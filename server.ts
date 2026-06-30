@@ -349,7 +349,9 @@ const initialNotifications = [
 async function syncToFirestore(data: any) {
   if (!firebaseConfig || !firebaseConfig.projectId) return;
   try {
-    const dbFS = getFirestore();
+    const dbFS = firebaseConfig.firestoreDatabaseId
+      ? getFirestore(undefined, firebaseConfig.firestoreDatabaseId)
+      : getFirestore();
     const batch = dbFS.batch();
 
     // Sync users
@@ -397,7 +399,9 @@ async function initDBFromFirestore() {
   }
 
   try {
-    const dbFS = getFirestore();
+    const dbFS = firebaseConfig.firestoreDatabaseId
+      ? getFirestore(undefined, firebaseConfig.firestoreDatabaseId)
+      : getFirestore();
     const usersSnapshot = await dbFS.collection("users").get();
 
     if (usersSnapshot.empty) {
