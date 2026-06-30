@@ -4,13 +4,30 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import authRouter from "./src/server/routes/auth";
+import { getConfig } from "./src/server/config";
+import { createSessionMiddleware } from "./src/server/session";
+import { errorHandler, notFound } from "./src/server/middleware/errors";
+import { requireTrustedOrigin } from "./src/server/middleware/origin";
+import { apiRateLimit } from "./src/server/middleware/rateLimits";
+import { requestId, requestLogger } from "./src/server/middleware/request";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 
 dotenv.config();
 
+const config = getConfig();
 const app = express();
-const PORT = 3000;
+const PORT = config.PORT;
+
+if (config.TRUST_PROXY) {
+  app.set("trust proxy", 1);
+}
+
+app.use(requestId);
+app.use(requestLogger);
+app.use(helmet());
 const DB_FILE = path.join(process.cwd(), "database.json");
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 
@@ -45,14 +62,18 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 // Increase limits to allow 25MB base64 uploads
 app.use(express.json({ limit: "30mb" }));
 app.use(express.urlencoded({ limit: "30mb", extended: true }));
+app.use(createSessionMiddleware());
+app.use(requireTrustedOrigin);
+app.use("/api", apiRateLimit);
+app.use("/api/auth", authRouter);
 
 // Serve static uploaded audio files
 app.use("/uploads", express.static(UPLOADS_DIR));
 
 // Initialize Gemini API
-const ai = process.env.GEMINI_API_KEY
+const ai = config.GEMINI_API_KEY
   ? new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
+      apiKey: config.GEMINI_API_KEY,
       httpOptions: {
         headers: {
           "User-Agent": "aistudio-build",
@@ -501,47 +522,6 @@ function saveDB(data: any) {
 // REST Endpoints
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
-});
-
-// Authentication
-app.post("/api/auth/login", (req, res) => {
-  const { username, password } = req.body;
-  const db = loadDB();
-  const user = db.users.find(
-    (u: any) => u.username.toLowerCase() === username?.toLowerCase() && u.password === password
-  );
-
-  if (user) {
-    res.json({ success: true, user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, role: user.role } });
-  } else {
-    res.status(401).json({ success: false, message: "Неверный логин или пароль" });
-  }
-});
-
-app.post("/api/auth/register", (req, res) => {
-  const { username, password, displayName } = req.body;
-  if (!username || !password || !displayName) {
-    return res.status(400).json({ success: false, message: "Заполните все поля" });
-  }
-
-  const db = loadDB();
-  if (db.users.some((u: any) => u.username.toLowerCase() === username.toLowerCase())) {
-    return res.status(400).json({ success: false, message: "Пользователь с таким логином уже существует" });
-  }
-
-  const newUser = {
-    id: "user_" + Date.now(),
-    username,
-    password,
-    displayName,
-    avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(username)}`,
-    role: "user" as const,
-  };
-
-  db.users.push(newUser);
-  saveDB(db);
-
-  res.json({ success: true, user: { id: newUser.id, username: newUser.username, displayName: newUser.displayName, avatarUrl: newUser.avatarUrl, role: newUser.role } });
 });
 
 // Projects
@@ -1328,6 +1308,8 @@ Return the response as a valid JSON object matching the requested schema. Use ap
   }
 });
 
+app.use("/api", notFound);
+
 // Start Server and mount Vite middleware
 async function startServer() {
   // Restore database state from Firestore Cloud Backup before listening
@@ -1346,6 +1328,8 @@ async function startServer() {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  app.use(errorHandler);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

@@ -1,0 +1,262 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  user
+}
+
+enum ProjectRole {
+  owner
+  editor
+  viewer
+}
+
+enum ProjectType {
+  single
+  album
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  done
+}
+
+enum ExternalProvider {
+  google
+  yandex
+  telegram
+  other
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique
+  email        String?  @unique
+  displayName  String
+  avatarUrl    String?
+  passwordHash String
+  role         UserRole @default(user)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships        ProjectMember[]
+  lyricVersions      LyricVersion[]
+  audioVersions      AudioVersion[]
+  comments           Comment[]
+  chatMessages       ChatMessage[]
+  createdTasks       Task[]          @relation("TaskCreator")
+  assignedTasks      Task[]          @relation("TaskAssignee")
+  annotations        Annotation[]
+  notifications      Notification[]  @relation("NotificationRecipient")
+  actedNotifications Notification[]  @relation("NotificationActor")
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+model Session {
+  sid    String   @id
+  sess   Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
+}
+
+model Project {
+  id        String      @id @default(uuid()) @db.Uuid
+  title     String
+  type      ProjectType
+  coverUrl  String?
+  tags      String[]    @default([])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  members       ProjectMember[]
+  tracks        Track[]
+  notifications Notification[]
+
+  @@index([updatedAt])
+  @@index([createdAt])
+}
+
+model ProjectMember {
+  id        String      @id @default(uuid()) @db.Uuid
+  projectId String      @db.Uuid
+  userId    String      @db.Uuid
+  role      ProjectRole
+  createdAt DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([userId, role])
+}
+
+model Track {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @db.Uuid
+  title     String
+  lyrics    String   @default("")
+  tags      String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lyricVersions LyricVersion[]
+  audioVersions AudioVersion[]
+  comments      Comment[]
+  chatMessages  ChatMessage[]
+  tasks         Task[]
+  annotations   Annotation[]
+  notifications Notification[]
+
+  @@index([projectId])
+  @@index([projectId, updatedAt])
+}
+
+model LyricVersion {
+  id         String   @id @default(uuid()) @db.Uuid
+  trackId    String   @db.Uuid
+  authorId   String?  @db.Uuid
+  lyrics     String
+  label      String
+  isOriginal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([trackId])
+  @@index([authorId])
+  @@index([trackId, createdAt])
+  @@index([trackId, isOriginal])
+}
+
+model AudioVersion {
+  id               String            @id @default(uuid()) @db.Uuid
+  trackId          String            @db.Uuid
+  uploadedById     String?           @db.Uuid
+  filename         String
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  storagePath      String?
+  externalUrl      String?
+  isExternal       Boolean           @default(false)
+  externalProvider ExternalProvider?
+  versionNumber    Int
+  createdAt        DateTime          @default(now())
+
+  track      Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@unique([trackId, versionNumber])
+  @@index([trackId])
+  @@index([uploadedById])
+  @@index([trackId, createdAt])
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  trackId   String   @db.Uuid
+  authorId  String   @db.Uuid
+  lineIndex Int?
+  text      String
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([trackId])
+  @@index([authorId])
+  @@index([trackId, resolved])
+  @@index([trackId, createdAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  trackId   String   @db.Uuid
+  authorId  String   @db.Uuid
+  text      String
+  createdAt DateTime @default(now())
+
+  track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([trackId])
+  @@index([authorId])
+  @@index([trackId, createdAt])
+}
+
+model Task {
+  id           String     @id @default(uuid()) @db.Uuid
+  trackId      String     @db.Uuid
+  createdById  String?    @db.Uuid
+  assignedToId String?    @db.Uuid
+  title        String
+  status       TaskStatus @default(todo)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  track      Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdBy  User? @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  assignedTo User? @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([trackId])
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([trackId, status])
+  @@index([assignedToId, status])
+}
+
+model Annotation {
+  id               String   @id @default(uuid()) @db.Uuid
+  trackId          String   @db.Uuid
+  authorId         String   @db.Uuid
+  timestampSeconds Int
+  text             String
+  createdAt        DateTime @default(now())
+
+  track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([trackId])
+  @@index([authorId])
+  @@index([trackId, timestampSeconds])
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  actorId   String?  @db.Uuid
+  projectId String   @db.Uuid
+  trackId   String?  @db.Uuid
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user    User?   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  track   Track?  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([actorId])
+  @@index([projectId])
+  @@index([trackId])
+  @@index([userId, read])
+  @@index([projectId, createdAt])
+}
