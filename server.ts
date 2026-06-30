@@ -4,6 +4,8 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 
 dotenv.config();
 
@@ -11,6 +13,29 @@ const app = express();
 const PORT = 3000;
 const DB_FILE = path.join(process.cwd(), "database.json");
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+
+// Load Firebase Configuration for Admin SDK
+const CONFIG_FILE = path.join(process.cwd(), "firebase-applet-config.json");
+let firebaseConfig: any = null;
+if (fs.existsSync(CONFIG_FILE)) {
+  try {
+    firebaseConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+  } catch (e) {
+    console.error("Failed to read firebase-applet-config.json", e);
+  }
+}
+
+// Initialize Firebase Admin SDK
+if (firebaseConfig && firebaseConfig.projectId) {
+  try {
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+    console.log("Firebase Admin SDK successfully initialized with project ID:", firebaseConfig.projectId);
+  } catch (e) {
+    console.error("Failed to initialize Firebase Admin SDK:", e);
+  }
+}
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -320,6 +345,122 @@ const initialNotifications = [
   },
 ];
 
+// Sync in-memory database state to Firestore collections in the background
+async function syncToFirestore(data: any) {
+  if (!firebaseConfig || !firebaseConfig.projectId) return;
+  try {
+    const dbFS = getFirestore();
+    const batch = dbFS.batch();
+
+    // Sync users
+    if (Array.isArray(data.users)) {
+      data.users.forEach((user: any) => {
+        if (user && user.id) {
+          const ref = dbFS.collection("users").doc(user.id);
+          batch.set(ref, user, { merge: true });
+        }
+      });
+    }
+
+    // Sync projects
+    if (Array.isArray(data.projects)) {
+      data.projects.forEach((proj: any) => {
+        if (proj && proj.id) {
+          const ref = dbFS.collection("projects").doc(proj.id);
+          batch.set(ref, proj, { merge: true });
+        }
+      });
+    }
+
+    // Sync notifications
+    if (Array.isArray(data.notifications)) {
+      data.notifications.forEach((notif: any) => {
+        if (notif && notif.id) {
+          const ref = dbFS.collection("notifications").doc(notif.id);
+          batch.set(ref, notif, { merge: true });
+        }
+      });
+    }
+
+    await batch.commit();
+    console.log("Firestore Cloud Database synchronized successfully.");
+  } catch (e) {
+    console.error("Failed to sync database to Firestore:", e);
+  }
+}
+
+// Seed defaults or download complete collection state from Firestore on startup
+async function initDBFromFirestore() {
+  if (!firebaseConfig || !firebaseConfig.projectId) {
+    console.log("No Firebase config found. Running in standalone local mode with database.json.");
+    return;
+  }
+
+  try {
+    const dbFS = getFirestore();
+    const usersSnapshot = await dbFS.collection("users").get();
+
+    if (usersSnapshot.empty) {
+      console.log("Firestore cloud database is empty. Seeding defaults from initial data...");
+      const batch = dbFS.batch();
+
+      initialUsers.forEach((user) => {
+        batch.set(dbFS.collection("users").doc(user.id), user);
+      });
+
+      initialProjects.forEach((proj) => {
+        batch.set(dbFS.collection("projects").doc(proj.id), proj);
+      });
+
+      initialNotifications.forEach((notif) => {
+        batch.set(dbFS.collection("notifications").doc(notif.id), notif);
+      });
+
+      await batch.commit();
+      console.log("Firestore successfully seeded with default users, projects, and notifications.");
+
+      const initialDB = {
+        users: initialUsers,
+        projects: initialProjects,
+        notifications: initialNotifications,
+      };
+      fs.writeFileSync(DB_FILE, JSON.stringify(initialDB, null, 2), "utf-8");
+    } else {
+      console.log("Restoring workspace state from Firestore cloud database...");
+      const usersList: any[] = [];
+      usersSnapshot.forEach((doc) => {
+        usersList.push(doc.data());
+      });
+
+      const projectsSnapshot = await dbFS.collection("projects").get();
+      const projectsList: any[] = [];
+      projectsSnapshot.forEach((doc) => {
+        projectsList.push(doc.data());
+      });
+
+      const notificationsSnapshot = await dbFS.collection("notifications").get();
+      const notificationsList: any[] = [];
+      notificationsSnapshot.forEach((doc) => {
+        notificationsList.push(doc.data());
+      });
+
+      // Sort notifications by timestamp descending
+      notificationsList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      const dbState = {
+        users: usersList,
+        projects: projectsList,
+        notifications: notificationsList,
+      };
+
+      fs.writeFileSync(DB_FILE, JSON.stringify(dbState, null, 2), "utf-8");
+      console.log(`Cloud backup loaded successfully: ${usersList.length} users, ${projectsList.length} projects, ${notificationsList.length} notifications restored.`);
+    }
+  } catch (e) {
+    console.error("Failed to connect to Firestore on startup. Fallback to local database.json storage:", e);
+  }
+}
+
 // Load Database
 function loadDB() {
   if (fs.existsSync(DB_FILE)) {
@@ -342,6 +483,12 @@ function loadDB() {
 function saveDB(data: any) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+    // Run async sync to Firestore in the background
+    if (firebaseConfig && firebaseConfig.projectId) {
+      syncToFirestore(data).catch((err) => {
+        console.error("Failed to sync to Firestore in background:", err);
+      });
+    }
   } catch (e) {
     console.error("Failed to write to database.json", e);
   }
@@ -396,7 +543,39 @@ app.post("/api/auth/register", (req, res) => {
 // Projects
 app.get("/api/projects", (req, res) => {
   const db = loadDB();
-  res.json(db.projects);
+  const userId = req.query.userId as string;
+  if (userId) {
+    let modified = false;
+    const user = db.users.find((u: any) => u.id === userId);
+    if (user) {
+      db.projects.forEach((p: any) => {
+        if (p.id === "project_1" || p.id === "project_2") {
+          const isPart = p.participants && p.participants.some((part: any) => part.userId === userId);
+          if (!isPart) {
+            if (!p.participants) p.participants = [];
+            p.participants.push({
+              userId: user.id,
+              username: user.username,
+              displayName: user.displayName,
+              role: "editor",
+            });
+            modified = true;
+          }
+        }
+      });
+      if (modified) {
+        saveDB(db);
+      }
+    }
+
+    // Return only projects where the user is a participant
+    const filtered = db.projects.filter((p: any) =>
+      p.participants && p.participants.some((part: any) => part.userId === userId)
+    );
+    return res.json(filtered);
+  }
+  // Secure default: do not leak projects if no user is specified
+  res.json([]);
 });
 
 app.get("/api/projects/:id", (req, res) => {
@@ -546,7 +725,7 @@ app.post("/api/projects/:projectId/tracks", (req, res) => {
 
 // Update Track (Lyrics, title, tags)
 app.put("/api/projects/:projectId/tracks/:trackId", (req, res) => {
-  const { title, lyrics, tags, author, label, versionLabel } = req.body;
+  const { title, lyrics, tags, author, label, versionLabel, makeOriginal } = req.body;
   const db = loadDB();
   const projectIndex = db.projects.findIndex((p: any) => p.id === req.params.projectId);
 
@@ -557,8 +736,28 @@ app.put("/api/projects/:projectId/tracks/:trackId", (req, res) => {
     if (trackIndex > -1) {
       const track = project.tracks[trackIndex];
 
-      // If lyrics are modified, check if we need to store a version history
-      if (lyrics && lyrics !== track.lyrics) {
+      // If makeOriginal is true, we save a separate version with the NEW lyrics marked as isOriginal
+      if (makeOriginal) {
+        // Unmark any existing originals first
+        if (Array.isArray(track.versionHistory)) {
+          track.versionHistory.forEach((v: any) => {
+            v.isOriginal = false;
+          });
+        } else {
+          track.versionHistory = [];
+        }
+
+        const newVersion = {
+          id: "ver_" + Date.now(),
+          lyrics: lyrics ?? track.lyrics,
+          author: author || "Редактор",
+          timestamp: new Date().toISOString(),
+          label: versionLabel || "Оригинальная версия (Master)",
+          isOriginal: true,
+        };
+        track.versionHistory.push(newVersion);
+      } else if (lyrics && lyrics !== track.lyrics) {
+        // Standard lyrics version backup
         const isSignificantEdit = versionLabel || track.versionHistory.length === 0;
         if (isSignificantEdit || Math.random() < 0.15) { // periodic auto-version
           const newVersion = {
@@ -567,6 +766,7 @@ app.put("/api/projects/:projectId/tracks/:trackId", (req, res) => {
             author: author || "Редактор",
             timestamp: new Date().toISOString(),
             label: versionLabel || label || `Автосохранение (${author || "Пользователь"})`,
+            isOriginal: false,
           };
           track.versionHistory.push(newVersion);
         }
@@ -587,7 +787,7 @@ app.put("/api/projects/:projectId/tracks/:trackId", (req, res) => {
           projectName: project.title,
           trackId: track.id,
           trackName: track.title,
-          message: "обновил текст песни",
+          message: makeOriginal ? "создал оригинальную версию (Master)" : "обновил текст песни",
           author: author || "Участник",
           timestamp: new Date().toISOString(),
           read: false,
@@ -597,6 +797,43 @@ app.put("/api/projects/:projectId/tracks/:trackId", (req, res) => {
       }
 
       res.json(track);
+    } else {
+      res.status(404).json({ message: "Трек не найден" });
+    }
+  } else {
+    res.status(404).json({ message: "Проект не найден" });
+  }
+});
+
+// Pin a lyric version as Original/Master
+app.put("/api/projects/:projectId/tracks/:trackId/versions/:versionId/pin", (req, res) => {
+  const db = loadDB();
+  const projectIndex = db.projects.findIndex((p: any) => p.id === req.params.projectId);
+
+  if (projectIndex > -1) {
+    const project = db.projects[projectIndex];
+    const trackIndex = project.tracks.findIndex((t: any) => t.id === req.params.trackId);
+
+    if (trackIndex > -1) {
+      const track = project.tracks[trackIndex];
+      const versionId = req.params.versionId;
+
+      if (Array.isArray(track.versionHistory)) {
+        // Toggle/set pin
+        track.versionHistory.forEach((v: any) => {
+          if (v.id === versionId) {
+            v.isOriginal = !v.isOriginal;
+          } else {
+            v.isOriginal = false;
+          }
+        });
+
+        project.updatedAt = new Date().toISOString();
+        saveDB(db);
+        res.json(track);
+      } else {
+        res.status(404).json({ message: "История версий пуста" });
+      }
     } else {
       res.status(404).json({ message: "Трек не найден" });
     }
@@ -909,6 +1146,123 @@ app.post("/api/notifications/read-all", (req, res) => {
   res.json({ success: true });
 });
 
+// Algorithmic fallback rhyme generator for Russian and English
+function getAlgorithmicRhymes(word: string, language: string): { word: string; rhymes: string[]; suggestions: string[]; fallback: boolean } {
+  const normalized = word.trim().toLowerCase();
+  const isRussian = language.toLowerCase() === "russian" || /[а-яё]/i.test(normalized);
+
+  if (isRussian) {
+    const endingsMap: { [key: string]: string[] } = {
+      "ажи": ["гаражи", "рубежи", "виражи", "чертежи", "платежи", "персонажи", "экипажи", "миражи", "ножи", "ежи"],
+      "аж": ["персонаж", "экипаж", "гараж", "мираж", "багаж", "пассаж", "трикотаж", "инструктаж"],
+      "жи": ["рубежи", "чертежи", "платежи", "ножи", "ежи", "виражи", "стрижи", "гаражи", "лыжи"],
+      "ость": ["радость", "сладость", "младость", "старость", "жалость", "верность", "гордость", "смелость", "ревность", "вечность"],
+      "сть": ["гость", "злость", "кость", "мост", "хвост", "путь", "грудь", "честь", "весть", "власть"],
+      "ить": ["любить", "творить", "забыть", "жить", "плыть", "быть", "дарить", "говорить", "курить", "светить"],
+      "ать": ["мечтать", "летать", "играть", "знать", "писать", "дышать", "бежать", "сказать", "искать", "ждать"],
+      "еть": ["петь", "лететь", "смотреть", "хотеть", "гореть", "греть", "блестеть", "звенеть", "сожалеть"],
+      "ока": ["осока", "морока", "тревога", "дорога", "дока", "высоко", "глубоко", "жестоко", "одиноко"],
+      "ок": ["урок", "поток", "шаг", "цветок", "листок", "звонок", "песок", "кусок", "замок", "восток", "платок"],
+      "ик": ["крик", "миг", "блик", "стих", "жених", "тупик", "дождик", "праздник", "дневник", "старик", "ночник"],
+      "як": ["моряк", "маяк", "сквозняк", "синяк", "чердак", "пустяк", "дурак", "рыбак"],
+      "ак": ["шаг", "мрак", "кулак", "знак", "флаг", "бардак", "табак", "дурак", "рыбак", "пятак"],
+      "ом": ["дом", "том", "гром", "пролом", "снегом", "ручьем", "днем", "огнем", "вдвоем", "альбом", "умом"],
+      "ем": ["всем", "проблем", "систем", "шлем", "крем", "плен", "джем", "зачем", "совсем", "тем"],
+      "им": ["им", "дмим", "любим", "храним", "одним", "твоим", "моим", "своим", "непобедим", "дымим"],
+      "ум": ["ум", "шум", "дум", "костюм", "угрюм", "кум", "триумф", "изюм"],
+      "ор": ["мотор", "разговор", "договор", "коридор", "забор", "светофор", "узор", "собор", "приговор", "вздор"],
+      "он": ["закон", "перрон", "флакон", "вагон", "звон", "сон", "тон", "поклон", "миллион", "дракон", "балахон"],
+      "ен": ["плен", "взамен", "перемен", "стен", "колен", "член", "джентльмен", "сцен"],
+      "ан": ["план", "туман", "обман", "океан", "карман", "капкан", "фонтан", "роман", "ураган", "банан"],
+      "ар": ["дар", "пожар", "удар", "гитар", "кошмар", "пар", "бульвар", "санитар", "шар", "нектар"],
+      "ер": ["ветер", "вечер", "сквер", "шедевр", "размер", "пример", "барьер", "лидер", "актер", "партнер"],
+      "ир": ["мир", "эфир", "кумир", "квартир", "пассажир", "бригадир", "зефир", "банкир"],
+      "ур": ["шнур", "абажур", "каламбур", "тамбур", "контур", "тур"],
+      "ов": ["слов", "оков", "домов", "шагов", "ветров", "пленников", "певцов", "берегов", "облаков", "островов"],
+      "ев": ["дерев", "напев", "гнев", "лев", "певцов", "нагрев", "посев"],
+      "ой": ["моей", "твоей", "душой", "домой", "ночной", "весной", "одной", "стеной", "живой", "чужой", "золотой"],
+      "ей": ["соловей", "ручей", "ночей", "лучей", "быстрей", "сильней", "веселей", "дней", "людей", "гостей"],
+      "ам": ["нам", "вам", "домам", "словам", "глазам", "годам", "мирам", "слезам", "шагам", "садам"],
+      "а": ["весна", "красна", "струна", "тишина", "стена", "луна", "волна", "страна", "война", "длина", "жена"],
+      "я": ["земля", "семья", "моя", "твоя", "заря", "друзья", "песня", "доля", "воля", "буря", "струя"],
+      "и": ["шаги", "круги", "враги", "книги", "дороги", "огни", "дни", "они", "беги", "помоги"],
+      "ы": ["цветы", "мосты", "мечты", "черты", "листы", "зонты", "следы", "сады", "ветры", "миры"],
+      "о": ["окно", "давно", "кино", "пятно", "руно", "сукно", "вино", "оно", "полно", "темно", "смешно"],
+      "е": ["море", "горе", "поле", "доле", "вскоре", "дозоре", "просторе", "уборе", "взоре", "соборе"],
+      "у": ["хочу", "лечу", "молчу", "кричу", "шепчу", "плачу", "тащу", "ищу", "грущу", "люблю"],
+      "ю": ["люблю", "дарю", "смотрю", "говорю", "пою", "твою", "мою", "ловлю", "стою", "жду"]
+    };
+
+    let rhymes: string[] = [];
+    for (let i = 4; i >= 1; i--) {
+      if (normalized.length >= i) {
+        const suffix = normalized.slice(-i);
+        if (endingsMap[suffix]) {
+          rhymes = endingsMap[suffix];
+          break;
+        }
+      }
+    }
+
+    if (rhymes.length === 0) {
+      rhymes = ["весна", "тишина", "мечта", "высота", "красота", "звезда", "слеза", "гроза", "глаза", "душа"];
+    }
+
+    const suggestions = [
+      `Оставив прошлое пылиться на затворках, мы пишем новые мечты на ${rhymes[0] || "высоте"}`,
+      `В твоих глазах горит рассвет, рисуя новые ${rhymes[1] || "пути"}`,
+      `Слышен тихий шепот, уносящий вдаль все наши ${rhymes[2] || "мысли"}`
+    ];
+
+    return { word, rhymes, suggestions, fallback: true };
+  } else {
+    // English
+    const endingsMap: { [key: string]: string[] } = {
+      "ight": ["night", "light", "bright", "fight", "flight", "sight", "might", "tight", "right", "white"],
+      "ear": ["dear", "fear", "hear", "near", "clear", "year", "beer", "tear", "cheer", "steer"],
+      "ore": ["more", "door", "shore", "score", "store", "floor", "core", "tore", "wore", "lore"],
+      "one": ["alone", "stone", "home", "phone", "zone", "grown", "blown", "shown", "tone", "bone"],
+      "ing": ["sing", "ring", "wing", "king", "bring", "spring", "thing", "fling", "swing", "string"],
+      "eart": ["heart", "part", "art", "start", "smart", "chart", "apart", "depart"],
+      "art": ["art", "heart", "part", "start", "smart", "chart", "apart", "depart"],
+      "ime": ["time", "rhyme", "chime", "prime", "lime", "climb", "crime"],
+      "ay": ["day", "play", "say", "way", "may", "stay", "away", "today", "gray", "clay"],
+      "ife": ["life", "wife", "knife", "strife", "rife"],
+      "ove": ["love", "above", "dove", "glove", "shove"],
+      "it": ["it", "bit", "fit", "hit", "lit", "pit", "sit", "wit", "split", "quit"],
+      "ar": ["car", "far", "star", "bar", "war", "scar", "tar", "bizarre", "guitar"],
+      "sky": ["sky", "high", "fly", "try", "why", "cry", "dry", "by", "my", "sigh"],
+      "e": ["be", "me", "see", "free", "tree", "three", "sea", "key", "we", "thee"],
+      "o": ["go", "so", "no", "show", "grow", "blow", "slow", "flow", "glow", "row"],
+      "u": ["you", "blue", "true", "new", "through", "too", "do", "crew", "view", "few"],
+      "y": ["sky", "high", "fly", "try", "why", "cry", "dry", "by", "my", "sigh", "happy", "free"]
+    };
+
+    let rhymes: string[] = [];
+    for (let i = 4; i >= 1; i--) {
+      if (normalized.length >= i) {
+        const suffix = normalized.slice(-i);
+        if (endingsMap[suffix]) {
+          rhymes = endingsMap[suffix];
+          break;
+        }
+      }
+    }
+
+    if (rhymes.length === 0) {
+      rhymes = ["light", "night", "bright", "fly", "high", "sky", "time", "rhyme", "heart", "art"];
+    }
+
+    const suggestions = [
+      `Under the neon skies, we find our own ${rhymes[0] || "way"}`,
+      `No matter what they say, we're shining bright as ${rhymes[1] || "day"}`,
+      `Just close your eyes and let the music play all ${rhymes[2] || "night"}`
+    ];
+
+    return { word, rhymes, suggestions, fallback: true };
+  }
+}
+
 // Gemini Rhymes & Lyric Suggestion
 app.post("/api/gemini/rhymes", async (req, res) => {
   const { word, language = "Russian", context = "" } = req.body;
@@ -917,20 +1271,9 @@ app.post("/api/gemini/rhymes", async (req, res) => {
   }
 
   if (!ai) {
-    // Fallback if no API key is set
-    return res.json({
-      word,
-      rhymes: [
-        "неон", "закон", "перрон", "флакон", "вагон", "звон", "сон", "тон", "он", "поклон",
-        "дворец", "конец", "венец", "певец", "боец", "молодец", "гонец"
-      ].slice(0, 10),
-      suggestions: [
-        "И в душе горит весенний этот звон",
-        "Мы уедем далеко за горизонт, за неон",
-        "Слышен тихий колокольный перезвон"
-      ],
-      fallback: true
-    });
+    // Elegant dynamic fallback when no API key is set
+    const fallbackResult = getAlgorithmicRhymes(word, language);
+    return res.json(fallbackResult);
   }
 
   try {
@@ -964,17 +1307,28 @@ Return the response as a valid JSON object matching the requested schema. Use ap
       }
     });
 
-    const resultText = response.text?.trim() || "{}";
+    let resultText = response.text?.trim() || "{}";
+    
+    // Clean potential markdown code blocks if the model somehow bypassed responseMimeType
+    if (resultText.startsWith("```")) {
+      resultText = resultText.replace(/^```(?:json)?\n?|```$/g, "").trim();
+    }
+
     const result = JSON.parse(resultText);
     res.json(result);
   } catch (err) {
     console.error("Gemini API Error:", err);
-    res.status(500).json({ message: "Ошибка при генерации рифм с помощью AI" });
+    // Graceful fallback during API failures, safety blocks, or network issues
+    const fallbackResult = getAlgorithmicRhymes(word, language);
+    res.json(fallbackResult);
   }
 });
 
 // Start Server and mount Vite middleware
 async function startServer() {
+  // Restore database state from Firestore Cloud Backup before listening
+  await initDBFromFirestore();
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

@@ -20,6 +20,7 @@ export interface TrackVersion {
   author: string;
   timestamp: string;
   label: string; // e.g. "Draft v1", "After Producer's feedback"
+  isOriginal?: boolean;
 }
 
 export interface AudioVersion {

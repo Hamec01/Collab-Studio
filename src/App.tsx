@@ -25,7 +25,8 @@ import {
   Volume2,
   Trash2,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  Music
 } from "lucide-react";
 
 export default function App() {
@@ -37,6 +38,14 @@ export default function App() {
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
   const [activeSidebar, setActiveSidebar] = useState<'comments' | 'chat' | 'tasks' | 'rhymes'>('comments');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [mobileTab, setMobileTab] = useState<'projects' | 'editor' | 'rightPanel'>('projects');
+
+  // Auto-set mobile tab to projects if there is no active track
+  useEffect(() => {
+    if (!activeTrack) {
+      setMobileTab('projects');
+    }
+  }, [activeTrack]);
 
   // Audio Upload Dialog State
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -125,7 +134,8 @@ export default function App() {
   // Fetch all projects, active track details, and notifications from backend
   const fetchData = async (silent = false) => {
     try {
-      const projRes = await fetch("/api/projects");
+      const url = currentUser ? `/api/projects?userId=${currentUser.id}` : "/api/projects";
+      const projRes = await fetch(url);
       if (projRes.ok) {
         const projData = await projRes.json();
         setProjects(projData);
@@ -248,7 +258,7 @@ export default function App() {
   };
 
   // UPDATE LYRICS & SAVE LYRICS DRAFT VERSION
-  const handleUpdateLyrics = async (newLyrics: string, versionLabel?: string) => {
+  const handleUpdateLyrics = async (newLyrics: string, versionLabel?: string, makeOriginal?: boolean) => {
     if (!activeProject || !activeTrack || !currentUser) return;
     try {
       const response = await fetch(`/api/projects/${activeProject.id}/tracks/${activeTrack.id}`, {
@@ -258,6 +268,7 @@ export default function App() {
           lyrics: newLyrics,
           author: currentUser.displayName,
           versionLabel,
+          makeOriginal,
         }),
       });
 
@@ -268,6 +279,24 @@ export default function App() {
       }
     } catch (e) {
       console.error("Lyrics update failed", e);
+    }
+  };
+
+  // PIN A VERSION AS ORIGINAL/MASTER
+  const handlePinVersion = async (versionId: string) => {
+    if (!activeProject || !activeTrack || !currentUser) return;
+    try {
+      const response = await fetch(`/api/projects/${activeProject.id}/tracks/${activeTrack.id}/versions/${versionId}/pin`, {
+        method: "PUT",
+      });
+
+      if (response.ok) {
+        const updatedTrack = await response.json();
+        setActiveTrack(updatedTrack);
+        fetchData();
+      }
+    } catch (e) {
+      console.error("Pin version failed", e);
     }
   };
 
@@ -529,21 +558,21 @@ export default function App() {
       )}
 
       {/* Main Studio Header */}
-      <header className={`border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md ${
+      <header className={`border-b px-2 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md ${
         theme === "dark" ? "bg-neutral-950/80 border-neutral-900" : "bg-white/80 border-slate-200"
       }`}>
-        <div className="flex items-center gap-2.5 select-none">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-teal-400 flex items-center justify-center shadow-lg transform rotate-3">
-            <Disc className="w-4.5 h-4.5 text-white animate-spin-slow" />
+        <div className="flex items-center gap-2 select-none">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-teal-400 flex items-center justify-center shadow-lg transform rotate-3">
+            <Disc className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-white animate-spin-slow" />
           </div>
           <div className="text-left">
-            <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
-              Collabs Studio
-              <span className="text-[9px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-900 px-1.5 py-0.2 rounded-full font-normal">
+            <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white flex items-center gap-1">
+              collabStudio
+              <span className="text-[8px] sm:text-[9px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-900 px-1 py-0.2 rounded-full font-normal hidden sm:inline-block">
                 BETA v1.2
               </span>
             </h1>
-            <p className="text-[10px] text-neutral-400">Платформа совместной работы авторов песен</p>
+            <p className="text-[9px] text-neutral-400 hidden sm:block">Платформа совместной работы авторов песен</p>
           </div>
         </div>
 
@@ -569,9 +598,10 @@ export default function App() {
 
       {/* Main Studio Area */}
       {currentUser && (
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 max-w-7xl mx-auto w-full">
-          {/* LEFT PANEL: Projects & Track Directories (3 columns) */}
-          <div className="lg:col-span-3 flex flex-col gap-4">
+        <>
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 pb-28 lg:pb-4 max-w-7xl mx-auto w-full">
+            {/* LEFT PANEL: Projects & Track Directories (3 columns) */}
+            <div className={`lg:col-span-3 flex-col gap-4 ${mobileTab === 'projects' ? 'flex' : 'hidden lg:flex'}`}>
             <ProjectList
               projects={projects}
               activeProject={activeProject}
@@ -583,6 +613,7 @@ export default function App() {
                   setActiveTrack(p.tracks[0]);
                   setSelectedLineIndex(null);
                   setSelectedAudioVersionId(p.tracks[0].audioVersions[0]?.id || null);
+                  setMobileTab('editor');
                 } else {
                   setActiveTrack(null);
                 }
@@ -591,23 +622,17 @@ export default function App() {
                 setActiveTrack(t);
                 setSelectedLineIndex(null);
                 setSelectedAudioVersionId(t.audioVersions[0]?.id || null);
+                setMobileTab('editor');
               }}
               onCreateProject={handleCreateProject}
               onAddTrack={handleAddTrack}
               onDeleteProject={handleDeleteProject}
               currentUser={currentUser}
             />
-
-            {/* Change logs feed directly inside directories column to preserve negative space */}
-            <NotificationsPanel
-              notifications={notifications}
-              onMarkAsRead={handleReadNotification}
-              onReadAll={handleReadAllNotifications}
-            />
           </div>
 
           {/* CENTRAL PANEL: Main Lyrics Editor & Audio Deck (6 columns) */}
-          <div className="lg:col-span-6 flex flex-col gap-5">
+          <div className={`lg:col-span-6 flex-col gap-5 ${mobileTab === 'editor' ? 'flex' : 'hidden lg:flex'}`}>
             {activeTrack ? (
               <>
                 {/* Track General Info Block */}
@@ -635,6 +660,7 @@ export default function App() {
                 <LyricsEditor
                   lyrics={activeTrack.lyrics}
                   onUpdateLyrics={handleUpdateLyrics}
+                  onPinVersion={handlePinVersion}
                   versionHistory={activeTrack.versionHistory}
                   selectedLineIndex={selectedLineIndex}
                   onSelectLine={setSelectedLineIndex}
@@ -656,15 +682,22 @@ export default function App() {
               <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border border-dashed border-neutral-800 rounded-2xl bg-neutral-900/10 min-h-[400px]">
                 <FolderOpen className="w-12 h-12 text-neutral-700 mb-3 animate-pulse" />
                 <h3 className="text-white font-semibold text-sm">Рабочее пространство пусто</h3>
-                <p className="text-xs text-neutral-400 max-w-sm mt-1">
-                  Пожалуйста, выберите существующий проект или трек слева, либо создайте новый, чтобы запустить студию написания текстов и ведения демо-версий.
+                <p className="text-xs text-neutral-400 max-w-sm mt-1 mb-4">
+                  Пожалуйста, выберите существующий проект или трек в списке проектов, либо создайте новый, чтобы запустить студию написания текстов и ведения демо-версий.
                 </p>
+                <button
+                  onClick={() => setMobileTab('projects')}
+                  className="lg:hidden bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2 px-4 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                  Открыть проекты
+                </button>
               </div>
             )}
           </div>
 
           {/* RIGHT PANEL: Lyrical Help, Comments, Chats, and checklists (3 columns) */}
-          <div className="lg:col-span-3 flex flex-col gap-4">
+          <div className={`lg:col-span-3 flex-col gap-4 ${mobileTab === 'rightPanel' ? 'flex' : 'hidden lg:flex'}`}>
             {activeTrack ? (
               <div className="flex flex-col h-full space-y-4">
                 {/* Tabs to toggle Right side panel modules */}
@@ -743,6 +776,74 @@ export default function App() {
             )}
           </div>
         </div>
+
+        {/* Global Bottom Section: Lenta Izmeneniy */}
+        <div className="max-w-7xl mx-auto w-full px-4 pb-32 lg:pb-12">
+          <NotificationsPanel
+            notifications={notifications}
+            onMarkAsRead={handleReadNotification}
+            onReadAll={handleReadAllNotifications}
+          />
+        </div>
+
+        {/* Mobile Fixed Bottom Navigation Bar */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-5 pt-2 bg-gradient-to-t from-black/95 via-black/90 to-transparent">
+          <div className={`mx-auto max-w-md rounded-2xl flex items-center justify-around p-1.5 shadow-2xl border backdrop-blur-lg ${
+            theme === 'dark' 
+              ? 'bg-neutral-900/90 border-neutral-800' 
+              : 'bg-white/95 border-slate-200'
+          }`}>
+            <button
+              onClick={() => setMobileTab('projects')}
+              className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all relative cursor-pointer ${
+                mobileTab === 'projects'
+                  ? theme === 'dark' ? 'text-indigo-400 bg-neutral-800/60' : 'text-indigo-600 bg-indigo-50'
+                  : theme === 'dark' ? 'text-neutral-500 hover:text-neutral-300' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <FolderOpen className="w-5 h-5 mb-1" />
+              <span className="text-[10px] font-bold">Проекты</span>
+              {projects.length > 0 && (
+                <span className="absolute top-1 right-3 text-[9px] px-1.5 py-0.2 rounded-full font-mono bg-indigo-600 text-white font-bold">
+                  {projects.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setMobileTab('editor')}
+              className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all relative cursor-pointer ${
+                mobileTab === 'editor'
+                  ? theme === 'dark' ? 'text-indigo-400 bg-neutral-800/60' : 'text-indigo-600 bg-indigo-50'
+                  : theme === 'dark' ? 'text-neutral-500 hover:text-neutral-300' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Music className="w-5 h-5 mb-1" />
+              <span className="text-[10px] font-bold">Редактор</span>
+              {activeTrack && (
+                <span className="absolute top-1.5 right-6 w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setMobileTab('rightPanel')}
+              className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all relative cursor-pointer ${
+                mobileTab === 'rightPanel'
+                  ? theme === 'dark' ? 'text-indigo-400 bg-neutral-800/60' : 'text-indigo-600 bg-indigo-50'
+                  : theme === 'dark' ? 'text-neutral-500 hover:text-neutral-300' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <MessageSquare className="w-5 h-5 mb-1" />
+              <span className="text-[10px] font-bold">Обсуждение</span>
+              {activeTrack && (
+                <span className="absolute top-1 right-3 text-[9px] px-1.5 py-0.2 bg-red-600 text-white rounded-full font-mono font-bold scale-90">
+                  {activeSidebar === 'comments' ? 'П' : activeSidebar === 'chat' ? 'Ч' : activeSidebar === 'tasks' ? 'З' : 'AI'}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+        </>
       )}
 
       {/* MODAL: Upload audio versions (Direct File Upload & External link integration) */}

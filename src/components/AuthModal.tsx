@@ -78,23 +78,23 @@ export default function AuthModal({ onLogin, currentUser, onLogout, inviteProjec
 
   if (currentUser) {
     return (
-      <div id="auth_header" className="flex items-center gap-3 bg-neutral-900/60 border border-neutral-800 p-2 px-3 rounded-full">
+      <div id="auth_header" className="flex items-center gap-1.5 sm:gap-3 bg-neutral-900/60 border border-neutral-850 p-1 sm:p-2 sm:px-3 rounded-full">
         {currentUser.avatarUrl && (
           <img
             src={currentUser.avatarUrl}
             alt={currentUser.displayName}
-            className="w-8 h-8 rounded-full border border-neutral-700 bg-neutral-800 object-cover"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-neutral-700 bg-neutral-800 object-cover"
             referrerPolicy="no-referrer"
           />
         )}
-        <div className="text-left hidden sm:block">
-          <div className="text-xs text-neutral-400 font-mono">Соавтор</div>
-          <div className="text-sm font-medium text-white">{currentUser.displayName}</div>
+        <div className="text-left hidden md:block">
+          <div className="text-[10px] text-neutral-400 font-mono leading-none">Соавтор</div>
+          <div className="text-xs font-medium text-white">{currentUser.displayName}</div>
         </div>
         <button
           id="logout_btn"
           onClick={onLogout}
-          className="text-xs bg-red-950/40 hover:bg-red-900/40 text-red-400 font-medium px-3 py-1 rounded-full border border-red-900/30 transition-colors cursor-pointer"
+          className="text-[10px] sm:text-xs bg-red-950/40 hover:bg-red-900/40 text-red-400 font-medium px-2 sm:px-3 py-1 rounded-full border border-red-900/30 transition-colors cursor-pointer"
         >
           Выйти
         </button>

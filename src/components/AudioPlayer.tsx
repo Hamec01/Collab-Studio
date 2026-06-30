@@ -207,16 +207,16 @@ export default function AudioPlayer({
 
         {/* Audio version selector */}
         {audioVersions.length > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-[10px] font-mono text-neutral-400">ВЕРСИИ:</span>
             <select
               value={selectedAudioVersionId || ""}
               onChange={(e) => onSelectAudioVersion(e.target.value)}
-              className="bg-neutral-900 border border-neutral-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+              className="max-w-[150px] xs:max-w-[200px] bg-neutral-900 border border-neutral-800 rounded p-1.5 text-[11px] text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
               {audioVersions.map((av) => (
                 <option key={av.id} value={av.id}>
-                  v{av.versionNumber} ({av.filename})
+                  v{av.versionNumber} ({av.filename.length > 15 ? av.filename.substring(0, 15) + "..." : av.filename})
                 </option>
               ))}
             </select>
@@ -275,13 +275,13 @@ export default function AudioPlayer({
       </div>
 
       {/* Player controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-1 border-t border-neutral-900 pt-3">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-between gap-3 px-1 border-t border-neutral-900 pt-3">
         {/* Play controls */}
-        <div className="flex items-center gap-3">
+        <div className="col-span-2 sm:col-span-auto flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={togglePlay}
             disabled={!activeVersion}
-            className="p-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-neutral-900 disabled:text-neutral-700 transition-all shadow-md flex items-center justify-center cursor-pointer transform hover:scale-105 active:scale-95"
+            className="p-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-neutral-900 disabled:text-neutral-700 transition-all shadow-md flex items-center justify-center cursor-pointer transform hover:scale-105 active:scale-95 shrink-0"
           >
             {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
           </button>
@@ -290,20 +290,20 @@ export default function AudioPlayer({
           <button
             onClick={handleOpenAnnotation}
             disabled={!activeVersion}
-            className="flex items-center gap-1 text-[11px] font-semibold bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-950 text-indigo-400 px-3 py-2 rounded-lg border border-neutral-800 hover:border-indigo-500/30 transition-all cursor-pointer"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 text-[11px] font-semibold bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-950 text-indigo-400 px-3 py-2.5 sm:py-2 rounded-lg border border-neutral-800 hover:border-indigo-500/30 transition-all cursor-pointer"
             title="Оставить заметку на текущей секунде трека"
           >
             <Plus className="w-3.5 h-3.5" />
-            Заметка ({formatTime(currentTime)})
+            <span>Заметка ({formatTime(currentTime)})</span>
           </button>
         </div>
 
         {/* Looping Panel (A-B Looping) */}
-        <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-850 p-1 rounded-lg">
+        <div className="col-span-2 sm:col-span-auto flex items-center justify-between sm:justify-start gap-1 bg-neutral-900 border border-neutral-850 p-1 rounded-lg w-full sm:w-auto">
           <button
             onClick={setMarkerA}
             disabled={!activeVersion}
-            className={`text-[10px] px-2 py-1 rounded transition-colors cursor-pointer ${
+            className={`flex-1 sm:flex-initial text-[10px] py-1.5 sm:py-1 px-2.5 rounded text-center transition-colors cursor-pointer ${
               loopA !== null ? "bg-indigo-900/40 text-indigo-300 font-bold" : "text-neutral-400 hover:text-white"
             }`}
           >
@@ -312,7 +312,7 @@ export default function AudioPlayer({
           <button
             onClick={setMarkerB}
             disabled={!activeVersion || loopA === null}
-            className={`text-[10px] px-2 py-1 rounded transition-colors cursor-pointer ${
+            className={`flex-1 sm:flex-initial text-[10px] py-1.5 sm:py-1 px-2.5 rounded text-center transition-colors cursor-pointer ${
               loopB !== null ? "bg-indigo-900/40 text-indigo-300 font-bold" : "text-neutral-400 hover:text-white"
             }`}
           >
@@ -321,34 +321,34 @@ export default function AudioPlayer({
           {(loopA !== null || loopB !== null) && (
             <button
               onClick={clearLoop}
-              className="p-1 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
+              className="p-1 px-2 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
               title="Сбросить петлю"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
         {/* Speed Controls */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-mono text-neutral-500">СКОРОСТЬ:</span>
+        <div className="col-span-1 sm:col-span-auto flex items-center gap-1.5 w-full sm:w-auto">
+          <span className="text-[10px] font-mono text-neutral-500 shrink-0">СКОРОСТЬ:</span>
           <select
             value={playbackSpeed}
             onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-            className="bg-neutral-900 border border-neutral-800 rounded p-1 text-xs text-neutral-300 focus:outline-none cursor-pointer"
+            className="flex-1 sm:flex-initial bg-neutral-900 border border-neutral-800 rounded p-1.5 text-xs text-neutral-300 focus:outline-none cursor-pointer"
           >
-            <option value={0.5}>0.5x (Слоу)</option>
+            <option value={0.5}>0.5x</option>
             <option value={0.75}>0.75x</option>
-            <option value={1}>1.0x (Норм)</option>
+            <option value={1}>1.0x</option>
             <option value={1.25}>1.25x</option>
             <option value={1.5}>1.5x</option>
-            <option value={2}>2.0x (Фаст)</option>
+            <option value={2}>2.0x</option>
           </select>
         </div>
 
         {/* Volume */}
-        <div className="flex items-center gap-2">
-          <Volume2 className="w-3.5 h-3.5 text-neutral-400" />
+        <div className="col-span-1 sm:col-span-auto flex items-center justify-end sm:justify-start gap-2 w-full sm:w-auto">
+          <Volume2 className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
           <input
             type="range"
             min={0}
@@ -356,20 +356,22 @@ export default function AudioPlayer({
             step={0.05}
             value={volume}
             onChange={(e) => setVolume(Number(e.target.value))}
-            className="w-16 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+            className="w-16 xs:w-20 sm:w-16 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
           />
         </div>
 
         {/* Toggle Annotations button */}
         {annotations.length > 0 && (
-          <button
-            onClick={() => setShowAnnotationsList(!showAnnotationsList)}
-            className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors bg-neutral-900 border border-neutral-800 px-2.5 py-1.5 rounded-lg cursor-pointer"
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-            Заметки ({annotations.length})
-            {showAnnotationsList ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-          </button>
+          <div className="col-span-2 sm:col-span-auto w-full sm:w-auto">
+            <button
+              onClick={() => setShowAnnotationsList(!showAnnotationsList)}
+              className="w-full sm:w-auto flex items-center justify-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors bg-neutral-900 border border-neutral-800 px-2.5 py-2 sm:py-1.5 rounded-lg cursor-pointer"
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Заметки ({annotations.length})</span>
+              {showAnnotationsList ? <ChevronDown className="w-3.5 h-3.5 ml-1" /> : <ChevronUp className="w-3.5 h-3.5 ml-1" />}
+            </button>
+          </div>
         )}
       </div>
 

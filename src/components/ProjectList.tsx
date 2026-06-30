@@ -37,7 +37,11 @@ export default function ProjectList({
 
   const handleCopyInviteLink = () => {
     if (!activeProject) return;
-    const inviteUrl = `${window.location.origin}${window.location.pathname}?invite=${activeProject.id}`;
+    let origin = window.location.origin;
+    if (origin.includes("ais-dev-")) {
+      origin = origin.replace("ais-dev-", "ais-pre-");
+    }
+    const inviteUrl = `${origin}${window.location.pathname}?invite=${activeProject.id}`;
     navigator.clipboard.writeText(inviteUrl).then(() => {
       setCopiedInvite(true);
       setTimeout(() => setCopiedInvite(false), 2000);
@@ -176,7 +180,7 @@ export default function ProjectList({
                     referrerPolicy="no-referrer"
                   />
 
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 pr-6">
                     <div className="flex items-center gap-1.5">
                       {proj.type === "album" ? (
                         <Layers className="w-3.5 h-3.5 text-teal-400 shrink-0" title="Альбом" />

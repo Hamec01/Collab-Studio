@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A registered user account in CollabStudio",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "displayName": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] }
+      },
+      "required": ["id", "username", "password", "displayName"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A collaborative album or single project containing tracks and participants",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["single", "album"] },
+        "coverUrl": { "type": "string" },
+        "tags": { "type": "array" },
+        "participants": { "type": "array" },
+        "tracks": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "type", "participants", "tracks"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "An activity log or notification triggered by actions in a track",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "trackId": { "type": "string" },
+        "trackName": { "type": "string" },
+        "message": { "type": "string" },
+        "author": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["id", "projectId", "projectName", "message", "author", "timestamp", "read"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stored user credentials and profiles"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Collaborative project files containing nested tracks, comments, and chats"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Activity updates displayed in the bottom Lenta"
+    }
+  }
+}

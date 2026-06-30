@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Edit3, Eye, Save, History, MessageSquare, Sparkles, Maximize2, Minimize2 } from "lucide-react";
+import { Edit3, Eye, Save, History, MessageSquare, Maximize2, Minimize2, ArrowRight } from "lucide-react";
 import { TrackVersion } from "../types";
 
 interface LyricsEditorProps {
   lyrics: string;
-  onUpdateLyrics: (newLyrics: string, versionLabel?: string) => void;
+  onUpdateLyrics: (newLyrics: string, versionLabel?: string, makeOriginal?: boolean) => void;
+  onPinVersion?: (versionId: string) => void;
   versionHistory: TrackVersion[];
   selectedLineIndex: number | null;
   onSelectLine: (index: number | null) => void;
@@ -15,7 +16,8 @@ interface LyricsEditorProps {
 export default function LyricsEditor({
   lyrics,
   onUpdateLyrics,
-  versionHistory,
+  onPinVersion,
+  versionHistory = [],
   selectedLineIndex,
   onSelectLine,
   currentUser,
@@ -24,8 +26,10 @@ export default function LyricsEditor({
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(lyrics);
   const [versionLabel, setVersionLabel] = useState("");
+  const [makeOriginalOnSave, setMakeOriginalOnSave] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<string>("current");
 
   useEffect(() => {
     if (isFullscreen) {
@@ -38,18 +42,30 @@ export default function LyricsEditor({
     };
   }, [isFullscreen]);
 
-  // Split lyrics by line to render line-by-line
-  const lines = lyrics.split("\n");
+  // Sync editedText with current lyrics when starting to edit
+  useEffect(() => {
+    if (!isEditing) {
+      setEditedText(lyrics);
+    }
+  }, [lyrics, isEditing]);
+
+  // Determine active lyrics depending on the selected version
+  const activeVersion = versionHistory.find((v) => v.id === selectedVersionId);
+  const displayedLyrics = activeVersion ? activeVersion.lyrics : lyrics;
+  const lines = displayedLyrics.split("\n");
 
   const handleSave = () => {
-    onUpdateLyrics(editedText, versionLabel.trim() || undefined);
+    onUpdateLyrics(editedText, versionLabel.trim() || undefined, makeOriginalOnSave);
     setIsEditing(false);
     setVersionLabel("");
+    setMakeOriginalOnSave(false);
+    setSelectedVersionId("current"); // Return to viewing the live/current version after edit
   };
 
   const handleStartEdit = () => {
     setEditedText(lyrics);
     setIsEditing(true);
+    setSelectedVersionId("current"); // Automatically focus on the current live text for editing
   };
 
   const restoreVersion = (ver: TrackVersion) => {
@@ -57,80 +73,183 @@ export default function LyricsEditor({
       onUpdateLyrics(ver.lyrics, `Восстановлено из истории: ${ver.label}`);
       setEditedText(ver.lyrics);
       setIsEditing(false);
+      setSelectedVersionId("current");
     }
   };
 
+  const originalVersion = versionHistory.find((v) => v.isOriginal);
+
   return (
     <div className={isFullscreen
-      ? "fixed inset-0 z-50 bg-neutral-950 p-6 sm:p-10 flex flex-col h-screen w-screen overflow-hidden animate-fade-in"
-      : "bg-neutral-950 border border-neutral-800 rounded-xl p-5 flex flex-col h-full min-h-[480px]"
+      ? "fixed inset-0 z-50 bg-neutral-950 p-4 sm:p-8 flex flex-col h-screen w-screen overflow-hidden animate-fade-in"
+      : "bg-neutral-950 border border-neutral-800 rounded-xl p-4 sm:p-5 flex flex-col h-full min-h-[480px]"
     }>
       {/* Editor Header */}
-      <div className="flex items-center justify-between border-b border-neutral-900 pb-3 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-indigo-950/40 text-indigo-400 border border-indigo-900/30">
-            <Edit3 className="w-4 h-4" />
+      <div className="flex flex-col gap-3.5 border-b border-neutral-900 pb-3.5 mb-4">
+        {/* Row 1: Title & Accessory controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-indigo-950/40 text-indigo-400 border border-indigo-900/30 shrink-0">
+              <Edit3 className="w-4 h-4" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-bold text-white tracking-wide">Текст песни</h3>
+              <p className="text-[10px] text-neutral-400 hidden xs:block">Нажмите на строку для комментирования</p>
+            </div>
           </div>
-          <div className="text-left">
-            <h3 className="text-sm font-semibold text-white">Текст Песни</h3>
-            <p className="text-[11px] text-neutral-400">Пишите стихи, разметку аккордов и обсуждайте строфы</p>
-          </div>
-        </div>
 
-        {/* View / Edit Mode Toggles */}
-        <div className="flex items-center gap-1.5 bg-neutral-900 p-1 rounded-lg">
-          <button
-            onClick={() => setIsEditing(false)}
-            className={`flex items-center gap-1 text-[11px] px-3 py-1.5 rounded-md transition-all cursor-pointer ${
-              !isEditing ? "bg-indigo-600 text-white font-medium" : "text-neutral-400 hover:text-white"
-            }`}
-          >
-            <Eye className="w-3.5 h-3.5" />
-            Просмотр & Комменты
-          </button>
-          <button
-            onClick={handleStartEdit}
-            className={`flex items-center gap-1 text-[11px] px-3 py-1.5 rounded-md transition-all cursor-pointer ${
-              isEditing ? "bg-indigo-600 text-white font-medium" : "text-neutral-400 hover:text-white"
-            }`}
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            Редактировать
-          </button>
-          {versionHistory.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            {versionHistory.length > 0 && (
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                  showHistory ? "bg-indigo-950 text-indigo-400 border border-indigo-900/40" : "text-neutral-400 hover:text-white bg-neutral-900/50"
+                }`}
+                title="История версий текста"
+              >
+                <History className="w-4 h-4" />
+              </button>
+            )}
+
             <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                showHistory ? "bg-indigo-950 text-indigo-400 border border-indigo-900/30" : "text-neutral-400 hover:text-white"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                isFullscreen ? "bg-rose-950 text-rose-400 border border-rose-900/40" : "text-neutral-400 hover:text-white bg-neutral-900/50"
               }`}
-              title="История версий текста"
+              title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
             >
-              <History className="w-4 h-4" />
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-          )}
-
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-              isFullscreen ? "bg-rose-950 text-rose-400 border border-rose-900/30" : "text-neutral-400 hover:text-white hover:bg-neutral-800"
-            }`}
-            title={isFullscreen ? "Выйти из полноэкранного режима" : "Полноэкранный режим"}
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
+          </div>
         </div>
+
+        {/* Row 2: Tactile Segmented Toggle (Reading vs Editing Mode) */}
+        {!showHistory && (
+          <div className="grid grid-cols-2 bg-neutral-900 p-1 rounded-xl w-full">
+            <button
+              onClick={() => setIsEditing(false)}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                !isEditing
+                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/25"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Чтение и Обсуждение</span>
+            </button>
+            <button
+              onClick={handleStartEdit}
+              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                isEditing
+                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/25"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Редактирование</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col relative min-h-[300px] ${isFullscreen ? "max-w-3xl mx-auto w-full pt-4" : ""}`}>
+      <div className={`flex-1 flex flex-col relative min-h-[300px] ${isFullscreen ? "max-w-3xl mx-auto w-full pt-2" : ""}`}>
+        
+        {/* Version Selector for Reading Mode */}
+        {!showHistory && !isEditing && (
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-neutral-900/40 border border-neutral-900/80 rounded-xl p-2 mb-3.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider ml-1">Версия:</span>
+              {originalVersion && (
+                <button
+                  onClick={() => setSelectedVersionId(selectedVersionId === originalVersion.id ? "current" : originalVersion.id)}
+                  className={`flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold rounded-md transition-all cursor-pointer border ${
+                    selectedVersionId === originalVersion.id
+                      ? "bg-amber-500 text-neutral-950 border-amber-400 shadow-md shadow-amber-500/10"
+                      : "bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20"
+                  }`}
+                  title="Показать оригинальную Master-версию"
+                >
+                  👑 Оригинал
+                </button>
+              )}
+            </div>
+            
+            <select
+              value={selectedVersionId}
+              onChange={(e) => setSelectedVersionId(e.target.value)}
+              className="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-[11px] text-neutral-200 rounded-lg px-2 py-1 focus:outline-none cursor-pointer max-w-[200px]"
+            >
+              <option value="current">📝 Текущая (Редактируемая)</option>
+              {versionHistory.map((ver) => (
+                <option key={ver.id} value={ver.id}>
+                  {ver.isOriginal ? "👑 " : "📄 "}
+                  {ver.label.length > 20 ? `${ver.label.substring(0, 20)}...` : ver.label} ({ver.author})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Version Banner for Previewing Historical Version */}
+        {!showHistory && !isEditing && activeVersion && (
+          <div className="bg-amber-950/20 border border-amber-900/40 rounded-xl p-3 mb-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                {activeVersion.isOriginal ? (
+                  <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                    👑 Оригинал (Master)
+                  </span>
+                ) : (
+                  <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                    ⏳ Архивный черновик
+                  </span>
+                )}
+                <span className="text-white font-bold text-xs">
+                  Автор: {activeVersion.author}
+                </span>
+              </div>
+              <p className="text-[10px] text-neutral-400 leading-normal">
+                {new Date(activeVersion.timestamp).toLocaleString("ru-RU")} — "{activeVersion.label}"
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+              {onPinVersion && (
+                <button
+                  onClick={() => onPinVersion(activeVersion.id)}
+                  className={`text-[10px] font-bold px-2 py-1.5 rounded-lg transition-all cursor-pointer border ${
+                    activeVersion.isOriginal
+                      ? "bg-neutral-900 hover:bg-neutral-850 text-neutral-400 hover:text-white border-neutral-800"
+                      : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/25"
+                  }`}
+                  title={activeVersion.isOriginal ? "Убрать статус оригинала" : "Закрепить эту версию как оригинальный мастер"}
+                >
+                  {activeVersion.isOriginal ? "Снять 👑" : "Закрепить как Оригинал"}
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  if (confirm(`Вы уверены, что хотите восстановить эту версию как основную рабочую версию проекта?`)) {
+                    onUpdateLyrics(activeVersion.lyrics, `Восстановлено из архива: ${activeVersion.label}`);
+                    setSelectedVersionId("current");
+                  }
+                }}
+                className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg transition-all cursor-pointer shadow-md shrink-0"
+              >
+                Применить
+              </button>
+            </div>
+          </div>
+        )}
+
         {showHistory ? (
           /* History logs panel */
           <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-            <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400 border-b border-neutral-900 pb-1 mb-2">
+            <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400 border-b border-neutral-900 pb-2 mb-2">
               <span>ИСТОРИЯ ИЗМЕНЕНИЙ ТЕКСТА</span>
               <button
                 onClick={() => setShowHistory(false)}
-                className="text-indigo-400 hover:text-indigo-300"
+                className="text-indigo-400 hover:text-indigo-300 font-bold px-2 py-1 bg-neutral-900 rounded-md"
               >
                 назад
               </button>
@@ -144,23 +263,44 @@ export default function LyricsEditor({
                   className="bg-neutral-900/50 border border-neutral-900 hover:border-neutral-800 p-3.5 rounded-xl text-xs text-left flex justify-between items-start gap-4 transition-all"
                 >
                   <div className="space-y-1">
-                    <span className="text-[10px] font-mono bg-neutral-800 text-neutral-400 px-1.5 py-0.5 rounded border border-neutral-750">
-                      {ver.label}
-                    </span>
-                    <div className="text-white font-medium mt-1">Автор: {ver.author}</div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-mono bg-neutral-800 text-neutral-400 px-1.5 py-0.5 rounded border border-neutral-750">
+                        {ver.label}
+                      </span>
+                      {ver.isOriginal && (
+                        <span className="text-[9px] bg-amber-500/15 text-amber-400 border border-amber-500/25 font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                          👑 Оригинал
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-white font-semibold mt-1">Автор: {ver.author}</div>
                     <div className="text-[10px] text-neutral-500">
                       {new Date(ver.timestamp).toLocaleString("ru-RU")}
                     </div>
-                    <div className="mt-2 text-[11px] text-neutral-400 font-serif italic line-clamp-2">
+                    <div className="mt-2 text-[11px] text-neutral-400 font-serif italic line-clamp-2 leading-relaxed">
                       "{ver.lyrics.substring(0, 100)}..."
                     </div>
                   </div>
-                  <button
-                    onClick={() => restoreVersion(ver)}
-                    className="text-[10px] bg-indigo-950/40 hover:bg-indigo-900/40 border border-indigo-900/30 hover:border-indigo-500 text-indigo-400 hover:text-white px-2.5 py-1 rounded transition-colors cursor-pointer"
-                  >
-                    Восстановить
-                  </button>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button
+                      onClick={() => restoreVersion(ver)}
+                      className="text-[10px] bg-indigo-950/40 hover:bg-indigo-900/40 border border-indigo-900/30 hover:border-indigo-500 text-indigo-400 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer font-bold shrink-0 text-center"
+                    >
+                      Применить
+                    </button>
+                    {onPinVersion && (
+                      <button
+                        onClick={() => onPinVersion(ver.id)}
+                        className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all cursor-pointer text-center border ${
+                          ver.isOriginal
+                            ? "bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white"
+                            : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/20 hover:border-amber-500/40"
+                        }`}
+                      >
+                        {ver.isOriginal ? "Снять 👑" : "Сделать 👑"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
           </div>
@@ -171,89 +311,134 @@ export default function LyricsEditor({
               value={editedText}
               onChange={(e) => setEditedText(e.target.value)}
               placeholder="Вставьте или напишите текст песни..."
-              className={`flex-1 bg-neutral-900/40 border border-neutral-800 focus:border-indigo-500 rounded-xl p-3.5 text-sm sm:text-base text-neutral-200 focus:outline-none font-serif leading-relaxed resize-none ${
-                isFullscreen ? "min-h-[400px] text-lg p-5" : "min-h-[260px]"
+              className={`flex-1 bg-neutral-900/40 border border-neutral-800 focus:border-indigo-500 rounded-xl p-3 text-sm text-neutral-200 focus:outline-none font-serif leading-relaxed resize-none ${
+                isFullscreen ? "min-h-[400px] text-base p-5" : "min-h-[260px]"
               }`}
             />
-            {/* Version label input before saving */}
-            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            {/* Version label input and save */}
+            <div className="flex flex-col gap-2 pt-1">
               <input
                 type="text"
                 value={versionLabel}
                 onChange={(e) => setVersionLabel(e.target.value)}
-                placeholder="Название версии (например: Добавлен мост / правка Марии)"
-                className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-white focus:outline-none"
+                placeholder="Комментарий к изменениям (например: Добавлен бридж / правки)"
+                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder-neutral-500"
               />
+              <div className="flex items-center justify-between px-1 py-1 flex-wrap gap-2">
+                <label className="flex items-center gap-2 text-xs text-neutral-400 hover:text-white cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={makeOriginalOnSave}
+                    onChange={(e) => setMakeOriginalOnSave(e.target.checked)}
+                    className="rounded border-neutral-800 text-indigo-600 focus:ring-indigo-500 bg-neutral-900 cursor-pointer"
+                  />
+                  <span>Закрепить эту версию как Оригинал (Master)</span>
+                </label>
+              </div>
               <button
                 onClick={handleSave}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold p-2 px-4 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-900/20"
               >
                 <Save className="w-4 h-4" />
-                Сохранить черновик
+                <span>Сохранить новую версию</span>
               </button>
             </div>
           </div>
         ) : (
           /* READ & ANNOTATE MODE (LINE-BY-LINE HIGHLIGHTING) */
-          <div className={`flex-1 overflow-y-auto pr-1 py-1 text-left ${
-            isFullscreen ? "max-h-[calc(100vh-180px)] space-y-3 p-2" : "max-h-[460px] space-y-1.5"
-          }`}>
-            {lines.map((line, idx) => {
-              const isSelected = selectedLineIndex === idx;
-              const commentsCount = trackCommentsCount(idx);
-              const isSectionHeader = line.startsWith("[") && line.endsWith("]");
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className={`flex-1 overflow-y-auto pr-1 pb-16 text-left space-y-1 ${
+              isFullscreen ? "max-h-[calc(100vh-220px)] p-2" : "max-h-[460px]"
+            }`}>
+              {lines.map((line, idx) => {
+                const isSelected = selectedLineIndex === idx;
+                const commentsCount = trackCommentsCount(idx);
+                const isSectionHeader = line.startsWith("[") && line.endsWith("]");
 
-              return (
-                <div
-                  key={idx}
-                  onClick={() => onSelectLine(isSelected ? null : idx)}
-                  className={`group flex items-start gap-3 p-1 px-2.5 rounded-lg transition-all cursor-pointer select-none ${
-                    isSectionHeader
-                      ? "hover:bg-neutral-900/30"
-                      : isSelected
-                      ? "bg-indigo-950/30 border border-indigo-900/40 shadow-inner"
-                      : "hover:bg-neutral-900/40"
-                  } ${isFullscreen ? "p-2 sm:p-3" : ""}`}
-                >
-                  {/* Line Number */}
-                  <span className="font-mono text-[10px] sm:text-xs text-neutral-500 w-5 text-right mt-1 select-none">
-                    {idx + 1}
-                  </span>
-
-                  {/* Line Content */}
-                  <div className="flex-1">
-                    {isSectionHeader ? (
-                      <span className={`font-mono font-bold tracking-wide text-indigo-400 mt-1.5 block ${
-                        isFullscreen ? "text-sm sm:text-base" : "text-xs"
-                      }`}>
-                        {line}
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => onSelectLine(isSelected ? null : idx)}
+                    className={`group flex items-center justify-between gap-3 p-1.5 px-3 rounded-lg transition-all cursor-pointer select-none border ${
+                      isSectionHeader
+                        ? "border-transparent bg-transparent mt-2 first:mt-0"
+                        : isSelected
+                        ? "bg-indigo-600/10 border-indigo-500/40 shadow-inner"
+                        : "border-transparent bg-transparent hover:bg-neutral-900/30"
+                    }`}
+                  >
+                    {/* Line Index & Content wrapper */}
+                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                      <span className="font-mono text-[9px] sm:text-xs text-neutral-500 w-4 text-right mt-1 select-none shrink-0">
+                        {idx + 1}
                       </span>
-                    ) : (
-                      <p className={`leading-relaxed font-serif ${
-                        line.trim() === "" ? "h-3" : "text-neutral-200"
-                      } ${isFullscreen ? "text-base sm:text-xl" : "text-sm"}`}>
-                        {line}
-                      </p>
-                    )}
-                  </div>
 
-                  {/* Comment trigger badge / indicators */}
-                  <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                      <div className="flex-1 min-w-0">
+                        {isSectionHeader ? (
+                          <span className="font-mono font-bold tracking-wide text-indigo-400 text-[11px] sm:text-xs uppercase">
+                            {line}
+                          </span>
+                        ) : (
+                          <p className={`leading-relaxed font-serif ${
+                            line.trim() === "" ? "h-3" : "text-neutral-200"
+                          } text-xs sm:text-sm`}>
+                            {line}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Simple badge indicating comments count */}
                     {commentsCount > 0 && (
-                      <span className="flex items-center gap-1 text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-900/50 p-0.5 px-1.5 rounded-md font-mono">
+                      <span className="flex items-center gap-1 text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-900/50 p-0.5 px-1.5 rounded-md font-mono shrink-0">
                         <MessageSquare className="w-2.5 h-2.5 fill-indigo-300" />
                         {commentsCount}
                       </span>
                     )}
-                    {!isSectionHeader && line.trim() !== "" && (
-                      <span className="text-[9px] bg-neutral-900 text-neutral-500 border border-neutral-800 p-0.5 px-1 rounded hover:bg-indigo-950 hover:text-indigo-400 transition-colors">
-                        комментировать
-                      </span>
+
+                    {/* Quick indicator circle for selected line on mobile */}
+                    {isSelected && !isSectionHeader && (
+                      <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
                     )}
                   </div>
+                );
+              })}
+            </div>
+
+            {/* CONTEXTUAL DISCUSSION OVERLAY FOR SELECTED LINE (Mobile & Desktop optimized) */}
+            {selectedLineIndex !== null && !lines[selectedLineIndex].startsWith("[") && (
+              <div className="absolute bottom-1 left-0 right-0 z-30 animate-slide-up px-1">
+                <div className="bg-indigo-950 border border-indigo-900/80 shadow-2xl rounded-xl p-3 flex items-center justify-between gap-3 backdrop-blur-md">
+                  <div className="flex-1 min-w-0 text-left">
+                    <span className="text-[10px] font-mono text-indigo-300 font-bold uppercase tracking-wider block">
+                      Выбрана строка {selectedLineIndex + 1}
+                    </span>
+                    <p className="text-white text-xs truncate font-serif mt-0.5 italic">
+                      "{lines[selectedLineIndex]}"
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => onSelectLine(null)}
+                      className="text-[11px] font-semibold text-neutral-400 hover:text-white px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Сбросить
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Keep selected line, switch tab/scroll to comments
+                        const discTab = document.getElementById("mobile_discussion_tab");
+                        if (discTab) discTab.click();
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg transition-all shadow-md cursor-pointer"
+                    >
+                      <span>Обсудить</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
         )}
       </div>

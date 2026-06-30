@@ -1,5 +1,5 @@
 {
-  "name": "Collabs Songwriter Space",
+  "name": "CollabStudio",
   "description": "A comprehensive collaborative workspace for songwriters, enabling lyrics co-writing, audio version tracking, rhyme search, in-app chat, and feedback comments.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
