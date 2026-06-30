@@ -1,6 +1,6 @@
 import "express";
 import "express-session";
-import type { UserRole } from "@prisma/client";
+import type { ProjectRole, UserRole } from "@prisma/client";
 
 declare module "express-session" {
   interface SessionData {
@@ -21,9 +21,16 @@ declare global {
       updatedAt: Date;
     }
 
+    interface ProjectAccess {
+      projectId: string;
+      role: ProjectRole | "admin";
+      isAdmin: boolean;
+    }
+
     interface Request {
       requestId?: string;
       user?: User;
+      projectAccess?: ProjectAccess;
     }
   }
 }

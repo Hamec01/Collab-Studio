@@ -6,14 +6,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import authRouter from "./src/server/routes/auth";
+import projectsRouter from "./src/server/routes/projects";
 import { getConfig } from "./src/server/config";
 import { createSessionMiddleware } from "./src/server/session";
 import { errorHandler, notFound } from "./src/server/middleware/errors";
 import { requireTrustedOrigin } from "./src/server/middleware/origin";
 import { apiRateLimit } from "./src/server/middleware/rateLimits";
 import { requestId, requestLogger } from "./src/server/middleware/request";
-import admin from "firebase-admin";
-import { getFirestore } from "firebase-admin/firestore";
 
 dotenv.config();
 
@@ -31,29 +30,6 @@ app.use(helmet());
 const DB_FILE = path.join(process.cwd(), "database.json");
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 
-// Load Firebase Configuration for Admin SDK
-const CONFIG_FILE = path.join(process.cwd(), "firebase-applet-config.json");
-let firebaseConfig: any = null;
-if (fs.existsSync(CONFIG_FILE)) {
-  try {
-    firebaseConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
-  } catch (e) {
-    console.error("Failed to read firebase-applet-config.json", e);
-  }
-}
-
-// Initialize Firebase Admin SDK
-if (firebaseConfig && firebaseConfig.projectId) {
-  try {
-    admin.initializeApp({
-      projectId: firebaseConfig.projectId,
-    });
-    console.log("Firebase Admin SDK successfully initialized with project ID:", firebaseConfig.projectId);
-  } catch (e) {
-    console.error("Failed to initialize Firebase Admin SDK:", e);
-  }
-}
-
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -66,6 +42,7 @@ app.use(createSessionMiddleware());
 app.use(requireTrustedOrigin);
 app.use("/api", apiRateLimit);
 app.use("/api/auth", authRouter);
+app.use("/api/projects", projectsRouter);
 
 // Serve static uploaded audio files
 app.use("/uploads", express.static(UPLOADS_DIR));
@@ -366,126 +343,6 @@ const initialNotifications = [
   },
 ];
 
-// Sync in-memory database state to Firestore collections in the background
-async function syncToFirestore(data: any) {
-  if (!firebaseConfig || !firebaseConfig.projectId) return;
-  try {
-    const dbFS = firebaseConfig.firestoreDatabaseId
-      ? getFirestore(undefined, firebaseConfig.firestoreDatabaseId)
-      : getFirestore();
-    const batch = dbFS.batch();
-
-    // Sync users
-    if (Array.isArray(data.users)) {
-      data.users.forEach((user: any) => {
-        if (user && user.id) {
-          const ref = dbFS.collection("users").doc(user.id);
-          batch.set(ref, user, { merge: true });
-        }
-      });
-    }
-
-    // Sync projects
-    if (Array.isArray(data.projects)) {
-      data.projects.forEach((proj: any) => {
-        if (proj && proj.id) {
-          const ref = dbFS.collection("projects").doc(proj.id);
-          batch.set(ref, proj, { merge: true });
-        }
-      });
-    }
-
-    // Sync notifications
-    if (Array.isArray(data.notifications)) {
-      data.notifications.forEach((notif: any) => {
-        if (notif && notif.id) {
-          const ref = dbFS.collection("notifications").doc(notif.id);
-          batch.set(ref, notif, { merge: true });
-        }
-      });
-    }
-
-    await batch.commit();
-    console.log("Firestore Cloud Database synchronized successfully.");
-  } catch (e) {
-    console.error("Failed to sync database to Firestore:", e);
-  }
-}
-
-// Seed defaults or download complete collection state from Firestore on startup
-async function initDBFromFirestore() {
-  if (!firebaseConfig || !firebaseConfig.projectId) {
-    console.log("No Firebase config found. Running in standalone local mode with database.json.");
-    return;
-  }
-
-  try {
-    const dbFS = firebaseConfig.firestoreDatabaseId
-      ? getFirestore(undefined, firebaseConfig.firestoreDatabaseId)
-      : getFirestore();
-    const usersSnapshot = await dbFS.collection("users").get();
-
-    if (usersSnapshot.empty) {
-      console.log("Firestore cloud database is empty. Seeding defaults from initial data...");
-      const batch = dbFS.batch();
-
-      initialUsers.forEach((user) => {
-        batch.set(dbFS.collection("users").doc(user.id), user);
-      });
-
-      initialProjects.forEach((proj) => {
-        batch.set(dbFS.collection("projects").doc(proj.id), proj);
-      });
-
-      initialNotifications.forEach((notif) => {
-        batch.set(dbFS.collection("notifications").doc(notif.id), notif);
-      });
-
-      await batch.commit();
-      console.log("Firestore successfully seeded with default users, projects, and notifications.");
-
-      const initialDB = {
-        users: initialUsers,
-        projects: initialProjects,
-        notifications: initialNotifications,
-      };
-      fs.writeFileSync(DB_FILE, JSON.stringify(initialDB, null, 2), "utf-8");
-    } else {
-      console.log("Restoring workspace state from Firestore cloud database...");
-      const usersList: any[] = [];
-      usersSnapshot.forEach((doc) => {
-        usersList.push(doc.data());
-      });
-
-      const projectsSnapshot = await dbFS.collection("projects").get();
-      const projectsList: any[] = [];
-      projectsSnapshot.forEach((doc) => {
-        projectsList.push(doc.data());
-      });
-
-      const notificationsSnapshot = await dbFS.collection("notifications").get();
-      const notificationsList: any[] = [];
-      notificationsSnapshot.forEach((doc) => {
-        notificationsList.push(doc.data());
-      });
-
-      // Sort notifications by timestamp descending
-      notificationsList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      const dbState = {
-        users: usersList,
-        projects: projectsList,
-        notifications: notificationsList,
-      };
-
-      fs.writeFileSync(DB_FILE, JSON.stringify(dbState, null, 2), "utf-8");
-      console.log(`Cloud backup loaded successfully: ${usersList.length} users, ${projectsList.length} projects, ${notificationsList.length} notifications restored.`);
-    }
-  } catch (e) {
-    console.error("Failed to connect to Firestore on startup. Fallback to local database.json storage:", e);
-  }
-}
-
 // Load Database
 function loadDB() {
   if (fs.existsSync(DB_FILE)) {
@@ -508,12 +365,6 @@ function loadDB() {
 function saveDB(data: any) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-    // Run async sync to Firestore in the background
-    if (firebaseConfig && firebaseConfig.projectId) {
-      syncToFirestore(data).catch((err) => {
-        console.error("Failed to sync to Firestore in background:", err);
-      });
-    }
   } catch (e) {
     console.error("Failed to write to database.json", e);
   }
@@ -522,308 +373,6 @@ function saveDB(data: any) {
 // REST Endpoints
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
-});
-
-// Projects
-app.get("/api/projects", (req, res) => {
-  const db = loadDB();
-  const userId = req.query.userId as string;
-  if (userId) {
-    let modified = false;
-    const user = db.users.find((u: any) => u.id === userId);
-    if (user) {
-      db.projects.forEach((p: any) => {
-        if (p.id === "project_1" || p.id === "project_2") {
-          const isPart = p.participants && p.participants.some((part: any) => part.userId === userId);
-          if (!isPart) {
-            if (!p.participants) p.participants = [];
-            p.participants.push({
-              userId: user.id,
-              username: user.username,
-              displayName: user.displayName,
-              role: "editor",
-            });
-            modified = true;
-          }
-        }
-      });
-      if (modified) {
-        saveDB(db);
-      }
-    }
-
-    // Return only projects where the user is a participant
-    const filtered = db.projects.filter((p: any) =>
-      p.participants && p.participants.some((part: any) => part.userId === userId)
-    );
-    return res.json(filtered);
-  }
-  // Secure default: do not leak projects if no user is specified
-  res.json([]);
-});
-
-app.get("/api/projects/:id", (req, res) => {
-  const db = loadDB();
-  const project = db.projects.find((p: any) => p.id === req.params.id);
-  if (project) {
-    res.json(project);
-  } else {
-    res.status(404).json({ message: "Проект не найден" });
-  }
-});
-
-app.post("/api/projects", (req, res) => {
-  const { title, type, coverUrl, tags, userId, username, displayName } = req.body;
-  if (!title || !type) {
-    return res.status(400).json({ message: "Укажите название и тип проекта" });
-  }
-
-  const db = loadDB();
-  const newProject = {
-    id: "project_" + Date.now(),
-    title,
-    type,
-    coverUrl: coverUrl || "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&h=400&q=80",
-    tags: tags || [],
-    participants: [
-      {
-        userId: userId || "user_admin",
-        username: username || "admin",
-        displayName: displayName || "Алексей (Producer)",
-        role: "owner" as const,
-      },
-    ],
-    tracks: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  db.projects.push(newProject);
-  saveDB(db);
-  res.status(201).json(newProject);
-});
-
-// Join Project via Invite Link
-app.post("/api/projects/:id/join", (req, res) => {
-  const { userId, username, displayName } = req.body;
-  if (!userId || !username || !displayName) {
-    return res.status(400).json({ message: "Недостаточно данных пользователя" });
-  }
-
-  const db = loadDB();
-  const projectIndex = db.projects.findIndex((p: any) => p.id === req.params.id);
-
-  if (projectIndex > -1) {
-    const project = db.projects[projectIndex];
-    const alreadyParticipant = project.participants.some((p: any) => p.userId === userId);
-
-    if (!alreadyParticipant) {
-      project.participants.push({
-        userId,
-        username,
-        displayName,
-        role: "editor" as const,
-      });
-      project.updatedAt = new Date().toISOString();
-
-      // Create notification
-      const newNotif = {
-        id: "not_" + Date.now(),
-        projectId: project.id,
-        projectName: project.title,
-        message: "присоединился к проекту по приглашению",
-        author: displayName || username,
-        timestamp: new Date().toISOString(),
-        read: false,
-      };
-      db.notifications.unshift(newNotif);
-
-      saveDB(db);
-    }
-
-    res.json(project);
-  } else {
-    res.status(404).json({ message: "Проект не найден" });
-  }
-});
-
-app.put("/api/projects/:id", (req, res) => {
-  const { title, type, coverUrl, tags, participants } = req.body;
-  const db = loadDB();
-  const projectIndex = db.projects.findIndex((p: any) => p.id === req.params.id);
-
-  if (projectIndex > -1) {
-    const updated = {
-      ...db.projects[projectIndex],
-      title: title ?? db.projects[projectIndex].title,
-      type: type ?? db.projects[projectIndex].type,
-      coverUrl: coverUrl ?? db.projects[projectIndex].coverUrl,
-      tags: tags ?? db.projects[projectIndex].tags,
-      participants: participants ?? db.projects[projectIndex].participants,
-      updatedAt: new Date().toISOString(),
-    };
-    db.projects[projectIndex] = updated;
-    saveDB(db);
-    res.json(updated);
-  } else {
-    res.status(404).json({ message: "Проект не найден" });
-  }
-});
-
-app.delete("/api/projects/:id", (req, res) => {
-  const db = loadDB();
-  const filtered = db.projects.filter((p: any) => p.id !== req.params.id);
-  db.projects = filtered;
-  saveDB(db);
-  res.json({ success: true });
-});
-
-// Tracks Inside Projects
-app.post("/api/projects/:projectId/tracks", (req, res) => {
-  const { title, tags } = req.body;
-  const db = loadDB();
-  const projectIndex = db.projects.findIndex((p: any) => p.id === req.params.projectId);
-
-  if (projectIndex > -1) {
-    const newTrack = {
-      id: "track_" + Date.now(),
-      title: title || "Новый трек",
-      lyrics: "[Куплет 1]\nНачните писать текст здесь...",
-      tags: tags || ["В разработке"],
-      versionHistory: [],
-      audioVersions: [],
-      comments: [],
-      chat: [],
-      tasks: [],
-      annotations: [],
-    };
-
-    db.projects[projectIndex].tracks.push(newTrack);
-    db.projects[projectIndex].updatedAt = new Date().toISOString();
-    saveDB(db);
-    res.status(201).json(newTrack);
-  } else {
-    res.status(404).json({ message: "Проект не найден" });
-  }
-});
-
-// Update Track (Lyrics, title, tags)
-app.put("/api/projects/:projectId/tracks/:trackId", (req, res) => {
-  const { title, lyrics, tags, author, label, versionLabel, makeOriginal } = req.body;
-  const db = loadDB();
-  const projectIndex = db.projects.findIndex((p: any) => p.id === req.params.projectId);
-
-  if (projectIndex > -1) {
-    const project = db.projects[projectIndex];
-    const trackIndex = project.tracks.findIndex((t: any) => t.id === req.params.trackId);
-
-    if (trackIndex > -1) {
-      const track = project.tracks[trackIndex];
-
-      // If makeOriginal is true, we save a separate version with the NEW lyrics marked as isOriginal
-      if (makeOriginal) {
-        // Unmark any existing originals first
-        if (Array.isArray(track.versionHistory)) {
-          track.versionHistory.forEach((v: any) => {
-            v.isOriginal = false;
-          });
-        } else {
-          track.versionHistory = [];
-        }
-
-        const newVersion = {
-          id: "ver_" + Date.now(),
-          lyrics: lyrics ?? track.lyrics,
-          author: author || "Редактор",
-          timestamp: new Date().toISOString(),
-          label: versionLabel || "Оригинальная версия (Master)",
-          isOriginal: true,
-        };
-        track.versionHistory.push(newVersion);
-      } else if (lyrics && lyrics !== track.lyrics) {
-        // Standard lyrics version backup
-        const isSignificantEdit = versionLabel || track.versionHistory.length === 0;
-        if (isSignificantEdit || Math.random() < 0.15) { // periodic auto-version
-          const newVersion = {
-            id: "ver_" + Date.now(),
-            lyrics: track.lyrics,
-            author: author || "Редактор",
-            timestamp: new Date().toISOString(),
-            label: versionLabel || label || `Автосохранение (${author || "Пользователь"})`,
-            isOriginal: false,
-          };
-          track.versionHistory.push(newVersion);
-        }
-      }
-
-      track.title = title ?? track.title;
-      track.lyrics = lyrics ?? track.lyrics;
-      track.tags = tags ?? track.tags;
-
-      project.updatedAt = new Date().toISOString();
-      saveDB(db);
-
-      // Create notification for lyrics modification
-      if (lyrics && lyrics !== track.lyrics) {
-        const newNotif = {
-          id: "not_" + Date.now(),
-          projectId: project.id,
-          projectName: project.title,
-          trackId: track.id,
-          trackName: track.title,
-          message: makeOriginal ? "создал оригинальную версию (Master)" : "обновил текст песни",
-          author: author || "Участник",
-          timestamp: new Date().toISOString(),
-          read: false,
-        };
-        db.notifications.unshift(newNotif);
-        saveDB(db);
-      }
-
-      res.json(track);
-    } else {
-      res.status(404).json({ message: "Трек не найден" });
-    }
-  } else {
-    res.status(404).json({ message: "Проект не найден" });
-  }
-});
-
-// Pin a lyric version as Original/Master
-app.put("/api/projects/:projectId/tracks/:trackId/versions/:versionId/pin", (req, res) => {
-  const db = loadDB();
-  const projectIndex = db.projects.findIndex((p: any) => p.id === req.params.projectId);
-
-  if (projectIndex > -1) {
-    const project = db.projects[projectIndex];
-    const trackIndex = project.tracks.findIndex((t: any) => t.id === req.params.trackId);
-
-    if (trackIndex > -1) {
-      const track = project.tracks[trackIndex];
-      const versionId = req.params.versionId;
-
-      if (Array.isArray(track.versionHistory)) {
-        // Toggle/set pin
-        track.versionHistory.forEach((v: any) => {
-          if (v.id === versionId) {
-            v.isOriginal = !v.isOriginal;
-          } else {
-            v.isOriginal = false;
-          }
-        });
-
-        project.updatedAt = new Date().toISOString();
-        saveDB(db);
-        res.json(track);
-      } else {
-        res.status(404).json({ message: "История версий пуста" });
-      }
-    } else {
-      res.status(404).json({ message: "Трек не найден" });
-    }
-  } else {
-    res.status(404).json({ message: "Проект не найден" });
-  }
 });
 
 // Add Audio Version (base64 file or link)
@@ -1312,9 +861,6 @@ app.use("/api", notFound);
 
 // Start Server and mount Vite middleware
 async function startServer() {
-  // Restore database state from Firestore Cloud Backup before listening
-  await initDBFromFirestore();
-
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

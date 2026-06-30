@@ -12,9 +12,9 @@ Collab-Studio is being migrated to a fully self-hosted architecture:
 - HttpOnly SameSite=Lax session cookie
 - Gemini API as the only external service
 
-This branch is currently at **Stage 2: server authentication and sessions**. Existing project, track, chat, task, notification, and audio routes are not migrated yet.
+This branch is currently at **Stage 3A: PostgreSQL-backed project core**. Project, membership, track, and lyric version routes use Prisma/PostgreSQL; audio, comments, chat, tasks, annotations, and notifications are still legacy JSON-backed until later stages.
 
-## Stage 2 Status
+## Stage 3A Status
 
 Added in this stage:
 
@@ -28,16 +28,17 @@ Added in this stage:
 - working admin bootstrap script
 - server-side auth routes backed by PostgreSQL sessions
 - Argon2id password hashing
+- PostgreSQL-backed projects, project members, tracks, and lyric versions
+- project access middleware for admin/owner/editor/viewer
 - Helmet, API rate limits, request ids, safe error responses, and Origin checks
 - backup/restore script skeletons
 
 Not done in this stage:
 
-- existing project/track/comment/chat/task/audio routes are not rewritten yet
-- Firebase code is not removed yet
-- `database.json` storage is not removed yet
+- audio metadata, comments, chat, tasks, annotations, and notifications still use the legacy JSON data path
 - frontend auth/upload flows are not changed yet
 - migrations are not applied automatically
+- existing `database.json` is not deleted and is reserved for later one-off migration work
 
 ## Environment
 
@@ -94,7 +95,7 @@ npm run create-admin
 
 The script is interactive, hides password input, checks uniqueness, and never prints the password or password hash.
 
-Existing business routes still use the legacy JSON/Firebase implementation and are not secure for internet exposure until the next stages.
+Project core routes now use PostgreSQL. Audio, comments, chat, tasks, annotations, and notifications still use legacy JSON handlers and are not complete for internet exposure until later stages.
 
 ## Docker Layout
 
@@ -126,6 +127,20 @@ docker compose --profile migrate run --rm migrate
 
 Do not run this until the database target is confirmed.
 
+
+## Future Data Migration
+
+A future one-off migration should move existing `database.json` content into PostgreSQL after the remaining legacy subsystems are modeled. The planned direction is:
+
+1. Stop the app and make a verified backup of `database.json` and uploads.
+2. Parse `database.json` with a dedicated migration script.
+3. Map legacy users by username/email to PostgreSQL users.
+4. Insert projects, memberships, tracks, lyric versions, audio metadata, comments, chat, tasks, annotations, and notifications in transactions.
+5. Verify row counts and sample project access before switching traffic.
+6. Keep the original `database.json` read-only until restore has been tested.
+
+This migration is not implemented or run in Stage 3A.
+
 ## Local Development
 
 After dependencies are installed:
@@ -135,7 +150,7 @@ npm run prisma:generate
 npm run dev
 ```
 
-The current Stage 2 branch still contains the old business API implementation. Auth routes are wired to Prisma/session; project, track, chat, task, notification, and audio routes will move later.
+The current Stage 3A branch has auth plus project, member, track, and lyric version routes wired to Prisma/session. Audio, comments, chat, tasks, annotations, and notifications will move later.
 
 ## Health Checks
 
@@ -169,11 +184,7 @@ The restore script exits with instructions until a reviewed restore workflow is 
 
 Before exposing the application to the internet, later stages must complete:
 
-- Firebase removal
-- JSON storage removal
-- route-by-route session auth
-- project membership and role checks
-- Argon2id login/register implementation
+- JSON storage removal for remaining legacy subsystems
 - protected multipart audio upload and streaming
 - Origin checks for mutating requests
 - Gemini rate limit and timeout
