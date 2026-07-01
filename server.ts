@@ -21,6 +21,7 @@ dotenv.config();
 const config = getConfig();
 const app = express();
 const PORT = config.PORT;
+const isHttps = config.APP_URL.startsWith("https://");
 
 if (config.TRUST_PROXY) {
   app.set("trust proxy", 1);
@@ -28,7 +29,18 @@ if (config.TRUST_PROXY) {
 
 app.use(requestId);
 app.use(requestLogger);
-app.use(helmet());
+app.use(
+  helmet({
+    strictTransportSecurity: isHttps,
+    crossOriginOpenerPolicy: isHttps,
+    originAgentCluster: isHttps,
+    contentSecurityPolicy: {
+      directives: {
+        upgradeInsecureRequests: isHttps ? [] : null,
+      },
+    },
+  }),
+);
 
 // JSON APIs no longer carry file content
 app.use(express.json({ limit: "1mb" }));
