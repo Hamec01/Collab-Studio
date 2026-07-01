@@ -203,6 +203,44 @@ function isPathInside(root: string, candidate: string) {
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
+async function resolveOwnedDirectory(root: string, segments: string[]) {
+  const resolvedRoot = path.resolve(root);
+  let current = resolvedRoot;
+
+  for (const segment of segments) {
+    if (!segment || segment.includes("/") || segment.includes("\\") || segment === "." || segment === "..") {
+      throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
+    }
+    const nextPath = path.resolve(current, segment);
+    const relative = path.relative(resolvedRoot, nextPath);
+    if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
+    }
+    const stat = await fsp.lstat(nextPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (stat?.isSymbolicLink()) {
+      throw new AppError(503, "STORAGE_UNAVAILABLE", "Audio storage is unavailable");
+    }
+    current = nextPath;
+  }
+
+  return current;
+}
+
+async function removeProjectUploadsTree(projectId: string) {
+  const projectUploadRoot = await resolveOwnedDirectory(UPLOADS_ROOT, [projectId]);
+  await fsp.rm(projectUploadRoot, { recursive: true, force: true });
+  console.info("Removed project uploads tree", { projectId });
+}
+
+async function removeTrackUploadsTree(projectId: string, trackId: string) {
+  const trackUploadRoot = await resolveOwnedDirectory(UPLOADS_ROOT, [projectId, trackId]);
+  await fsp.rm(trackUploadRoot, { recursive: true, force: true });
+  console.info("Removed track uploads tree", { projectId, trackId });
+}
+
 async function ensureStorageDirectory(projectId: string, trackId: string) {
   await fsp.mkdir(UPLOADS_ROOT, { recursive: true, mode: 0o750 });
   const realRoot = await fsp.realpath(UPLOADS_ROOT);
@@ -437,8 +475,12 @@ router.delete(
   requireProjectOwner,
   asyncHandler(async (req, res) => {
     const { projectId } = projectParamsSchema.parse(req.params);
-    // TODO: remove orphaned physical audio files through the audited storage cleanup workflow.
-    await prisma.project.delete({ where: { id: projectId } });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.project.findUnique({ where: { id: projectId }, select: { id: true } });
+      if (!existing) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+      await tx.project.delete({ where: { id: projectId } });
+    });
+    await removeProjectUploadsTree(projectId);
     res.json({ success: true });
   }),
 );
@@ -688,8 +730,10 @@ router.delete(
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
     const existing = await prisma.track.findFirst({ where: { id: trackId, projectId }, select: { id: true } });
     if (!existing) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
-    // TODO: remove orphaned physical audio files through the audited storage cleanup workflow.
-    await prisma.track.delete({ where: { id: trackId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.track.delete({ where: { id: trackId } });
+    });
+    await removeTrackUploadsTree(projectId, trackId);
     res.json({ success: true });
   }),
 );

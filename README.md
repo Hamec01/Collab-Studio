@@ -164,6 +164,15 @@ npm run dev
 
 The current Stage 4 branch uses session auth on the frontend and keeps audio metadata/streaming on the protected PostgreSQL-backed backend.
 
+## Stage 5.5 Notes
+
+- `/api/health` is the liveness endpoint
+- `/api/ready` checks PostgreSQL readiness
+- `npm run create-admin` works inside the production app image without a `src` bind mount
+- project deletion removes only that project's upload subtree inside `UPLOADS_DIR`
+- `npm run audit-orphan-audio` performs a dry-run by default and supports explicit `--delete`
+- public deployment and Caddy are not part of this stage
+
 ## Health Checks
 
 The existing app exposes:

@@ -3,7 +3,9 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import argon2 from "argon2";
 import { Prisma } from "@prisma/client";
-import { prisma } from "../src/server/db";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 async function promptRequired(rl: ReturnType<typeof createInterface>, label: string): Promise<string> {
   const value = (await rl.question(label)).trim();

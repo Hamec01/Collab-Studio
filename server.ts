@@ -10,6 +10,7 @@ import notificationsRouter from "./src/server/routes/notifications";
 import geminiRouter from "./src/server/routes/gemini";
 import { getConfig } from "./src/server/config";
 import { createSessionMiddleware } from "./src/server/session";
+import { checkDatabaseReady } from "./src/server/db";
 import { errorHandler, notFound } from "./src/server/middleware/errors";
 import { requireTrustedOrigin } from "./src/server/middleware/origin";
 import { apiRateLimit } from "./src/server/middleware/rateLimits";
@@ -45,6 +46,15 @@ app.use("/api/gemini", geminiRouter);
 // REST Endpoints
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/ready", async (_req, res) => {
+  const ready = await checkDatabaseReady();
+  if (!ready) {
+    res.status(503).json({ status: "not_ready" });
+    return;
+  }
+  res.json({ status: "ready" });
 });
 
 app.use("/api", notFound);

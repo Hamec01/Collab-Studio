@@ -16,6 +16,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx scripts/seed.ts",
     "create-admin": "tsx scripts/create-admin.ts",
+    "audit-orphan-audio": "tsx scripts/audit-orphan-audio.ts",
     "backup": "bash scripts/backup.sh",
     "restore": "bash scripts/restore.sh"
   },
