@@ -451,8 +451,9 @@ export default function App() {
 
       {currentUser && (
         <>
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 pb-24 max-w-7xl mx-auto w-full">
-            <div className={`lg:col-span-3 flex-col gap-4 ${mobileTab === "projects" ? "flex" : "hidden lg:flex"}`}>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 pb-24 max-w-7xl mx-auto w-full min-h-0">
+              <div className={`lg:col-span-3 min-h-0 flex-col gap-4 ${mobileTab === "projects" ? "flex" : "hidden lg:flex"}`}>
               <ProjectList
                 projects={projects}
                 activeProject={activeProject}
@@ -471,9 +472,9 @@ export default function App() {
                 onDeleteProject={handleDeleteProject}
                 currentUser={currentUser}
               />
-            </div>
+              </div>
 
-            <div className={`lg:col-span-6 flex-col gap-5 ${mobileTab === "editor" ? "flex" : "hidden lg:flex"}`}>
+              <div className={`lg:col-span-6 min-h-0 flex-col gap-5 ${mobileTab === "editor" ? "flex" : "hidden lg:flex"}`}>
               {activeTrack ? (
                 <>
                   <div className="p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-neutral-900/60 border-neutral-800">
@@ -514,6 +515,8 @@ export default function App() {
                     onSelectAudioVersion={setSelectedAudioVersionId}
                     selectedAudioVersionId={selectedAudioVersionId}
                     canAnnotate={canEdit}
+                    onRequestUploadFile={() => setShowUploadModal(true)}
+                    onRequestAddLink={() => setShowUploadModal(true)}
                   />
                 </>
               ) : (
@@ -522,9 +525,9 @@ export default function App() {
                   <p className="text-xs text-neutral-400">Выберите проект и трек для работы.</p>
                 </div>
               )}
-            </div>
+              </div>
 
-            <div className={`lg:col-span-3 flex-col gap-4 ${mobileTab === "rightPanel" ? "flex" : "hidden lg:flex"}`}>
+              <div className={`lg:col-span-3 min-h-0 flex-col gap-4 ${mobileTab === "rightPanel" ? "flex" : "hidden lg:flex"}`}>
               {activeTrack ? (
                 <div className="flex flex-col h-full space-y-4">
                   <div className="bg-neutral-950 border border-neutral-800 p-1 rounded-xl flex items-center justify-between">
@@ -573,15 +576,16 @@ export default function App() {
                   <p className="text-[11px] text-neutral-500">Выберите трек, чтобы открыть правки, чат, задачи и AI-рифмы.</p>
                 </div>
               )}
+              </div>
             </div>
-          </div>
 
-          <div className="max-w-7xl mx-auto w-full px-4 pb-24">
-            <NotificationsPanel
-              notifications={notifications}
-              onMarkAsRead={handleReadNotification}
-              onReadAll={handleReadAllNotifications}
-            />
+            <div className="max-w-7xl mx-auto w-full px-4 pb-24">
+              <NotificationsPanel
+                notifications={notifications}
+                onMarkAsRead={handleReadNotification}
+                onReadAll={handleReadAllNotifications}
+              />
+            </div>
           </div>
 
           <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-4 pt-2 bg-gradient-to-t from-black/95 via-black/90 to-transparent">
