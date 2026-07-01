@@ -12,7 +12,7 @@ Collab-Studio is being migrated to a fully self-hosted architecture:
 - HttpOnly SameSite=Lax session cookie
 - Gemini API as the only external service
 
-This branch is currently at **Stage 3C: protected PostgreSQL-backed audio storage**. All application metadata uses Prisma/PostgreSQL; local audio uses a private bind-mounted directory and authenticated streaming.
+This branch is currently at **Stage 4: frontend migration to session auth and PostgreSQL API**. Backend metadata uses Prisma/PostgreSQL, and frontend now talks to same-origin session endpoints with `credentials: include`.
 
 ## Stage 3C Status
 
@@ -38,7 +38,6 @@ Added in this stage:
 
 Not done in this stage:
 
-- frontend authentication and audio upload/player flows are not adapted to the new API until Stage 4
 - migrations are not applied automatically
 - an existing `database.json` on disk is an untouched legacy artifact; runtime code no longer reads or creates it
 
@@ -99,6 +98,17 @@ The script is interactive, hides password input, checks uniqueness, and never pr
 
 Project, collaboration, notification, and audio routes use PostgreSQL with session-backed ACL. Local files are available only through protected project stream routes.
 
+Frontend auth and API behavior in Stage 4:
+
+- `GET /api/auth/me` is the source of truth for current user state
+- no localStorage/sessionStorage auth source is used
+- no client-side bearer token storage is used
+- frontend API requests use relative same-origin paths and include credentials
+- local audio upload uses multipart `FormData` (`file` field), not Base64 JSON
+- audio playback uses backend `streamUrl` (local) or validated `externalUrl` (external)
+- `/uploads` is never used as a public static frontend URL
+- Gemini is backend-only (`POST /api/gemini/rhymes`); no browser Gemini key or SDK
+
 ## Gemini Operational Limits
 
 Gemini uses independent in-memory rate-limit stores for the IP and authenticated-user limits. This is suitable only while one app instance is running; multiple replicas require a shared limiter store in a later infrastructure stage.
@@ -152,7 +162,7 @@ npm run prisma:generate
 npm run dev
 ```
 
-The current Stage 3C branch stores audio metadata in PostgreSQL and streams private local files through authenticated Range endpoints.
+The current Stage 4 branch uses session auth on the frontend and keeps audio metadata/streaming on the protected PostgreSQL-backed backend.
 
 ## Health Checks
 

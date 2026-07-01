@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { Edit3, Eye, Save, History, MessageSquare, Maximize2, Minimize2, ArrowRight } from "lucide-react";
-import { TrackVersion } from "../types";
+import { AuthUser, LyricVersion } from "../types";
 
 interface LyricsEditorProps {
   lyrics: string;
   onUpdateLyrics: (newLyrics: string, versionLabel?: string, makeOriginal?: boolean) => void;
   onPinVersion?: (versionId: string) => void;
-  versionHistory: TrackVersion[];
+  versionHistory: LyricVersion[];
   selectedLineIndex: number | null;
   onSelectLine: (index: number | null) => void;
-  currentUser: any;
+  currentUser: AuthUser | null;
   trackCommentsCount: (lineIdx: number) => number;
+  canEdit: boolean;
 }
 
 export default function LyricsEditor({
@@ -22,6 +23,7 @@ export default function LyricsEditor({
   onSelectLine,
   currentUser,
   trackCommentsCount,
+  canEdit,
 }: LyricsEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(lyrics);
@@ -68,8 +70,10 @@ export default function LyricsEditor({
     setSelectedVersionId("current"); // Automatically focus on the current live text for editing
   };
 
-  const restoreVersion = (ver: TrackVersion) => {
-    if (confirm(`Вы уверены, что хотите восстановить версию от ${ver.author} (${ver.label})?`)) {
+  const lyricAuthor = (authorId: string | null) => (authorId ? authorId.slice(0, 8) : "Deleted user");
+
+  const restoreVersion = (ver: LyricVersion) => {
+    if (confirm(`Вы уверены, что хотите восстановить версию от ${lyricAuthor(ver.authorId)} (${ver.label})?`)) {
       onUpdateLyrics(ver.lyrics, `Восстановлено из истории: ${ver.label}`);
       setEditedText(ver.lyrics);
       setIsEditing(false);
@@ -139,6 +143,7 @@ export default function LyricsEditor({
             </button>
             <button
               onClick={handleStartEdit}
+              disabled={!canEdit}
               className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 isEditing
                   ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/25"
@@ -184,7 +189,7 @@ export default function LyricsEditor({
               {versionHistory.map((ver) => (
                 <option key={ver.id} value={ver.id}>
                   {ver.isOriginal ? "👑 " : "📄 "}
-                  {ver.label.length > 20 ? `${ver.label.substring(0, 20)}...` : ver.label} ({ver.author})
+                  {ver.label.length > 20 ? `${ver.label.substring(0, 20)}...` : ver.label} ({lyricAuthor(ver.authorId)})
                 </option>
               ))}
             </select>
@@ -206,7 +211,7 @@ export default function LyricsEditor({
                   </span>
                 )}
                 <span className="text-white font-bold text-xs">
-                  Автор: {activeVersion.author}
+                  Автор: {lyricAuthor(activeVersion.authorId)}
                 </span>
               </div>
               <p className="text-[10px] text-neutral-400 leading-normal">
@@ -217,6 +222,7 @@ export default function LyricsEditor({
               {onPinVersion && (
                 <button
                   onClick={() => onPinVersion(activeVersion.id)}
+                  disabled={!canEdit}
                   className={`text-[10px] font-bold px-2 py-1.5 rounded-lg transition-all cursor-pointer border ${
                     activeVersion.isOriginal
                       ? "bg-neutral-900 hover:bg-neutral-850 text-neutral-400 hover:text-white border-neutral-800"
@@ -229,11 +235,13 @@ export default function LyricsEditor({
               )}
               <button
                 onClick={() => {
+                  if (!canEdit) return;
                   if (confirm(`Вы уверены, что хотите восстановить эту версию как основную рабочую версию проекта?`)) {
                     onUpdateLyrics(activeVersion.lyrics, `Восстановлено из архива: ${activeVersion.label}`);
                     setSelectedVersionId("current");
                   }
                 }}
+                disabled={!canEdit}
                 className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg transition-all cursor-pointer shadow-md shrink-0"
               >
                 Применить
@@ -273,7 +281,7 @@ export default function LyricsEditor({
                         </span>
                       )}
                     </div>
-                    <div className="text-white font-semibold mt-1">Автор: {ver.author}</div>
+                    <div className="text-white font-semibold mt-1">Автор: {lyricAuthor(ver.authorId)}</div>
                     <div className="text-[10px] text-neutral-500">
                       {new Date(ver.timestamp).toLocaleString("ru-RU")}
                     </div>
@@ -291,6 +299,7 @@ export default function LyricsEditor({
                     {onPinVersion && (
                       <button
                         onClick={() => onPinVersion(ver.id)}
+                        disabled={!canEdit}
                         className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all cursor-pointer text-center border ${
                           ver.isOriginal
                             ? "bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white"

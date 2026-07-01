@@ -1,15 +1,19 @@
 import React, { useState } from "react";
 import { Plus, CheckCircle2, Circle, Clock, CheckSquare } from "lucide-react";
-import { Task } from "../types";
+import { ProjectMember, Task } from "../types";
+
+const isTaskStatus = (value: string): value is Task["status"] =>
+  value === "todo" || value === "in-progress" || value === "done";
 
 interface TaskBoardProps {
   tasks: Task[];
-  onAddTask: (title: string, assignedTo?: string) => void;
+  onAddTask: (title: string, assignedToId?: string) => void;
   onUpdateTaskStatus: (taskId: string, status: "todo" | "in-progress" | "done") => void;
-  participants: any[];
+  participants: ProjectMember[];
+  canEdit: boolean;
 }
 
-export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, participants }: TaskBoardProps) {
+export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, participants, canEdit }: TaskBoardProps) {
   const [title, setTitle] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -45,7 +49,11 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
         {/* Change status action */}
         <select
           value={task.status}
-          onChange={(e) => onUpdateTaskStatus(task.id, e.target.value as any)}
+          onChange={(e) => {
+            const status = e.target.value;
+            if (isTaskStatus(status)) onUpdateTaskStatus(task.id, status);
+          }}
+          disabled={!canEdit}
           className="bg-neutral-950 border border-neutral-800 rounded p-0.5 text-[9px] text-neutral-400 focus:outline-none cursor-pointer"
         >
           <option value="todo">Ждёт</option>
@@ -65,6 +73,7 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
         </div>
         <button
           onClick={() => setShowAdd(!showAdd)}
+          disabled={!canEdit}
           className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white p-1 px-2 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
         >
           <Plus className="w-3 h-3" />
@@ -72,7 +81,7 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
         </button>
       </div>
 
-      {showAdd && (
+      {showAdd && canEdit && (
         <form onSubmit={handleSubmit} className="bg-neutral-900 border border-neutral-800 p-3 rounded-lg mb-4 space-y-2 text-xs">
           <div>
             <label className="block text-[10px] text-neutral-400 mb-1">ЧТО НУЖНО СДЕЛАТЬ</label>
@@ -94,7 +103,7 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
             >
               <option value="">Не назначен</option>
               {participants.map((p) => (
-                <option key={p.userId} value={p.displayName}>
+                <option key={p.userId} value={p.userId}>
                   {p.displayName}
                 </option>
               ))}

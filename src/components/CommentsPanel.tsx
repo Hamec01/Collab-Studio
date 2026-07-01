@@ -6,6 +6,7 @@ interface CommentsPanelProps {
   comments: Comment[];
   onAddComment: (text: string, lineIndex?: number) => void;
   onResolveComment: (commentId: string) => void;
+  canResolve: boolean;
   selectedLineIndex: number | null;
   onClearSelectedLine: () => void;
   lyricsLines: string[];
@@ -15,6 +16,7 @@ export default function CommentsPanel({
   comments,
   onAddComment,
   onResolveComment,
+  canResolve,
   selectedLineIndex,
   onClearSelectedLine,
   lyricsLines,
@@ -146,6 +148,7 @@ export default function CommentsPanel({
 
                 <button
                   onClick={() => onResolveComment(comment.id)}
+                  disabled={!canResolve}
                   className={`p-1 rounded-md border transition-all cursor-pointer ${
                     comment.resolved
                       ? "bg-neutral-800 border-neutral-700 text-amber-500 hover:bg-neutral-700"

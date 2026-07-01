@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Send, User, Clock } from "lucide-react";
-import { ChatMessage } from "../types";
+import { Send, Clock } from "lucide-react";
+import { AuthUser, ChatMessage } from "../types";
 
 interface ChatRoomProps {
   chat: ChatMessage[];
   onSendMessage: (text: string) => void;
-  currentUser: any;
+  currentUser: AuthUser | null;
+  canSend: boolean;
 }
 
-export default function ChatRoom({ chat, onSendMessage, currentUser }: ChatRoomProps) {
+export default function ChatRoom({ chat, onSendMessage, currentUser, canSend }: ChatRoomProps) {
   const [text, setText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +49,7 @@ export default function ChatRoom({ chat, onSendMessage, currentUser }: ChatRoomP
           </div>
         ) : (
           chat.map((msg) => {
-            const isMe = msg.author.includes(currentUser?.displayName || "----");
+            const isMe = msg.authorUser?.id === currentUser?.id;
             return (
               <div
                 key={msg.id}
@@ -95,7 +96,7 @@ export default function ChatRoom({ chat, onSendMessage, currentUser }: ChatRoomP
         />
         <button
           type="submit"
-          disabled={!text.trim()}
+          disabled={!text.trim() || !canSend}
           className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-900 disabled:text-neutral-600 text-white p-2 px-3 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
         >
           <Send className="w-3.5 h-3.5" />

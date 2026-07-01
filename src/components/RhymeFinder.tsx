@@ -1,8 +1,14 @@
 import React, { useState } from "react";
 import { Search, Sparkles, BookOpen, Music, RefreshCw } from "lucide-react";
 import { RhymeResult } from "../types";
+import { requestRhymes } from "../api/gemini";
+import { ApiError } from "../api/client";
 
-export default function RhymeFinder() {
+interface RhymeFinderProps {
+  onUnauthorized?: () => void;
+}
+
+export default function RhymeFinder({ onUnauthorized }: RhymeFinderProps) {
   const [word, setWord] = useState("");
   const [context, setContext] = useState("");
   const [language, setLanguage] = useState("Russian");
@@ -17,24 +23,23 @@ export default function RhymeFinder() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/gemini/rhymes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          word: word.trim(),
-          language,
-          context: context.trim(),
-        }),
+      const data = await requestRhymes({
+        word: word.trim(),
+        language,
+        context: context.trim(),
       });
-
-      if (!response.ok) {
-        throw new Error("Не удалось получить рифмы");
-      }
-
-      const data = await response.json();
       setResult(data);
     } catch (err) {
-      setError("Ошибка при поиске рифм. Пожалуйста, попробуйте позже.");
+      if (err instanceof ApiError) {
+        if (err.status === 401) {
+          setError("Сессия истекла. Войдите снова.");
+          onUnauthorized?.();
+        }
+        else if (err.status === 429) setError("Слишком много запросов. Попробуйте позже.");
+        else setError(err.message || "Не удалось получить рифмы");
+      } else {
+        setError("Ошибка при поиске рифм. Пожалуйста, попробуйте позже.");
+      }
     } finally {
       setLoading(false);
     }

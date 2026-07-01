@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { FolderPlus, Disc, Layers, Music, Users, Plus, Tag, ArrowRight, Trash2, UserPlus, Check } from "lucide-react";
-import { Project, Track } from "../types";
+import { AuthUser, Project, Track } from "../types";
 
 interface ProjectListProps {
   projects: Project[];
@@ -11,7 +11,7 @@ interface ProjectListProps {
   onCreateProject: (title: string, type: 'single' | 'album', tags: string[], coverUrl?: string) => void;
   onAddTrack: (projectId: string, title: string) => void;
   onDeleteProject: (projectId: string) => void;
-  currentUser: any;
+  currentUser: AuthUser | null;
 }
 
 export default function ProjectList({
@@ -104,7 +104,7 @@ export default function ProjectList({
               <label className="block text-[10px] font-mono text-neutral-400 mb-1">ФОРМАТ</label>
               <select
                 value={newType}
-                onChange={(e) => setNewType(e.target.value as any)}
+                onChange={(e) => setNewType(e.target.value as "single" | "album")}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none cursor-pointer"
               >
                 <option value="single">Сингл (Один трек)</option>
@@ -174,7 +174,7 @@ export default function ProjectList({
                   className="p-3 flex items-start gap-3 cursor-pointer select-none relative"
                 >
                   <img
-                    src={proj.coverUrl}
+                    src={proj.coverUrl || "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=300&q=80"}
                     alt={proj.title}
                     className="w-12 h-12 rounded-lg object-cover bg-neutral-850 border border-neutral-800 shrink-0"
                     referrerPolicy="no-referrer"

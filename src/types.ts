@@ -1,69 +1,108 @@
-export interface User {
+export interface AuthUser {
   id: string;
   username: string;
   displayName: string;
-  avatarUrl?: string;
-  email?: string;
-  role: 'admin' | 'user';
+  avatarUrl: string | null;
+  email: string | null;
+  role: "admin" | "user";
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface Participant {
+export interface ProjectMember {
   userId: string;
   username: string;
+  email: string | null;
   displayName: string;
-  role: 'owner' | 'editor' | 'viewer';
+  avatarUrl: string | null;
+  role: "owner" | "editor" | "viewer";
+  createdAt: string;
 }
 
-export interface TrackVersion {
+export interface LyricVersion {
   id: string;
   lyrics: string;
-  author: string;
+  authorId: string | null;
+  label: string;
+  isOriginal: boolean;
   timestamp: string;
-  label: string; // e.g. "Draft v1", "After Producer's feedback"
-  isOriginal?: boolean;
+  createdAt: string;
 }
 
 export interface AudioVersion {
   id: string;
-  filename: string;
-  size?: string; // in MB or human readable
-  url: string; // can be a local upload URL or a Google/Yandex/TG link
-  isExternal: boolean;
-  externalProvider?: 'google' | 'yandex' | 'telegram' | 'other';
-  uploadedBy: string;
-  timestamp: string;
+  originalFilename: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  durationSeconds: number | null;
   versionNumber: number;
+  uploadedBy: {
+    id: string | null;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  createdAt: string;
+  streamUrl: string | null;
+  isExternal: boolean;
+  externalUrl: string | null;
+  externalProvider: "google" | "yandex" | "telegram" | "other" | null;
+}
+
+export interface CollaborationUser {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
 }
 
 export interface Comment {
   id: string;
-  lineIndex?: number; // if connected to a specific lyrics line, 0-indexed
+  authorId: string | null;
   author: string;
+  authorUser: CollaborationUser | null;
+  lineIndex?: number;
   text: string;
-  timestamp: string;
   resolved: boolean;
+  resolvedById: string | null;
+  resolvedBy: CollaborationUser | null;
+  resolvedAt: string | null;
+  timestamp: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ChatMessage {
   id: string;
+  authorId: string | null;
   author: string;
+  authorUser: CollaborationUser | null;
   text: string;
   timestamp: string;
+  createdAt: string;
 }
 
 export interface Task {
   id: string;
   title: string;
-  status: 'todo' | 'in-progress' | 'done';
-  assignedTo?: string; // displayName or username
+  description: string | null;
+  status: "todo" | "in-progress" | "done";
+  createdById: string | null;
+  createdBy: CollaborationUser | null;
+  assignedToId: string | null;
+  assignedTo?: string;
+  assignedToUser: CollaborationUser | null;
   timestamp: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface AudioAnnotation {
+export interface Annotation {
   id: string;
+  authorId: string | null;
+  author: string;
+  authorUser: CollaborationUser | null;
   timestampSeconds: number;
   text: string;
-  author: string;
   createdAt: string;
 }
 
@@ -72,21 +111,25 @@ export interface Track {
   title: string;
   lyrics: string;
   tags: string[];
-  versionHistory: TrackVersion[];
+  versionHistory: LyricVersion[];
+  lyricVersions: LyricVersion[];
   audioVersions: AudioVersion[];
   comments: Comment[];
   chat: ChatMessage[];
   tasks: Task[];
-  annotations: AudioAnnotation[];
+  annotations: Annotation[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Project {
   id: string;
   title: string;
   type: 'single' | 'album';
-  coverUrl: string;
+  coverUrl: string | null;
   tags: string[];
-  participants: Participant[];
+  participants: ProjectMember[];
+  members: ProjectMember[];
   tracks: Track[];
   createdAt: string;
   updatedAt: string;
@@ -96,10 +139,14 @@ export interface AppNotification {
   id: string;
   projectId: string;
   projectName: string;
-  trackId?: string;
-  trackName?: string;
+  trackId: string | null;
+  trackName: string | null;
+  type: string;
   message: string;
+  actorId: string | null;
   author: string;
+  actor: CollaborationUser | null;
+  createdAt: string;
   timestamp: string;
   read: boolean;
 }
@@ -109,3 +156,5 @@ export interface RhymeResult {
   rhymes: string[];
   suggestions?: string[];
 }
+
+export type ApiErrorCode = string;

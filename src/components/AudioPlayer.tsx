@@ -13,24 +13,24 @@ import {
   ChevronUp,
   ChevronDown
 } from "lucide-react";
-import { AudioVersion, AudioAnnotation } from "../types";
+import { Annotation, AudioVersion } from "../types";
 
 interface AudioPlayerProps {
-  currentTrack: any;
   audioVersions: AudioVersion[];
-  annotations: AudioAnnotation[];
+  annotations: Annotation[];
   onAddAnnotation: (timestampSeconds: number, text: string) => void;
   onSelectAudioVersion: (versionId: string) => void;
   selectedAudioVersionId: string | null;
+  canAnnotate: boolean;
 }
 
 export default function AudioPlayer({
-  currentTrack,
   audioVersions,
   annotations,
   onAddAnnotation,
   onSelectAudioVersion,
   selectedAudioVersionId,
+  canAnnotate,
 }: AudioPlayerProps) {
   const activeVersion = audioVersions.find((v) => v.id === selectedAudioVersionId) || audioVersions[0];
 
@@ -178,10 +178,10 @@ export default function AudioPlayer({
       <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-indigo-500 to-teal-500" />
 
       {/* Hidden Audio Element */}
-      {activeVersion?.url && (
+      {(activeVersion?.streamUrl || activeVersion?.externalUrl) && (
         <audio
           ref={audioRef}
-          src={activeVersion.url}
+          src={activeVersion.streamUrl || activeVersion.externalUrl || undefined}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={() => setIsPlaying(false)}
@@ -196,11 +196,11 @@ export default function AudioPlayer({
             АКТИВНАЯ ДЕМКА ТРЕКА
           </div>
           <h4 className="text-sm font-semibold text-white truncate max-w-[280px]">
-            {activeVersion ? activeVersion.filename : "Аудио не загружено"}
+            {activeVersion ? activeVersion.originalFilename : "Аудио не загружено"}
           </h4>
           <p className="text-[11px] text-neutral-400">
             {activeVersion
-              ? `Версия #${activeVersion.versionNumber} от ${activeVersion.uploadedBy}`
+              ? `Версия #${activeVersion.versionNumber} от ${activeVersion.uploadedBy.displayName}`
               : "Пожалуйста, загрузите mp3 или вставьте ссылку на демо"}
           </p>
         </div>
@@ -216,7 +216,7 @@ export default function AudioPlayer({
             >
               {audioVersions.map((av) => (
                 <option key={av.id} value={av.id}>
-                  v{av.versionNumber} ({av.filename.length > 15 ? av.filename.substring(0, 15) + "..." : av.filename})
+                  v{av.versionNumber} ({av.originalFilename.length > 15 ? av.originalFilename.substring(0, 15) + "..." : av.originalFilename})
                 </option>
               ))}
             </select>
@@ -289,7 +289,7 @@ export default function AudioPlayer({
           {/* Quick Annotation button */}
           <button
             onClick={handleOpenAnnotation}
-            disabled={!activeVersion}
+            disabled={!activeVersion || !canAnnotate}
             className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 text-[11px] font-semibold bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-950 text-indigo-400 px-3 py-2.5 sm:py-2 rounded-lg border border-neutral-800 hover:border-indigo-500/30 transition-all cursor-pointer"
             title="Оставить заметку на текущей секунде трека"
           >
@@ -400,7 +400,7 @@ export default function AudioPlayer({
           />
           <button
             onClick={saveAnnotation}
-            disabled={!annotText.trim()}
+            disabled={!annotText.trim() || !canAnnotate}
             className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-850 disabled:text-neutral-600 text-white font-medium p-1.5 rounded text-xs transition-colors self-end"
           >
             Сохранить заметку
