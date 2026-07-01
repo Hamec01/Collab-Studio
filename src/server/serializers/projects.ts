@@ -6,10 +6,15 @@ import {
   serializeComment,
   serializeTask,
 } from "./collaboration";
+import { httpsExternalAudioUrl } from "../schemas/tracks";
 
 export const trackRelationsInclude = {
   lyricVersions: {
     orderBy: [{ createdAt: "desc" as const }, { id: "asc" as const }],
+  },
+  audioVersions: {
+    include: { uploadedBy: { select: collaborationUserSelect } },
+    orderBy: [{ versionNumber: "desc" as const }, { id: "asc" as const }],
   },
   comments: {
     include: {
@@ -72,6 +77,29 @@ export function serializeLyricVersion(version: LyricVersion) {
   };
 }
 
+export function serializeAudioVersion(audio: TrackWithRelations["audioVersions"][number], projectId: string) {
+  const streamUrl = audio.isExternal ? null : `/api/projects/${projectId}/tracks/${audio.trackId}/audio/${audio.id}/stream`;
+  const externalUrl = audio.isExternal && audio.externalUrl && httpsExternalAudioUrl.safeParse(audio.externalUrl).success ? audio.externalUrl : null;
+  return {
+    id: audio.id,
+    originalFilename: audio.originalFilename,
+    mimeType: audio.mimeType,
+    sizeBytes: audio.sizeBytes,
+    durationSeconds: audio.durationSeconds,
+    versionNumber: audio.versionNumber,
+    uploadedBy: {
+      id: audio.uploadedBy?.id ?? null,
+      displayName: audio.uploadedBy?.displayName ?? "Deleted user",
+      avatarUrl: audio.uploadedBy?.avatarUrl ?? null,
+    },
+    isExternal: audio.isExternal,
+    externalUrl,
+    externalProvider: audio.externalProvider,
+    streamUrl,
+    createdAt: audio.createdAt.toISOString(),
+  };
+}
+
 export function serializeTrack(track: TrackWithRelations) {
   return {
     id: track.id,
@@ -80,7 +108,7 @@ export function serializeTrack(track: TrackWithRelations) {
     tags: track.tags,
     versionHistory: track.lyricVersions.map(serializeLyricVersion),
     lyricVersions: track.lyricVersions.map(serializeLyricVersion),
-    audioVersions: [],
+    audioVersions: track.audioVersions.map((audio) => serializeAudioVersion(audio, track.projectId)),
     comments: track.comments.map(serializeComment),
     chat: track.chatMessages.map(serializeChatMessage),
     tasks: track.tasks.map(serializeTask),

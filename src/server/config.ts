@@ -23,7 +23,7 @@ const envSchema = z.object({
       message: "SESSION_SECRET must not use a default or placeholder value",
     }),
   GEMINI_API_KEY: z.string().optional(),
-  UPLOADS_DIR: z.string().min(1).default("/app/uploads"),
+  UPLOADS_DIR: z.string().min(1).default("./uploads"),
   ALLOW_PUBLIC_REGISTRATION: booleanFromEnv(false),
   TRUST_PROXY: booleanFromEnv(false),
   COOKIE_SECURE: booleanFromEnv(false),

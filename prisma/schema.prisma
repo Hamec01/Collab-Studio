@@ -146,14 +146,16 @@ model LyricVersion {
 }
 
 model AudioVersion {
-  id               String            @id @default(uuid()) @db.Uuid
-  trackId          String            @db.Uuid
-  uploadedById     String?           @db.Uuid
-  filename         String
+  id               String  @id @default(uuid()) @db.Uuid
+  trackId          String  @db.Uuid
+  uploadedById     String? @db.Uuid
   originalFilename String
-  mimeType         String
-  sizeBytes        Int
-  storagePath      String?
+  storedFilename   String?
+  storageKey       String?
+  mimeType         String?
+  sizeBytes        Int?
+  durationSeconds  Float?
+
   externalUrl      String?
   isExternal       Boolean           @default(false)
   externalProvider ExternalProvider?

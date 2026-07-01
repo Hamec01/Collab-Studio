@@ -12,9 +12,9 @@ Collab-Studio is being migrated to a fully self-hosted architecture:
 - HttpOnly SameSite=Lax session cookie
 - Gemini API as the only external service
 
-This branch is currently at **Stage 3B: PostgreSQL-backed collaboration**. Projects, memberships, tracks, lyric versions, comments, chat, tasks, annotations, and notifications use Prisma/PostgreSQL. The unchanged audio upload route remains legacy JSON/filesystem code until Stage 3C.
+This branch is currently at **Stage 3C: protected PostgreSQL-backed audio storage**. All application metadata uses Prisma/PostgreSQL; local audio uses a private bind-mounted directory and authenticated streaming.
 
-## Stage 3B Status
+## Stage 3C Status
 
 Added in this stage:
 
@@ -30,17 +30,17 @@ Added in this stage:
 - Argon2id password hashing
 - PostgreSQL-backed projects, project members, tracks, and lyric versions
 - PostgreSQL-backed comments, chat messages, tasks, annotations, and user-scoped notifications
+- PostgreSQL-backed AudioVersion metadata, multipart uploads, signature validation, and protected Range streaming
 - authenticated Gemini route with Zod validation, per-IP and per-user rate limits, a 10-second timeout, and local fallback
 - project access middleware for admin/owner/editor/viewer
 - Helmet, API rate limits, request ids, safe error responses, and Origin checks
-- backup/restore script skeletons
+- guarded PostgreSQL and private uploads backup/restore scripts
 
 Not done in this stage:
 
-- audio metadata and files still use the legacy JSON/filesystem path; the untouched audio handler also retains its legacy JSON notification side effect until Stage 3C
-- frontend auth/upload flows are not changed yet
+- frontend authentication and audio upload/player flows are not adapted to the new API until Stage 4
 - migrations are not applied automatically
-- existing `database.json` is not deleted and is reserved for later one-off migration work
+- an existing `database.json` on disk is an untouched legacy artifact; runtime code no longer reads or creates it
 
 ## Environment
 
@@ -97,7 +97,7 @@ npm run create-admin
 
 The script is interactive, hides password input, checks uniqueness, and never prints the password or password hash.
 
-Project and collaboration routes now use PostgreSQL with session-backed ACL. Audio remains an unprotected legacy JSON/filesystem handler, so the application is still not ready for internet exposure.
+Project, collaboration, notification, and audio routes use PostgreSQL with session-backed ACL. Local files are available only through protected project stream routes.
 
 ## Gemini Operational Limits
 
@@ -121,7 +121,8 @@ Uploads are a bind mount configured by `UPLOADS_HOST_DIR`:
 UPLOADS_HOST_DIR=/home/deploy/app-data/collab-studio/uploads
 ```
 
-Create and permission this host directory manually before running the app. The repository setup does not create or modify that system path.
+Create and permission this host directory manually before running the app. The non-root `node` user in `node:22-bookworm-slim` must be able to create directories and files there (normally UID:GID `1000:1000`). Keep permissions private; do not use `chmod 777`. The repository setup does not create or modify that host path. PostgreSQL and the migrate service do not mount uploads.
+`UPLOADS_DIR=/app/uploads` is private container storage. Never publish it through a web server or include it in the image; all local audio access must pass project ACL.
 
 ## Migrations
 
@@ -138,16 +139,9 @@ Do not run this until the database target is confirmed.
 
 ## Future Data Migration
 
-A future one-off migration should move existing `database.json` content into PostgreSQL after the remaining legacy subsystems are modeled. The planned direction is:
+A future one-off migration must import legacy `database.json` audio metadata and existing `uploads` files into PostgreSQL `AudioVersion` rows and the new `<projectId>/<trackId>/<uuid>.<ext>` layout. It must run only after the app is stopped and both sources are backed up. The migration must validate every source path and file signature, preserve the originals, avoid duplicate copies, and verify row/file counts before any manual cleanup. It is documented but not implemented or run in Stage 3C.
 
-1. Stop the app and make a verified backup of `database.json` and uploads.
-2. Parse `database.json` with a dedicated migration script.
-3. Map legacy users by username/email to PostgreSQL users.
-4. Insert projects, memberships, tracks, lyric versions, audio metadata, comments, chat, tasks, annotations, and notifications in transactions.
-5. Verify row counts and sample project access before switching traffic.
-6. Keep the original `database.json` read-only until restore has been tested.
-
-This migration is not implemented or run in Stage 3B. The foundation migration has never been applied and may still be reviewed now; after its first application it must not be edited, and every schema change must use a new migration.
+The foundation migration has never been applied and may still be reviewed now. After its first application it must not be edited; subsequent schema changes require a new migration.
 
 ## Local Development
 
@@ -158,7 +152,7 @@ npm run prisma:generate
 npm run dev
 ```
 
-The current Stage 3B branch has auth, project, member, track, lyric version, collaboration, notification, and Gemini routes wired to Prisma/session. Audio remains legacy until Stage 3C.
+The current Stage 3C branch stores audio metadata in PostgreSQL and streams private local files through authenticated Range endpoints.
 
 ## Health Checks
 
@@ -172,29 +166,27 @@ A PostgreSQL readiness endpoint will be wired into the application routes in a l
 
 ## Backup
 
-The backup skeleton is available as:
+The backup command stops the app, writes a PostgreSQL dump and a private uploads archive, and leaves the app stopped for artifact verification. It aborts if the uploads source is unavailable:
 
 ```bash
 npm run backup
 ```
 
-It is designed to dump PostgreSQL through Docker Compose and archive the configured uploads directory. Review the generated files and storage location before relying on it for production.
+Backups never include the production env file. Store and test both artifacts together before relying on them.
 
-Restore is intentionally manual at this stage:
+Restore requires reviewed dump/archive paths, validates archive traversal and links, stops the app, and requires typing `RESTORE`:
 
 ```bash
-npm run restore
+npm run restore -- backups/postgres-TIMESTAMP.sql.gz backups/uploads-TIMESTAMP.tar.gz
 ```
 
-The restore script exits with instructions until a reviewed restore workflow is implemented.
+Restore keeps the previous uploads directory as a timestamped pre-restore copy. Verify ownership and data before restarting the app.
 
 ## Security Notes
 
 Before exposing the application to the internet, later stages must complete:
 
-- JSON storage removal for remaining legacy subsystems
-- protected multipart audio upload and streaming
-- Origin checks for mutating requests
-- Gemini rate limit and timeout
-- request logging redaction
+- frontend migration to server sessions and multipart audio uploads
 - PostgreSQL readiness checks
+- reverse proxy, domain, and HTTPS configuration
+- operational backup/restore testing

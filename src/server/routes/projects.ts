@@ -1,5 +1,11 @@
+import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import { promises as fsp } from "node:fs";
+import path from "node:path";
+import multer from "multer";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { Prisma, type ProjectRole } from "@prisma/client";
+import { getConfig } from "../config";
 import { prisma } from "../db";
 import { requireAuth, requireProjectEditor, requireProjectMember, requireProjectOwner } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
@@ -11,8 +17,10 @@ import {
   updateMemberRoleSchema,
   updateProjectSchema,
 } from "../schemas/projects";
-import { createLyricVersionSchema, createTrackSchema, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
-import { serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
+import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
+import { serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
+import { collaborationUserSelect } from "../serializers/collaboration";
+import { createProjectMemberNotifications } from "../services/notifications";
 
 const router = Router();
 
@@ -74,6 +82,260 @@ async function assertOwnerWouldRemain(tx: Prisma.TransactionClient, projectId: s
   if (ownerCount < 1) {
     throw new AppError(409, "LAST_OWNER", "Project must keep at least one owner");
   }
+}
+
+const MAX_AUDIO_SIZE_BYTES = 25 * 1024 * 1024;
+const UPLOADS_ROOT = path.resolve(getConfig().UPLOADS_DIR);
+const AUDIO_TEMP_DIR = path.join(UPLOADS_ROOT, ".tmp");
+
+type AudioFormat = { extension: string; mimeTypes: readonly string[]; minimumBytes: number; matches: (header: Buffer) => boolean };
+
+function isValidMp3Header(header: Buffer) {
+  if (header.subarray(0, 3).toString("ascii") === "ID3") return header.length >= 10;
+  if (header.length < 4) return false;
+  if (header[0] !== 0xff || (header[1] & 0xe0) !== 0xe0) return false;
+  const mpegVersionBits = (header[1] >> 3) & 0x03;
+  const layerBits = (header[1] >> 1) & 0x03;
+  const bitrateIndex = (header[2] >> 4) & 0x0f;
+  const sampleRateIndex = (header[2] >> 2) & 0x03;
+  if (mpegVersionBits === 0x01 || layerBits === 0x00) return false;
+  if (bitrateIndex === 0x00 || bitrateIndex === 0x0f || sampleRateIndex === 0x03) return false;
+  return true;
+}
+
+function hasAudioM4aBrand(header: Buffer) {
+  if (header.length < 24) return false;
+  if (header.subarray(4, 8).toString("ascii") !== "ftyp") return false;
+  const audioBrands = new Set(["M4A ", "M4B ", "M4P ", "M4R "]);
+  for (let offset = 8; offset + 4 <= Math.min(header.length, 72); offset += 4) {
+    if (audioBrands.has(header.subarray(offset, offset + 4).toString("ascii"))) return true;
+  }
+  return false;
+}
+
+function hasWebmAudioMarker(header: Buffer) {
+  if (!header.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return false;
+  const asciiHeader = header.toString("ascii");
+  return asciiHeader.toLowerCase().includes("webm") && /A_OPUS|A_VORBIS|A_AAC|A_MPEG\/L3/.test(asciiHeader);
+}
+
+const audioFormats: readonly AudioFormat[] = [
+  { extension: ".mp3", mimeTypes: ["audio/mpeg"], minimumBytes: 10, matches: (header) => isValidMp3Header(header) },
+  { extension: ".wav", mimeTypes: ["audio/wav", "audio/x-wav"], minimumBytes: 12, matches: (header) => header.subarray(0, 4).toString("ascii") === "RIFF" && header.subarray(8, 12).toString("ascii") === "WAVE" },
+  { extension: ".flac", mimeTypes: ["audio/flac"], minimumBytes: 4, matches: (header) => header.subarray(0, 4).toString("ascii") === "fLaC" },
+  { extension: ".ogg", mimeTypes: ["audio/ogg"], minimumBytes: 32, matches: (header) => header.subarray(0, 4).toString("ascii") === "OggS" && /OpusHead|vorbis|Speex   |fLaC/.test(header.toString("latin1")) },
+  { extension: ".aac", mimeTypes: ["audio/aac"], minimumBytes: 7, matches: (header) => header.subarray(0, 4).toString("ascii") === "ADIF" || (header[0] === 0xff && (header[1] & 0xf6) === 0xf0) },
+  { extension: ".m4a", mimeTypes: ["audio/mp4"], minimumBytes: 24, matches: (header) => hasAudioM4aBrand(header) },
+  { extension: ".webm", mimeTypes: ["audio/webm"], minimumBytes: 64, matches: (header) => hasWebmAudioMarker(header) },
+];
+
+const audioUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, callback) => {
+      void fsp.mkdir(AUDIO_TEMP_DIR, { recursive: true, mode: 0o750 }).then(() => callback(null, AUDIO_TEMP_DIR), () => callback(new AppError(503, "STORAGE_UNAVAILABLE", "Audio storage is unavailable"), AUDIO_TEMP_DIR));
+    },
+    filename: (_req, _file, callback) => callback(null, `upload-${randomUUID()}.tmp`),
+  }),
+  limits: { fileSize: MAX_AUDIO_SIZE_BYTES, files: 1, fields: 3, parts: 4 },
+});
+
+const requireAudioTrack = asyncHandler(async (req, _res, next) => {
+  const { projectId, trackId } = audioTrackParamsSchema.parse(req.params);
+  const track = await prisma.track.findFirst({ where: { id: trackId, projectId }, select: { id: true } });
+  if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+  next();
+});
+
+function parseAudioMultipart(req: Request, res: Response, next: NextFunction) {
+  audioUpload.single("file")(req, res, (error) => {
+    if (!error) return next();
+    if (error instanceof multer.MulterError) {
+      if (error.code === "LIMIT_FILE_SIZE") return next(new AppError(413, "FILE_TOO_LARGE", "Audio file exceeds the 25 MB limit"));
+      return next(new AppError(400, "INVALID_MULTIPART", "Invalid audio upload"));
+    }
+    next(error);
+  });
+}
+
+async function readFileHeader(filePath: string) {
+  const handle = await fsp.open(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(4096);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function validateUploadedAudio(file: Express.Multer.File) {
+  const originalFilename = file.originalname.normalize("NFC");
+  if (!originalFilename || originalFilename.length > 255 || /[\/\\\0\r\n]/.test(originalFilename) || originalFilename.includes("..")) {
+    throw new AppError(400, "INVALID_FILENAME", "Invalid audio filename");
+  }
+  const extension = path.extname(originalFilename).toLowerCase();
+  const format = audioFormats.find((candidate) => candidate.extension === extension);
+  if (!format || !format.mimeTypes.includes(file.mimetype)) throw new AppError(415, "UNSUPPORTED_AUDIO", "Unsupported audio format");
+
+  const stat = await fsp.stat(file.path);
+  if (!stat.isFile() || stat.size < 1 || stat.size !== file.size) throw new AppError(400, "INVALID_AUDIO", "Audio file is empty or invalid");
+  if (stat.size > MAX_AUDIO_SIZE_BYTES) throw new AppError(413, "FILE_TOO_LARGE", "Audio file exceeds the 25 MB limit");
+  const header = await readFileHeader(file.path);
+  if (header.length < format.minimumBytes || !format.matches(header)) throw new AppError(415, "UNSUPPORTED_AUDIO", "Audio signature does not match its format");
+  return { originalFilename, extension, mimeType: file.mimetype, sizeBytes: stat.size };
+}
+
+function createStorageKey(projectId: string, trackId: string, extension: string) {
+  const storedFilename = `${randomUUID()}${extension}`;
+  return { storedFilename, storageKey: path.posix.join(projectId, trackId, storedFilename) };
+}
+
+function resolveStoragePath(storageKey: string) {
+  if (!storageKey || path.posix.isAbsolute(storageKey) || storageKey.includes("\\") || storageKey.split("/").some((segment) => segment === "" || segment === "." || segment === "..") || path.posix.normalize(storageKey) !== storageKey) {
+    throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
+  }
+  const resolved = path.resolve(UPLOADS_ROOT, ...storageKey.split("/"));
+  if (resolved !== UPLOADS_ROOT && !resolved.startsWith(`${UPLOADS_ROOT}${path.sep}`)) throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
+  return resolved;
+}
+function isPathInside(root: string, candidate: string) {
+  const relative = path.relative(root, candidate);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+async function ensureStorageDirectory(projectId: string, trackId: string) {
+  await fsp.mkdir(UPLOADS_ROOT, { recursive: true, mode: 0o750 });
+  const realRoot = await fsp.realpath(UPLOADS_ROOT);
+  let current = UPLOADS_ROOT;
+
+  for (const segment of [projectId, trackId]) {
+    const candidate = path.join(current, segment);
+    try {
+      await fsp.mkdir(candidate, { mode: 0o750 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+    const candidateStat = await fsp.lstat(candidate);
+    if (candidateStat.isSymbolicLink() || !candidateStat.isDirectory()) {
+      throw new AppError(503, "STORAGE_UNAVAILABLE", "Audio storage is unavailable");
+    }
+    const realCandidate = await fsp.realpath(candidate);
+    if (!isPathInside(realRoot, realCandidate)) {
+      throw new AppError(503, "STORAGE_UNAVAILABLE", "Audio storage is unavailable");
+    }
+    current = candidate;
+  }
+
+  return current;
+}
+
+async function resolveExistingStoragePath(storageKey: string) {
+  const resolved = resolveStoragePath(storageKey);
+  const realRoot = await fsp.realpath(UPLOADS_ROOT);
+  let current = UPLOADS_ROOT;
+
+  for (const segment of storageKey.split("/")) {
+    current = path.join(current, segment);
+    const segmentStat = await fsp.lstat(current);
+    if (segmentStat.isSymbolicLink()) {
+      throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
+    }
+  }
+
+  const realResolved = await fsp.realpath(resolved);
+  if (!isPathInside(realRoot, realResolved)) {
+    throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
+  }
+  return realResolved;
+}
+
+
+async function cleanupAudioFile(filePath: string | undefined, audioId: string) {
+  if (!filePath) return;
+  try {
+    await fsp.unlink(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.error("Audio cleanup failed", { audioId });
+  }
+}
+
+const audioInclude = { uploadedBy: { select: collaborationUserSelect } } as const;
+
+type AudioCreateInput = {
+  projectId: string; trackId: string; uploadedById: string; actorName: string; originalFilename: string; storedFilename?: string; storageKey?: string; mimeType?: string; sizeBytes?: number; isExternal: boolean; externalUrl?: string; externalProvider?: "google" | "yandex" | "telegram" | "other";
+};
+
+async function createAudioMetadata(input: AudioCreateInput) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const track = await tx.track.findFirst({ where: { id: input.trackId, projectId: input.projectId }, select: { id: true } });
+        if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+        const aggregate = await tx.audioVersion.aggregate({ where: { trackId: input.trackId }, _max: { versionNumber: true } });
+        const versionNumber = (aggregate._max.versionNumber ?? 0) + 1;
+        const audio = await tx.audioVersion.create({
+          data: { trackId: input.trackId, uploadedById: input.uploadedById, originalFilename: input.originalFilename, storedFilename: input.storedFilename ?? null, storageKey: input.storageKey ?? null, mimeType: input.mimeType ?? null, sizeBytes: input.sizeBytes ?? null, isExternal: input.isExternal, externalUrl: input.externalUrl ?? null, externalProvider: input.externalProvider ?? null, versionNumber },
+          include: audioInclude,
+        });
+        await createProjectMemberNotifications(tx, { projectId: input.projectId, trackId: input.trackId, actorId: input.uploadedById, actorName: input.actorName, type: "audio_uploaded", message: `uploaded audio version #${versionNumber} "${input.originalFilename.slice(0, 100)}"` });
+        return audio;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2002" || error.code === "P2034");
+      if (!retryable || attempt === 3) throw error;
+    }
+  }
+  throw new AppError(409, "AUDIO_VERSION_CONFLICT", "Could not allocate an audio version number");
+}
+
+function parseByteRange(rangeHeader: string | undefined, size: number) {
+  if (!rangeHeader) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+  if (!match || (!match[1] && !match[2]) || size < 1) throw new AppError(416, "INVALID_RANGE", "Invalid audio byte range");
+  let start: number;
+  let end: number;
+  if (match[1]) {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : size - 1;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= size || end < start) throw new AppError(416, "INVALID_RANGE", "Invalid audio byte range");
+    end = Math.min(end, size - 1);
+  } else {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) throw new AppError(416, "INVALID_RANGE", "Invalid audio byte range");
+    start = Math.max(size - suffixLength, 0);
+    end = size - 1;
+  }
+  return { start, end };
+}
+
+function contentDispositionFilename(originalFilename: string) {
+  const normalized = originalFilename.normalize("NFC").replace(/[\r\n\0]/g, "").trim();
+  const safe = normalized.replace(/["\\/]/g, "_").replace(/[^\x20-\x7e]/g, "_").slice(0, 150) || "audio";
+  const utf8Name = normalized.slice(0, 255) || "audio";
+  const encoded = encodeURIComponent(utf8Name).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `inline; filename="${safe}"; filename*=UTF-8''${encoded}`;
+}
+
+export async function deleteStoredAudioVersion(audioId: string) {
+  const audio = await prisma.audioVersion.findUnique({ where: { id: audioId } });
+  if (!audio) throw new AppError(404, "AUDIO_NOT_FOUND", "Audio version not found");
+  if (audio.isExternal || !audio.storageKey) { await prisma.$transaction((tx) => tx.audioVersion.delete({ where: { id: audioId } })); return; }
+  const references = await prisma.audioVersion.count({ where: { storageKey: audio.storageKey } });
+  if (references !== 1) throw new AppError(409, "AUDIO_REFERENCE_CONFLICT", "Audio file has multiple references");
+  const storedPath = await resolveExistingStoragePath(audio.storageKey);
+  const quarantinePath = `${storedPath}.deleting-${randomUUID()}`;
+  try { await fsp.rename(storedPath, quarantinePath); } catch { throw new AppError(500, "AUDIO_DELETE_FAILED", "Audio file could not be prepared for deletion"); }
+  try {
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.audioVersion.findUnique({ where: { id: audioId }, select: { storageKey: true } });
+      if (current?.storageKey !== audio.storageKey) throw new AppError(409, "AUDIO_REFERENCE_CONFLICT", "Audio metadata changed during deletion");
+      await tx.audioVersion.delete({ where: { id: audioId } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (error) {
+    try { await fsp.rename(quarantinePath, storedPath); } catch { console.error("Audio deletion rollback failed", { audioId }); }
+    throw error;
+  }
+  try { await fsp.unlink(quarantinePath); } catch { console.error("Audio quarantine cleanup failed", { audioId }); throw new AppError(500, "AUDIO_DELETE_FAILED", "Audio file cleanup failed"); }
 }
 
 router.get(
@@ -175,7 +437,7 @@ router.delete(
   requireProjectOwner,
   asyncHandler(async (req, res) => {
     const { projectId } = projectParamsSchema.parse(req.params);
-    // TODO Stage 3C: delete or orphan physical audio files after audio storage is migrated.
+    // TODO: remove orphaned physical audio files through the audited storage cleanup workflow.
     await prisma.project.delete({ where: { id: projectId } });
     res.json({ success: true });
   }),
@@ -426,7 +688,7 @@ router.delete(
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
     const existing = await prisma.track.findFirst({ where: { id: trackId, projectId }, select: { id: true } });
     if (!existing) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
-    // TODO Stage 3C: delete or orphan physical audio files after audio storage is migrated.
+    // TODO: remove orphaned physical audio files through the audited storage cleanup workflow.
     await prisma.track.delete({ where: { id: trackId } });
     res.json({ success: true });
   }),
@@ -488,6 +750,105 @@ router.patch(
 
     res.json(serializeLyricVersion(version));
   }),
+);
+
+router.post(
+  "/:projectId/tracks/:trackId/audio",
+  (req, _res, next) => { audioTrackParamsSchema.parse(req.params); next(); },
+  requireProjectEditor,
+  requireAudioTrack,
+  parseAudioMultipart,
+  (req, res, next) => {
+    void (async () => {
+      const user = requireCurrentUser(req);
+      const { projectId, trackId } = audioTrackParamsSchema.parse(req.params);
+      let finalPath: string | undefined;
+      let committed = false;
+      try {
+        if (req.file) {
+          localAudioFormSchema.parse(req.body);
+          const validated = await validateUploadedAudio(req.file);
+          const storage = createStorageKey(projectId, trackId, validated.extension);
+          const storageDirectory = await ensureStorageDirectory(projectId, trackId);
+          finalPath = path.join(storageDirectory, storage.storedFilename);
+          if (finalPath !== resolveStoragePath(storage.storageKey)) throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
+          await fsp.rename(req.file.path, finalPath);
+          const audio = await createAudioMetadata({ projectId, trackId, uploadedById: user.id, actorName: user.displayName, originalFilename: validated.originalFilename, storedFilename: storage.storedFilename, storageKey: storage.storageKey, mimeType: validated.mimeType, sizeBytes: validated.sizeBytes, isExternal: false });
+          committed = true;
+          res.status(201).json(serializeAudioVersion(audio, projectId));
+          return;
+        }
+
+        const external = externalAudioFormSchema.parse(req.body);
+        const audio = await createAudioMetadata({ projectId, trackId, uploadedById: user.id, actorName: user.displayName, originalFilename: external.label, isExternal: true, externalUrl: external.externalUrl, externalProvider: external.externalProvider });
+        committed = true;
+        res.status(201).json(serializeAudioVersion(audio, projectId));
+      } catch (error) {
+        if (req.file && !committed) await cleanupAudioFile(req.file.path, "temporary-upload");
+        if (finalPath && !committed) await cleanupAudioFile(finalPath, "uncommitted-upload");
+        next(error);
+      }
+    })();
+  },
+);
+
+const streamAudioHandler = asyncHandler(async (req, res, next) => {
+  const { projectId, trackId, audioId } = audioStreamParamsSchema.parse(req.params);
+  const audio = await prisma.audioVersion.findFirst({ where: { id: audioId, trackId, track: { projectId } } });
+  if (!audio) throw new AppError(404, "AUDIO_NOT_FOUND", "Audio version not found");
+  if (audio.isExternal || !audio.storageKey || !audio.mimeType) throw new AppError(409, "EXTERNAL_AUDIO", "External audio is not available through the local stream endpoint");
+  let storedPath: string;
+  let stat;
+  try {
+    storedPath = await resolveExistingStoragePath(audio.storageKey);
+    stat = await fsp.stat(storedPath);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") throw new AppError(404, "AUDIO_FILE_NOT_FOUND", "Audio file not found");
+    throw new AppError(503, "STORAGE_UNAVAILABLE", "Audio storage is unavailable");
+  }
+  if (!stat.isFile() || stat.size < 1) throw new AppError(404, "AUDIO_FILE_NOT_FOUND", "Audio file not found");
+
+  let range;
+  try { range = parseByteRange(req.headers.range, stat.size); } catch (error) {
+    res.setHeader("Content-Range", `bytes */${stat.size}`);
+    throw error;
+  }
+  const start = range?.start ?? 0;
+  const end = range?.end ?? stat.size - 1;
+  const contentLength = end - start + 1;
+  res.status(range ? 206 : 200);
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Content-Length", String(contentLength));
+  res.setHeader("Content-Type", audio.mimeType);
+  res.setHeader("Content-Disposition", contentDispositionFilename(audio.originalFilename));
+  res.setHeader("Cache-Control", "private, no-store");
+  if (range) res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`);
+  if (req.method === "HEAD") { res.end(); return; }
+
+  const stream = fs.createReadStream(storedPath, { start, end });
+  req.once("aborted", () => stream.destroy());
+  res.once("close", () => stream.destroy());
+  stream.once("error", () => {
+    console.error("Audio stream failed", { audioId });
+    if (!res.headersSent) next(new AppError(503, "STORAGE_UNAVAILABLE", "Audio storage is unavailable")); else res.destroy();
+  });
+  stream.pipe(res);
+});
+
+router.head(
+  "/:projectId/tracks/:trackId/audio/:audioId/stream",
+  (req, _res, next) => { audioStreamParamsSchema.parse(req.params); next(); },
+  requireProjectMember,
+  streamAudioHandler,
+);
+
+router.get(
+  "/:projectId/tracks/:trackId/audio/:audioId/stream",
+  (req, _res, next) => { audioStreamParamsSchema.parse(req.params); next(); },
+  requireProjectMember,
+  streamAudioHandler,
 );
 
 export default router;
