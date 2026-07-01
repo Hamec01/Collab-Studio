@@ -1,16 +1,51 @@
-import type { LyricVersion, Project, ProjectMember, Track, User } from "@prisma/client";
+import { Prisma, type LyricVersion, type Project, type ProjectMember, type User } from "@prisma/client";
+import {
+  collaborationUserSelect,
+  serializeAnnotation,
+  serializeChatMessage,
+  serializeComment,
+  serializeTask,
+} from "./collaboration";
+
+export const trackRelationsInclude = {
+  lyricVersions: {
+    orderBy: [{ createdAt: "desc" as const }, { id: "asc" as const }],
+  },
+  comments: {
+    include: {
+      author: { select: collaborationUserSelect },
+      resolvedBy: { select: collaborationUserSelect },
+    },
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+  },
+  chatMessages: {
+    include: { author: { select: collaborationUserSelect } },
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+  },
+  tasks: {
+    include: {
+      createdBy: { select: collaborationUserSelect },
+      assignedTo: { select: collaborationUserSelect },
+    },
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+  },
+  annotations: {
+    include: { author: { select: collaborationUserSelect } },
+    orderBy: [{ timestampSeconds: "asc" as const }, { createdAt: "asc" as const }, { id: "asc" as const }],
+  },
+} satisfies Prisma.TrackInclude;
 
 export type MemberWithUser = ProjectMember & {
   user: Pick<User, "id" | "username" | "email" | "displayName" | "avatarUrl" | "role">;
 };
 
-export type TrackWithVersions = Track & {
-  lyricVersions?: LyricVersion[];
-};
+export type TrackWithRelations = Prisma.TrackGetPayload<{
+  include: typeof trackRelationsInclude;
+}>;
 
 export type ProjectWithRelations = Project & {
   members?: MemberWithUser[];
-  tracks?: TrackWithVersions[];
+  tracks?: TrackWithRelations[];
 };
 
 export function serializeProjectMember(member: MemberWithUser) {
@@ -37,20 +72,19 @@ export function serializeLyricVersion(version: LyricVersion) {
   };
 }
 
-export function serializeTrack(track: TrackWithVersions) {
-  const versions = track.lyricVersions ?? [];
+export function serializeTrack(track: TrackWithRelations) {
   return {
     id: track.id,
     title: track.title,
     lyrics: track.lyrics,
     tags: track.tags,
-    versionHistory: versions.map(serializeLyricVersion),
-    lyricVersions: versions.map(serializeLyricVersion),
+    versionHistory: track.lyricVersions.map(serializeLyricVersion),
+    lyricVersions: track.lyricVersions.map(serializeLyricVersion),
     audioVersions: [],
-    comments: [],
-    chat: [],
-    tasks: [],
-    annotations: [],
+    comments: track.comments.map(serializeComment),
+    chat: track.chatMessages.map(serializeChatMessage),
+    tasks: track.tasks.map(serializeTask),
+    annotations: track.annotations.map(serializeAnnotation),
     createdAt: track.createdAt.toISOString(),
     updatedAt: track.updatedAt.toISOString(),
   };

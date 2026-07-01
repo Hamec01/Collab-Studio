@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { ErrorRequestHandler, Request, Response } from "express";
 import { ZodError } from "zod";
 
@@ -32,6 +33,20 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof ZodError) {
     sendError(res, 400, "VALIDATION_ERROR", "Invalid request body", req.requestId);
     return;
+  }
+
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    const knownErrors: Record<string, { status: number; code: string; message: string }> = {
+      P2002: { status: 409, code: "UNIQUE_CONFLICT", message: "Resource already exists" },
+      P2003: { status: 409, code: "RELATION_CONFLICT", message: "Related resource changed" },
+      P2025: { status: 404, code: "RESOURCE_NOT_FOUND", message: "Resource not found" },
+      P2034: { status: 409, code: "TRANSACTION_CONFLICT", message: "Concurrent update conflict; retry the request" },
+    };
+    const mapped = knownErrors[err.code];
+    if (mapped) {
+      sendError(res, mapped.status, mapped.code, mapped.message, req.requestId);
+      return;
+    }
   }
 
   if (err instanceof AppError) {

@@ -12,7 +12,7 @@ import {
   updateProjectSchema,
 } from "../schemas/projects";
 import { createLyricVersionSchema, createTrackSchema, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
-import { serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack } from "../serializers/projects";
+import { serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
 
 const router = Router();
 
@@ -40,11 +40,7 @@ const projectInclude = {
     orderBy: { createdAt: "asc" as const },
   },
   tracks: {
-    include: {
-      lyricVersions: {
-        orderBy: { createdAt: "desc" as const },
-      },
-    },
+    include: trackRelationsInclude,
     orderBy: { updatedAt: "desc" as const },
   },
 } as const;
@@ -61,7 +57,7 @@ function normalizeIdentifier(identifier: string) {
 async function getTrackOrThrow(projectId: string, trackId: string) {
   const track = await prisma.track.findFirst({
     where: { id: trackId, projectId },
-    include: { lyricVersions: { orderBy: { createdAt: "desc" } } },
+    include: trackRelationsInclude,
   });
   if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
   return track;
@@ -309,7 +305,7 @@ router.get(
     const { projectId } = projectParamsSchema.parse(req.params);
     const tracks = await prisma.track.findMany({
       where: { projectId },
-      include: { lyricVersions: { orderBy: { createdAt: "desc" } } },
+      include: trackRelationsInclude,
       orderBy: { updatedAt: "desc" },
     });
     res.json(tracks.map(serializeTrack));
@@ -350,7 +346,7 @@ router.post(
       }
       return tx.track.findUniqueOrThrow({
         where: { id: created.id },
-        include: { lyricVersions: { orderBy: { createdAt: "desc" } } },
+        include: trackRelationsInclude,
       });
     });
 
@@ -411,7 +407,7 @@ router.patch(
 
       return tx.track.findUniqueOrThrow({
         where: { id: updated.id },
-        include: { lyricVersions: { orderBy: { createdAt: "desc" } } },
+        include: trackRelationsInclude,
       });
     });
 

@@ -89,18 +89,21 @@ CREATE TABLE "AudioVersion" (
 CREATE TABLE "Comment" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "trackId" UUID NOT NULL,
-  "authorId" UUID NOT NULL,
+  "authorId" UUID,
+  "resolvedById" UUID,
   "lineIndex" INTEGER,
   "text" TEXT NOT NULL,
   "resolved" BOOLEAN NOT NULL DEFAULT false,
+  "resolvedAt" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "Comment_pkey" PRIMARY KEY ("id")
 );
 
 CREATE TABLE "ChatMessage" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "trackId" UUID NOT NULL,
-  "authorId" UUID NOT NULL,
+  "authorId" UUID,
   "text" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "ChatMessage_pkey" PRIMARY KEY ("id")
@@ -112,6 +115,7 @@ CREATE TABLE "Task" (
   "createdById" UUID,
   "assignedToId" UUID,
   "title" TEXT NOT NULL,
+  "description" TEXT,
   "status" "TaskStatus" NOT NULL DEFAULT 'todo',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -121,7 +125,7 @@ CREATE TABLE "Task" (
 CREATE TABLE "Annotation" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "trackId" UUID NOT NULL,
-  "authorId" UUID NOT NULL,
+  "authorId" UUID,
   "timestampSeconds" INTEGER NOT NULL,
   "text" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -130,11 +134,13 @@ CREATE TABLE "Annotation" (
 
 CREATE TABLE "Notification" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-  "userId" UUID,
+  "userId" UUID NOT NULL,
   "actorId" UUID,
   "projectId" UUID NOT NULL,
   "trackId" UUID,
   "message" TEXT NOT NULL,
+  "type" TEXT NOT NULL,
+  "actorName" TEXT,
   "read" BOOLEAN NOT NULL DEFAULT false,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
@@ -163,6 +169,7 @@ CREATE INDEX "AudioVersion_uploadedById_idx" ON "AudioVersion"("uploadedById");
 CREATE INDEX "AudioVersion_trackId_createdAt_idx" ON "AudioVersion"("trackId", "createdAt");
 CREATE INDEX "Comment_trackId_idx" ON "Comment"("trackId");
 CREATE INDEX "Comment_authorId_idx" ON "Comment"("authorId");
+CREATE INDEX "Comment_resolvedById_idx" ON "Comment"("resolvedById");
 CREATE INDEX "Comment_trackId_resolved_idx" ON "Comment"("trackId", "resolved");
 CREATE INDEX "Comment_trackId_createdAt_idx" ON "Comment"("trackId", "createdAt");
 CREATE INDEX "ChatMessage_trackId_idx" ON "ChatMessage"("trackId");
@@ -181,6 +188,7 @@ CREATE INDEX "Notification_actorId_idx" ON "Notification"("actorId");
 CREATE INDEX "Notification_projectId_idx" ON "Notification"("projectId");
 CREATE INDEX "Notification_trackId_idx" ON "Notification"("trackId");
 CREATE INDEX "Notification_userId_read_idx" ON "Notification"("userId", "read");
+CREATE INDEX "Notification_userId_createdAt_idx" ON "Notification"("userId", "createdAt");
 CREATE INDEX "Notification_projectId_createdAt_idx" ON "Notification"("projectId", "createdAt");
 
 ALTER TABLE "ProjectMember" ADD CONSTRAINT "ProjectMember_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -191,14 +199,15 @@ ALTER TABLE "LyricVersion" ADD CONSTRAINT "LyricVersion_authorId_fkey" FOREIGN K
 ALTER TABLE "AudioVersion" ADD CONSTRAINT "AudioVersion_trackId_fkey" FOREIGN KEY ("trackId") REFERENCES "Track"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "AudioVersion" ADD CONSTRAINT "AudioVersion_uploadedById_fkey" FOREIGN KEY ("uploadedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_trackId_fkey" FOREIGN KEY ("trackId") REFERENCES "Track"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Comment" ADD CONSTRAINT "Comment_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Comment" ADD CONSTRAINT "Comment_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Comment" ADD CONSTRAINT "Comment_resolvedById_fkey" FOREIGN KEY ("resolvedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "ChatMessage" ADD CONSTRAINT "ChatMessage_trackId_fkey" FOREIGN KEY ("trackId") REFERENCES "Track"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ChatMessage" ADD CONSTRAINT "ChatMessage_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ChatMessage" ADD CONSTRAINT "ChatMessage_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "Task" ADD CONSTRAINT "Task_trackId_fkey" FOREIGN KEY ("trackId") REFERENCES "Track"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "Task" ADD CONSTRAINT "Task_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "Task" ADD CONSTRAINT "Task_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "Annotation" ADD CONSTRAINT "Annotation_trackId_fkey" FOREIGN KEY ("trackId") REFERENCES "Track"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Annotation" ADD CONSTRAINT "Annotation_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Annotation" ADD CONSTRAINT "Annotation_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;

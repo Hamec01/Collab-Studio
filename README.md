@@ -12,9 +12,9 @@ Collab-Studio is being migrated to a fully self-hosted architecture:
 - HttpOnly SameSite=Lax session cookie
 - Gemini API as the only external service
 
-This branch is currently at **Stage 3A: PostgreSQL-backed project core**. Project, membership, track, and lyric version routes use Prisma/PostgreSQL; audio, comments, chat, tasks, annotations, and notifications are still legacy JSON-backed until later stages.
+This branch is currently at **Stage 3B: PostgreSQL-backed collaboration**. Projects, memberships, tracks, lyric versions, comments, chat, tasks, annotations, and notifications use Prisma/PostgreSQL. The unchanged audio upload route remains legacy JSON/filesystem code until Stage 3C.
 
-## Stage 3A Status
+## Stage 3B Status
 
 Added in this stage:
 
@@ -29,13 +29,15 @@ Added in this stage:
 - server-side auth routes backed by PostgreSQL sessions
 - Argon2id password hashing
 - PostgreSQL-backed projects, project members, tracks, and lyric versions
+- PostgreSQL-backed comments, chat messages, tasks, annotations, and user-scoped notifications
+- authenticated Gemini route with Zod validation, per-IP and per-user rate limits, a 10-second timeout, and local fallback
 - project access middleware for admin/owner/editor/viewer
 - Helmet, API rate limits, request ids, safe error responses, and Origin checks
 - backup/restore script skeletons
 
 Not done in this stage:
 
-- audio metadata, comments, chat, tasks, annotations, and notifications still use the legacy JSON data path
+- audio metadata and files still use the legacy JSON/filesystem path; the untouched audio handler also retains its legacy JSON notification side effect until Stage 3C
 - frontend auth/upload flows are not changed yet
 - migrations are not applied automatically
 - existing `database.json` is not deleted and is reserved for later one-off migration work
@@ -95,7 +97,13 @@ npm run create-admin
 
 The script is interactive, hides password input, checks uniqueness, and never prints the password or password hash.
 
-Project core routes now use PostgreSQL. Audio, comments, chat, tasks, annotations, and notifications still use legacy JSON handlers and are not complete for internet exposure until later stages.
+Project and collaboration routes now use PostgreSQL with session-backed ACL. Audio remains an unprotected legacy JSON/filesystem handler, so the application is still not ready for internet exposure.
+
+## Gemini Operational Limits
+
+Gemini uses independent in-memory rate-limit stores for the IP and authenticated-user limits. This is suitable only while one app instance is running; multiple replicas require a shared limiter store in a later infrastructure stage.
+
+The SDK request uses both a 10-second HTTP timeout and an AbortSignal. This cancels the client-side HTTP wait and prevents a background promise from being left unobserved. The Gemini SDK explicitly notes that client cancellation may not cancel work already accepted by the remote service, so billable remote processing can still continue after local cancellation.
 
 ## Docker Layout
 
@@ -139,7 +147,7 @@ A future one-off migration should move existing `database.json` content into Pos
 5. Verify row counts and sample project access before switching traffic.
 6. Keep the original `database.json` read-only until restore has been tested.
 
-This migration is not implemented or run in Stage 3A.
+This migration is not implemented or run in Stage 3B. The foundation migration has never been applied and may still be reviewed now; after its first application it must not be edited, and every schema change must use a new migration.
 
 ## Local Development
 
@@ -150,7 +158,7 @@ npm run prisma:generate
 npm run dev
 ```
 
-The current Stage 3A branch has auth plus project, member, track, and lyric version routes wired to Prisma/session. Audio, comments, chat, tasks, annotations, and notifications will move later.
+The current Stage 3B branch has auth, project, member, track, lyric version, collaboration, notification, and Gemini routes wired to Prisma/session. Audio remains legacy until Stage 3C.
 
 ## Health Checks
 

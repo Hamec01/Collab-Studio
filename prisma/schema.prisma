@@ -50,7 +50,8 @@ model User {
   memberships        ProjectMember[]
   lyricVersions      LyricVersion[]
   audioVersions      AudioVersion[]
-  comments           Comment[]
+  comments           Comment[]       @relation("CommentAuthor")
+  resolvedComments   Comment[]       @relation("CommentResolver")
   chatMessages       ChatMessage[]
   createdTasks       Task[]          @relation("TaskCreator")
   assignedTasks      Task[]          @relation("TaskAssignee")
@@ -169,19 +170,24 @@ model AudioVersion {
 }
 
 model Comment {
-  id        String   @id @default(uuid()) @db.Uuid
-  trackId   String   @db.Uuid
-  authorId  String   @db.Uuid
-  lineIndex Int?
-  text      String
-  resolved  Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id           String    @id @default(uuid()) @db.Uuid
+  trackId      String    @db.Uuid
+  authorId     String?   @db.Uuid
+  resolvedById String?   @db.Uuid
+  lineIndex    Int?
+  text         String
+  resolved     Boolean   @default(false)
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  track      Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  author     User? @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  resolvedBy User? @relation("CommentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@index([trackId])
   @@index([authorId])
+  @@index([resolvedById])
   @@index([trackId, resolved])
   @@index([trackId, createdAt])
 }
@@ -189,12 +195,12 @@ model Comment {
 model ChatMessage {
   id        String   @id @default(uuid()) @db.Uuid
   trackId   String   @db.Uuid
-  authorId  String   @db.Uuid
+  authorId  String?  @db.Uuid
   text      String
   createdAt DateTime @default(now())
 
   track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([trackId])
   @@index([authorId])
@@ -208,6 +214,7 @@ model Task {
   assignedToId String?    @db.Uuid
   title        String
   status       TaskStatus @default(todo)
+  description  String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -225,13 +232,13 @@ model Task {
 model Annotation {
   id               String   @id @default(uuid()) @db.Uuid
   trackId          String   @db.Uuid
-  authorId         String   @db.Uuid
+  authorId         String?  @db.Uuid
   timestampSeconds Int
   text             String
   createdAt        DateTime @default(now())
 
   track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([trackId])
   @@index([authorId])
@@ -240,15 +247,17 @@ model Annotation {
 
 model Notification {
   id        String   @id @default(uuid()) @db.Uuid
-  userId    String?  @db.Uuid
+  userId    String   @db.Uuid
   actorId   String?  @db.Uuid
   projectId String   @db.Uuid
   trackId   String?  @db.Uuid
   message   String
+  type      String
   read      Boolean  @default(false)
+  actorName String?
   createdAt DateTime @default(now())
 
-  user    User?   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  user    User    @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   track   Track?  @relation(fields: [trackId], references: [id], onDelete: Cascade)
@@ -258,5 +267,6 @@ model Notification {
   @@index([projectId])
   @@index([trackId])
   @@index([userId, read])
+  @@index([userId, createdAt])
   @@index([projectId, createdAt])
 }
