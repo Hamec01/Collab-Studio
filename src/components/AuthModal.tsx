@@ -33,12 +33,13 @@ export default function AuthModal({
   const [logoutLoading, setLogoutLoading] = useState(false);
 
   const mapError = (err: unknown) => {
-    if (!(err instanceof ApiError)) return "Ошибка сети. Попробуйте позже.";
+    if (!(err instanceof ApiError)) return "Сервер недоступен. Попробуйте позже.";
+    if (err.status === 0 || err.code === "NETWORK_ERROR") return "Сервер недоступен. Попробуйте позже.";
     if (err.status === 401) return "Неверный логин или пароль.";
     if (err.status === 403 && err.code === "REGISTRATION_DISABLED") return "Публичная регистрация отключена.";
     if (err.status === 409) return "Логин или email уже заняты.";
     if (err.status === 429) return "Слишком много попыток. Повторите позже.";
-    return err.message || "Ошибка авторизации.";
+    return "Не удалось войти.";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

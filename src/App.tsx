@@ -49,10 +49,10 @@ type ExternalProvider = "google" | "yandex" | "telegram" | "other";
 
 const AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
 const AUDIO_ACCEPT = ".mp3,.wav,.flac,.ogg,.aac,.m4a,.webm,audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/ogg,audio/aac,audio/mp4,audio/webm";
-let authBootRequested = false;
 
 export default function App() {
   const [authPhase, setAuthPhase] = useState<AuthPhase>("loading");
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -187,10 +187,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (authBootRequested) return;
-    authBootRequested = true;
-
     const controller = new AbortController();
+    setAuthPhase("loading");
+    setIsCheckingSession(true);
     (async () => {
       try {
         const response = await getCurrentUser(controller.signal);
@@ -205,8 +204,13 @@ export default function App() {
           setAuthPhase("unauthenticated");
           return;
         }
+        setCurrentUser(null);
         setAuthPhase("unauthenticated");
         setGlobalError("Не удалось загрузить сессию.");
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsCheckingSession(false);
+        }
       }
     })();
     return () => controller.abort();
@@ -429,7 +433,7 @@ export default function App() {
           onRegister={handleRegister}
           currentUser={currentUser}
           onLogout={handleLogout}
-          authLoading={authPhase === "loading"}
+          authLoading={isCheckingSession}
           sessionExpired={sessionExpired}
         />
       )}
