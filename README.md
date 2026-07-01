@@ -179,27 +179,45 @@ The existing app exposes:
 
 ```text
 GET /api/health
+GET /api/ready
 ```
-
-A PostgreSQL readiness endpoint will be wired into the application routes in a later stage using the Prisma readiness helper.
 
 ## Backup
 
-The backup command stops the app, writes a PostgreSQL dump and a private uploads archive, and leaves the app stopped for artifact verification. It aborts if the uploads source is unavailable:
+Production backups are stored outside the repository in `/home/deploy/backups/collab-studio`.
+
+The backup command writes a PostgreSQL dump, uploads archive, and checksum manifest. If the app was running before backup, the script returns it to the running state and waits for health/readiness:
 
 ```bash
-npm run backup
+ENV_FILE=/home/deploy/secrets/collab-studio.env npm run backup
 ```
 
-Backups never include the production env file. Store and test both artifacts together before relying on them.
+Backup output layout:
 
-Restore requires reviewed dump/archive paths, validates archive traversal and links, stops the app, and requires typing `RESTORE`:
+- `postgres-<TIMESTAMP>.sql.gz`
+- `uploads-<TIMESTAMP>.tar.gz`
+- `manifest-<TIMESTAMP>.sha256`
+
+Security requirements enforced by script:
+
+- backup directory mode `700`
+- backup files mode `600`
+- partial files removed on failure
+- gzip/tar integrity checks
+- `sha256sum -c` manifest verification
+- symlink protection for output paths
+
+Backups never include the production env file and must never be committed to Git.
+
+Restore requires reviewed dump/archive paths, matching manifest verification, archive traversal/link checks, and explicit `RESTORE` confirmation:
 
 ```bash
-npm run restore -- backups/postgres-TIMESTAMP.sql.gz backups/uploads-TIMESTAMP.tar.gz
+ENV_FILE=/home/deploy/secrets/collab-studio.env npm run restore -- postgres-TIMESTAMP.sql.gz uploads-TIMESTAMP.tar.gz
 ```
 
-Restore keeps the previous uploads directory as a timestamped pre-restore copy. Verify ownership and data before restarting the app.
+Restore keeps the previous uploads directory as a timestamped pre-restore copy. Verify ownership and data before restarting app.
+
+Note: restore compatibility checks were updated in this stage, but a destructive restore execution was not performed in Stage 5.8.
 
 ## Security Notes
 
