@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { FolderPlus, Disc, Layers, Music, Users, Plus, Tag, ArrowRight, Trash2, UserPlus, Check } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { FolderPlus, Disc, Layers, Music, Users, Plus, Tag, ArrowRight, Trash2, UserPlus } from "lucide-react";
 import { AuthUser, Project, Track } from "../types";
+import { ApiError } from "../api/client";
 
 interface ProjectListProps {
   projects: Project[];
@@ -10,6 +11,7 @@ interface ProjectListProps {
   onSelectTrack: (t: Track) => void;
   onCreateProject: (title: string, type: 'single' | 'album', tags: string[], coverUrl?: string) => void;
   onAddTrack: (projectId: string, title: string) => void;
+  onAddMember: (projectId: string, payload: { login: string; role: "viewer" | "editor" }) => Promise<void>;
   onDeleteProject: (projectId: string) => void;
   currentUser: AuthUser | null;
 }
@@ -22,6 +24,7 @@ export default function ProjectList({
   onSelectTrack,
   onCreateProject,
   onAddTrack,
+  onAddMember,
   onDeleteProject,
   currentUser,
 }: ProjectListProps) {
@@ -33,19 +36,75 @@ export default function ProjectList({
 
   const [showAddTrack, setShowAddTrack] = useState(false);
   const [newTrackTitle, setNewTrackTitle] = useState("");
-  const [copiedInvite, setCopiedInvite] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteLogin, setInviteLogin] = useState("");
+  const [inviteRole, setInviteRole] = useState<"viewer" | "editor">("viewer");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const inviteInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleCopyInviteLink = () => {
-    if (!activeProject) return;
-    let origin = window.location.origin;
-    if (origin.includes("ais-dev-")) {
-      origin = origin.replace("ais-dev-", "ais-pre-");
+  const canInvite = !!(
+    activeProject && currentUser && (
+      currentUser.role === "admin" ||
+      activeProject.participants.some((p) => p.userId === currentUser.id && p.role === "owner")
+    )
+  );
+
+  const resetInviteState = () => {
+    setShowInviteModal(false);
+    setInviteLogin("");
+    setInviteRole("viewer");
+    setInviteError("");
+    setInviteLoading(false);
+  };
+
+  useEffect(() => {
+    resetInviteState();
+  }, [activeProject?.id, currentUser?.id]);
+
+  useEffect(() => {
+    if (!showInviteModal) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        resetInviteState();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showInviteModal]);
+
+  useEffect(() => {
+    if (showInviteModal) {
+      inviteInputRef.current?.focus();
     }
-    const inviteUrl = `${origin}${window.location.pathname}?invite=${activeProject.id}`;
-    navigator.clipboard.writeText(inviteUrl).then(() => {
-      setCopiedInvite(true);
-      setTimeout(() => setCopiedInvite(false), 2000);
-    });
+  }, [showInviteModal]);
+
+  const mapInviteError = (error: unknown) => {
+    if (!(error instanceof ApiError)) return "Сервер недоступен.";
+    if (error.status === 400) return "Проверьте введённые данные.";
+    if (error.status === 403) return "У вас нет прав добавлять участников.";
+    if (error.status === 404) return "Пользователь с таким логином или email не найден.";
+    if (error.status === 409) return "Этот пользователь уже участвует в проекте.";
+    if (error.status === 429) return "Слишком много попыток. Повторите позже.";
+    if (error.status === 0) return "Сервер недоступен.";
+    return "Не удалось добавить участника.";
+  };
+
+  const handleInviteSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!activeProject || !canInvite || inviteLoading) return;
+    const login = inviteLogin.trim();
+    if (!login) return;
+    setInviteError("");
+    setInviteLoading(true);
+    try {
+      await onAddMember(activeProject.id, { login, role: inviteRole });
+      resetInviteState();
+    } catch (error) {
+      setInviteError(mapInviteError(error));
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   const handleCreateProject = (e: React.FormEvent) => {
@@ -307,23 +366,21 @@ export default function ProjectList({
               <Users className="w-3.5 h-3.5 text-indigo-400" />
               ДОСТУП И УЧАСТНИКИ ({activeProject.participants.length})
             </div>
-            <button
-              onClick={handleCopyInviteLink}
-              className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 cursor-pointer focus:outline-none"
-              title="Скопировать ссылку-приглашение для совместной работы"
-            >
-              {copiedInvite ? (
-                <>
-                  <Check className="w-3 h-3 text-teal-400 animate-pulse" />
-                  <span className="text-teal-400">Скопировано!</span>
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-3 h-3" />
-                  <span>Пригласить</span>
-                </>
-              )}
-            </button>
+            {canInvite ? (
+              <button
+                onClick={() => {
+                  setInviteError("");
+                  setShowInviteModal(true);
+                }}
+                className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1 cursor-pointer focus:outline-none"
+                title="Добавить существующего пользователя в проект"
+              >
+                <UserPlus className="w-3 h-3" />
+                <span>Пригласить</span>
+              </button>
+            ) : (
+              <span className="text-[10px] text-neutral-500">Только владелец может приглашать</span>
+            )}
           </div>
           <div className="space-y-2">
             {activeProject.participants.map((part) => (
@@ -335,6 +392,73 @@ export default function ProjectList({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {showInviteModal && activeProject && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          onClick={() => resetInviteState()}
+        >
+          <form
+            onSubmit={handleInviteSubmit}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-4"
+          >
+            <div className="text-left">
+              <h4 className="text-sm font-semibold text-white">Добавить участника</h4>
+              <p className="text-[11px] text-neutral-400 mt-1">Укажите точный username или email существующего пользователя.</p>
+            </div>
+
+            <div className="text-left">
+              <label className="block text-[10px] font-mono text-neutral-400 mb-1">USERNAME ИЛИ EMAIL</label>
+              <input
+                ref={inviteInputRef}
+                type="text"
+                value={inviteLogin}
+                onChange={(event) => setInviteLogin(event.target.value)}
+                placeholder="username или email"
+                className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                required
+              />
+            </div>
+
+            <div className="text-left">
+              <label className="block text-[10px] font-mono text-neutral-400 mb-1">РОЛЬ</label>
+              <select
+                value={inviteRole}
+                onChange={(event) => setInviteRole(event.target.value as "viewer" | "editor")}
+                className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
+              </select>
+            </div>
+
+            {inviteError && (
+              <div className="text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded p-2 text-left">
+                {inviteError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => resetInviteState()}
+                disabled={inviteLoading}
+                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs disabled:opacity-60"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={inviteLoading || !inviteLogin.trim()}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium disabled:opacity-60"
+              >
+                {inviteLoading ? "Добавляем..." : "Добавить участника"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

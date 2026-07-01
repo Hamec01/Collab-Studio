@@ -20,6 +20,7 @@ import { FolderOpen, MessageSquare, Music, Sparkles } from "lucide-react";
 import { ApiError, isApiError } from "./api/client";
 import { getCurrentUser, login, logout, register } from "./api/auth";
 import {
+  addProjectMember,
   attachExternalAudio,
   createAnnotation,
   createComment,
@@ -298,6 +299,24 @@ export default function App() {
     setSelectedAudioVersionId(track.audioVersions[0]?.id ?? null);
   };
 
+  const handleAddProjectMember = async (projectId: string, payload: { login: string; role: "viewer" | "editor" }) => {
+    const response = await withAuth(() => addProjectMember(projectId, payload));
+    const incoming = response.member;
+    setProjects((prev) =>
+      prev.map((project) => {
+        if (project.id !== projectId) return project;
+        const nextParticipants = project.participants.some((member) => member.userId === incoming.userId)
+          ? project.participants.map((member) => (member.userId === incoming.userId ? incoming : member))
+          : [...project.participants, incoming];
+        return {
+          ...project,
+          participants: nextParticipants,
+          members: nextParticipants,
+        };
+      }),
+    );
+  };
+
   const handleUpdateLyrics = async (newLyrics: string, versionLabel?: string) => {
     if (!activeProject || !activeTrack) return;
     const updated = await withAuth(() => updateTrack(activeProject.id, activeTrack.id, { lyrics: newLyrics, versionLabel }));
@@ -469,6 +488,7 @@ export default function App() {
                 }}
                 onCreateProject={handleCreateProject}
                 onAddTrack={handleAddTrack}
+                onAddMember={handleAddProjectMember}
                 onDeleteProject={handleDeleteProject}
                 currentUser={currentUser}
               />

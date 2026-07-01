@@ -5,6 +5,7 @@ import type {
   ChatMessage,
   Comment,
   LyricVersion,
+  ProjectMember,
   Project,
   Task,
   Track,
@@ -27,6 +28,16 @@ export function createProject(payload: { title: string; type: "single" | "album"
 
 export function deleteProject(projectId: string) {
   return apiRequest<{ success: boolean }>(`/api/projects/${projectId}`, { method: "DELETE" });
+}
+
+export function addProjectMember(projectId: string, payload: { login: string; role: "viewer" | "editor" }) {
+  return apiRequest<{ member: ProjectMember }>(`/api/projects/${projectId}/members`, {
+    method: "POST",
+    body: {
+      identifier: payload.login,
+      role: payload.role,
+    },
+  });
 }
 
 export function createTrack(projectId: string, payload: { title: string; lyrics?: string; tags?: string[]; versionLabel?: string }) {
