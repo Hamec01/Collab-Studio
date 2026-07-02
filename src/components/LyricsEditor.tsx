@@ -28,6 +28,7 @@ interface LyricsEditorProps {
   onRestoreLocalDraft: () => void;
   onUseServerDraft: () => void;
   onDownloadLocalDraft: () => void;
+  onJumpToDiscussion: () => void;
 }
 
 export default function LyricsEditor({
@@ -47,6 +48,7 @@ export default function LyricsEditor({
   onRestoreLocalDraft,
   onUseServerDraft,
   onDownloadLocalDraft,
+  onJumpToDiscussion,
 }: LyricsEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [versionLabel, setVersionLabel] = useState("");
@@ -474,11 +476,7 @@ export default function LyricsEditor({
                       Сбросить
                     </button>
                     <button
-                      onClick={() => {
-                        // Keep selected line, switch tab/scroll to comments
-                        const discTab = document.getElementById("mobile_discussion_tab");
-                        if (discTab) discTab.click();
-                      }}
+                      onClick={onJumpToDiscussion}
                       className="flex items-center gap-1 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg transition-all shadow-md cursor-pointer"
                     >
                       <span>Обсудить</span>

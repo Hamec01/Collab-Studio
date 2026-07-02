@@ -1123,6 +1123,10 @@ export default function App() {
                     onRestoreLocalDraft={handleRestoreLocalDraft}
                     onUseServerDraft={handleUseServerDraft}
                     onDownloadLocalDraft={handleDownloadLocalDraft}
+                    onJumpToDiscussion={() => {
+                      setActiveSidebar("comments");
+                      setMobileTab("rightPanel");
+                    }}
                   />
 
                   <AudioPlayer
