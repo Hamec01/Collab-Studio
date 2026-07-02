@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Annotation,
   AppNotification,
-  AuthUser,
   Project,
   Task,
   Track,
@@ -19,7 +18,8 @@ import RhymeFinder from "./components/RhymeFinder";
 import NotificationsPanel from "./components/NotificationsPanel";
 import { FolderOpen, MessageSquare, Music, Sparkles } from "lucide-react";
 import { ApiError, isApiError } from "./api/client";
-import { getAuthProviders, getCurrentUser, login, logout, register } from "./api/auth";
+import { useAuth } from "./app/auth/AuthProvider";
+import { usePlayer } from "./app/player/PlayerProvider";
 import {
   addProjectMember,
   attachExternalAudio,
@@ -30,7 +30,6 @@ import {
   createTask,
   createTrack,
   getTrack,
-  listProjects,
   pinLyricVersion,
   postChatMessage,
   saveLyricsDraft,
@@ -42,26 +41,28 @@ import {
   deleteProject,
 } from "./api/projects";
 import {
-  listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
 } from "./api/notifications";
-import { buildLyricsDraftKey, deleteLyricsDraft, readLyricsDraft, writeLyricsDraft } from "./utils/lyricsDraftStore";
 import {
-  DraftScope,
-  EmergencyDraftSnapshot,
   isLatestContentSynced,
-  pickMostRecentDraft,
   shouldRestoreFromLocal,
 } from "./utils/lyricsDraftRecovery";
 import {
   buildPrivatePath,
   mobileStateFromTab,
   parsePrivatePath,
-  type TrackTab,
 } from "./app/routeContract";
+import { resolveRouteSelection, shouldNavigateToCanonicalPath } from "./app/routeSelection";
+import { useWorkspaceQuery } from "./app/state/useWorkspaceQuery";
+import {
+  buildDraftScope,
+  readMergedDraft,
+  removeLocalDraft,
+  saveEmergencyDraft,
+  writeLocalDraft,
+} from "./app/draft/draftInterface";
 
-type AuthPhase = "loading" | "authenticated" | "unauthenticated";
 type Sidebar = "comments" | "chat" | "tasks" | "rhymes";
 type MobileTab = "projects" | "editor" | "rightPanel";
 type ExternalProvider = "google" | "yandex" | "telegram" | "other";
@@ -74,39 +75,31 @@ const LYRICS_RETRY_MAX_MS = 30000;
 
 type DraftSyncState = "local-only" | "synced" | "conflict" | "error";
 
-function emergencyDraftStorageKey(key: string) {
-  return `lyrics-draft-emergency:${key}`;
-}
-
-function parseEmergencyDraft(raw: string | null): EmergencyDraftSnapshot | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as EmergencyDraftSnapshot;
-    if (!parsed || typeof parsed !== "object") return null;
-    if (typeof parsed.key !== "string" || typeof parsed.content !== "string" || typeof parsed.savedAt !== "string") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
 export default function App() {
-  const [authPhase, setAuthPhase] = useState<AuthPhase>("loading");
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const [sessionExpired, setSessionExpired] = useState(false);
-  const [authMessage, setAuthMessage] = useState("");
-  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
-  const [selectedAudioVersionId, setSelectedAudioVersionId] = useState<string | null>(null);
+  const {
+    authPhase,
+    isCheckingSession,
+    currentUser,
+    sessionExpired,
+    authMessage,
+    authSystemError,
+    googleOAuthEnabled,
+    login,
+    register,
+    logout,
+    startGoogleAuth,
+    expireSession,
+    withAuth,
+  } = useAuth();
+  const {
+    selectedAudioVersionId,
+    setSelectedAudioVersionId,
+    syncSelectedAudioVersion,
+  } = usePlayer();
+  const [globalError, setGlobalError] = useState<string>("");
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
   const [activeSidebar, setActiveSidebar] = useState<Sidebar>("comments");
   const [mobileTab, setMobileTab] = useState<MobileTab>("projects");
-  const [routeTab, setRouteTab] = useState<TrackTab>("lyrics");
-  const [globalError, setGlobalError] = useState<string>("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -121,9 +114,6 @@ export default function App() {
   const [lyricsStatusMessage, setLyricsStatusMessage] = useState<string>("");
   const [restoreDraftSnapshot, setRestoreDraftSnapshot] = useState<RestoreDraftSnapshot | null>(null);
 
-  const requestSeq = useRef(0);
-  const trackRequestSeq = useRef(0);
-  const notificationRequestSeq = useRef(0);
   const draftGenerationRef = useRef(0);
   const autosaveTimerRef = useRef<number | null>(null);
   const retryTimerRef = useRef<number | null>(null);
@@ -138,6 +128,30 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const parsedRoute = useMemo(() => parsePrivatePath(location.pathname), [location.pathname]);
+
+  const {
+    projects,
+    setProjects,
+    notifications,
+    setNotifications,
+    workspaceReady,
+    workspaceError,
+    refreshActiveTrack,
+    refreshNotifications,
+    resetWorkspaceQuery,
+    updateTrackInProjects,
+  } = useWorkspaceQuery({
+    authPhase,
+    currentUserId: currentUser?.id ?? null,
+    withAuth,
+  });
+
+  const resolvedRouteSelection = useMemo(
+    () => resolveRouteSelection(projects, parsedRoute),
+    [projects, parsedRoute],
+  );
+  const activeProjectId = resolvedRouteSelection.projectId;
+  const activeTrackId = resolvedRouteSelection.trackId;
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) || null,
@@ -190,20 +204,7 @@ export default function App() {
 
   const currentDraftScope = () => {
     if (!currentUser || !activeProjectId || !activeTrackId) return null;
-    return {
-      userId: currentUser.id,
-      projectId: activeProjectId,
-      trackId: activeTrackId,
-      key: buildLyricsDraftKey(currentUser.id, activeProjectId, activeTrackId),
-    };
-  };
-
-  const readMergedLocalDraft = async (scope: DraftScope) => {
-    const [indexedDbDraft, emergencyDraft] = await Promise.all([
-      readLyricsDraft(scope.key).catch(() => null),
-      Promise.resolve(parseEmergencyDraft(sessionStorage.getItem(emergencyDraftStorageKey(scope.key)))),
-    ]);
-    return pickMostRecentDraft(indexedDbDraft, emergencyDraft, scope);
+    return buildDraftScope(currentUser.id, activeProjectId, activeTrackId);
   };
 
   const persistLocalDraft = async (syncState: DraftSyncState, contentOverride?: string) => {
@@ -211,14 +212,9 @@ export default function App() {
     if (!scope) return;
     const content = contentOverride ?? draftLyricsRef.current;
     try {
-      await writeLyricsDraft({
-        key: scope.key,
-        userId: scope.userId,
-        projectId: scope.projectId,
-        trackId: scope.trackId,
+      await writeLocalDraft(scope, {
         content,
         baseRevision: draftRevisionRef.current ?? undefined,
-        savedAt: new Date().toISOString(),
         serverUpdatedAt: draftServerUpdatedAt ?? undefined,
         syncState,
       });
@@ -232,37 +228,18 @@ export default function App() {
     const scope = currentDraftScope();
     if (!scope) return;
     const content = contentOverride ?? draftLyricsRef.current;
-    try {
-      const payload: EmergencyDraftSnapshot = {
-        key: scope.key,
-        content,
-        savedAt: new Date().toISOString(),
-        baseRevision: draftRevisionRef.current ?? undefined,
-        serverUpdatedAt: draftServerUpdatedAt ?? undefined,
-        syncState,
-      };
-      sessionStorage.setItem(emergencyDraftStorageKey(scope.key), JSON.stringify(payload));
-    } catch {
-      // ignore sessionStorage errors; IndexedDB remains primary
-    }
-  };
-
-  const clearEmergencyDraft = (key: string) => {
-    try {
-      sessionStorage.removeItem(emergencyDraftStorageKey(key));
-    } catch {
-      // ignore sessionStorage errors
-    }
+    saveEmergencyDraft({
+      key: scope.key,
+      content,
+      savedAt: new Date().toISOString(),
+      baseRevision: draftRevisionRef.current ?? undefined,
+      serverUpdatedAt: draftServerUpdatedAt ?? undefined,
+      syncState,
+    });
   };
 
   const clearWorkspace = () => {
-    requestSeq.current += 1;
-    trackRequestSeq.current += 1;
-    notificationRequestSeq.current += 1;
-    setProjects([]);
-    setNotifications([]);
-    setActiveProjectId(null);
-    setActiveTrackId(null);
+    resetWorkspaceQuery();
     setSelectedAudioVersionId(null);
     setSelectedLineIndex(null);
     setShowUploadModal(false);
@@ -290,112 +267,17 @@ export default function App() {
     };
   }, []);
 
-  const handleUnauthorized = () => {
-    if (authPhase === "unauthenticated" && !currentUser) return;
-    clearWorkspace();
-    setCurrentUser(null);
-    setAuthPhase("unauthenticated");
-    setSessionExpired(true);
-  };
-
-  const withAuth = async <T,>(operation: () => Promise<T>) => {
-    try {
-      return await operation();
-    } catch (error) {
-      if (isApiError(error) && error.status === 401) {
-        handleUnauthorized();
-      }
-      throw error;
-    }
-  };
-
-  const syncProjectSelection = (
-    projectList: Project[],
-    preferredProjectId: string | null = null,
-    preferredTrackId: string | null = null,
-  ) => {
-    if (projectList.length === 0) {
-      setActiveProjectId(null);
-      setActiveTrackId(null);
-      setSelectedAudioVersionId(null);
-      return;
-    }
-
-    const candidateProjectId = preferredProjectId ?? activeProjectId;
-    const candidateTrackId = preferredTrackId ?? activeTrackId;
-
-    const selectedProject = projectList.find((project) => project.id === candidateProjectId) || projectList[0];
-    setActiveProjectId(selectedProject.id);
-
-    const selectedTrack = selectedProject.tracks.find((track) => track.id === candidateTrackId) || selectedProject.tracks[0] || null;
-    setActiveTrackId(selectedTrack?.id ?? null);
-    setSelectedAudioVersionId((prev) => {
-      if (!selectedTrack) return null;
-      if (prev && selectedTrack.audioVersions.some((version) => version.id === prev)) return prev;
-      return selectedTrack.audioVersions[0]?.id ?? null;
-    });
-  };
-
-  const loadWorkspace = async (preferredRoute?: { projectId: string | null; trackId: string | null }) => {
-    const seq = ++requestSeq.current;
-    const [projectList, notificationList] = await Promise.all([listProjects(), listNotifications()]);
-    if (seq !== requestSeq.current) return;
-    setProjects(projectList);
-    setNotifications(notificationList);
-    syncProjectSelection(
-      projectList,
-      preferredRoute?.projectId ?? null,
-      preferredRoute?.trackId ?? null,
-    );
-  };
-
-  const refreshActiveTrack = async () => {
-    if (!activeProjectId || !activeTrackId) return;
-    const seq = ++trackRequestSeq.current;
-    const track = await withAuth(() => getTrack(activeProjectId, activeTrackId));
-    if (seq !== trackRequestSeq.current) return;
-    setProjects((prev) =>
-      prev.map((project) =>
-        project.id !== activeProjectId
-          ? project
-          : {
-              ...project,
-              tracks: project.tracks.map((existing) => (existing.id === track.id ? track : existing)),
-            },
-      ),
-    );
-    setSelectedAudioVersionId((prev) => {
-      if (prev && track.audioVersions.some((version) => version.id === prev)) return prev;
-      return track.audioVersions[0]?.id ?? null;
-    });
-  };
-
-  const refreshNotifications = async () => {
-    const seq = ++notificationRequestSeq.current;
-    const list = await withAuth(() => listNotifications());
-    if (seq !== notificationRequestSeq.current) return;
-    setNotifications(list);
-  };
-
   const updateTrackDraftState = (projectId: string, trackId: string, lyrics: string, updatedAt: string) => {
-    setProjects((prev) =>
-      prev.map((project) =>
-        project.id !== projectId
-          ? project
-          : {
-              ...project,
-              tracks: project.tracks.map((track) =>
-                track.id !== trackId
-                  ? track
-                  : {
-                      ...track,
-                      lyrics,
-                      updatedAt,
-                    },
-              ),
-            },
-      ),
-    );
+    updateTrackInProjects(projectId, trackId, (track) => ({
+      ...track,
+      lyrics,
+      updatedAt,
+    }));
+  };
+
+  const refreshCurrentTrack = async () => {
+    if (!activeProjectId || !activeTrackId) return;
+    await refreshActiveTrack(activeProjectId, activeTrackId);
   };
 
   const scheduleRetryAutosave = () => {
@@ -453,8 +335,7 @@ export default function App() {
         setLyricsStatusMessage("");
         lastSyncedLyricsRef.current = response.content;
         updateTrackDraftState(scope.projectId, scope.trackId, response.content, response.updatedAt);
-        await deleteLyricsDraft(scope.key).catch(() => undefined);
-        clearEmergencyDraft(scope.key);
+        await removeLocalDraft(scope).catch(() => undefined);
       } else {
         setLyricsSaveStatus("dirty");
         setLyricsStatusMessage("");
@@ -545,10 +426,7 @@ export default function App() {
 
   useEffect(() => {
     if (authPhase !== "authenticated") return;
-    setRouteTab(parsedRoute.tab);
     setMobileTab(parsedRoute.trackId ? mobileStateFromTab(parsedRoute.tab) : "projects");
-    setActiveProjectId(parsedRoute.projectId);
-    setActiveTrackId(parsedRoute.trackId);
     if (parsedRoute.tab === "team") {
       setActiveSidebar("comments");
     }
@@ -557,12 +435,12 @@ export default function App() {
   useEffect(() => {
     if (authPhase !== "authenticated") return;
 
-    const nextTab: TrackTab =
+    const nextTab =
       mobileTab === "rightPanel"
         ? "team"
-        : routeTab === "team"
+        : parsedRoute.tab === "team"
           ? "lyrics"
-          : routeTab;
+          : parsedRoute.tab;
 
     const nextPath = buildPrivatePath({
       projectId: activeProjectId,
@@ -578,90 +456,47 @@ export default function App() {
     activeProjectId,
     activeTrackId,
     mobileTab,
-    routeTab,
+    parsedRoute.tab,
     location.pathname,
     navigate,
   ]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    setAuthPhase("loading");
-    setIsCheckingSession(true);
-    (async () => {
-      try {
-        const [providersResult, userResult] = await Promise.allSettled([
-          getAuthProviders(controller.signal),
-          getCurrentUser(controller.signal),
-        ]);
-
-        if (controller.signal.aborted) return;
-
-        setGoogleOAuthEnabled(providersResult.status === "fulfilled" ? providersResult.value.googleOAuthEnabled : false);
-
-        if (userResult.status === "fulfilled") {
-          setCurrentUser(userResult.value.user);
-          setAuthPhase("authenticated");
-          setSessionExpired(false);
-          await loadWorkspace({
-            projectId: parsedRoute.projectId,
-            trackId: parsedRoute.trackId,
-          });
-          return;
-        }
-
-        if (isApiError(userResult.reason) && userResult.reason.status === 401) {
-          setCurrentUser(null);
-          setAuthPhase("unauthenticated");
-          return;
-        }
-
-        setCurrentUser(null);
-        setAuthPhase("unauthenticated");
-        setGlobalError("Не удалось загрузить сессию.");
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        if (isApiError(error) && error.status === 401) {
-          setCurrentUser(null);
-          setAuthPhase("unauthenticated");
-          return;
-        }
-        setCurrentUser(null);
-        setAuthPhase("unauthenticated");
-        setGlobalError("Не удалось загрузить сессию.");
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsCheckingSession(false);
-        }
-      }
-    })();
-    return () => controller.abort();
-  }, [parsedRoute.projectId, parsedRoute.trackId]);
+    if (authPhase !== "authenticated" || !workspaceReady || !location.pathname.startsWith("/app")) return;
+    if (shouldNavigateToCanonicalPath(location.pathname, resolvedRouteSelection.canonicalPath)) {
+      navigate(resolvedRouteSelection.canonicalPath, { replace: true });
+    }
+  }, [
+    authPhase,
+    workspaceReady,
+    location.pathname,
+    resolvedRouteSelection.canonicalPath,
+    navigate,
+  ]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const authError = params.get("authError");
-    if (!authError) return;
+    if (authPhase === "unauthenticated") {
+      clearWorkspace();
+    }
+  }, [authPhase]);
 
-    const authMessages: Record<string, string> = {
-      google_cancelled: "Вход через Google был отменен.",
-      google_missing_code: "Google не вернул код авторизации.",
-      google_invalid_state: "Безопасность входа не подтвердилась. Повторите попытку.",
-      google_not_configured: "Вход через Google временно недоступен.",
-      google_token_exchange_failed: "Не удалось завершить вход через Google.",
-      google_email_not_verified: "Google не подтвердил email.",
-      google_email_conflict: "Этот email уже связан с другим аккаунтом.",
-      google_link_conflict: "Этот Google-аккаунт уже связан с другим пользователем.",
-      google_network_error: "Сетевая ошибка при входе через Google.",
-      google_auth_failed: "Не удалось выполнить вход через Google.",
-    };
-
-    const message = authMessages[authError] || "Не удалось выполнить вход через Google.";
-    setAuthMessage(message);
-    setGlobalError(message);
-    params.delete("authError");
-    const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}${window.location.hash}`;
-    window.history.replaceState({}, document.title, nextUrl);
-  }, []);
+  useEffect(() => {
+    if (authSystemError) {
+      setGlobalError(authSystemError);
+      return;
+    }
+    if (authMessage) {
+      setGlobalError(authMessage);
+      return;
+    }
+    if (workspaceError) {
+      setGlobalError(workspaceError);
+      return;
+    }
+    if (authPhase === "authenticated") {
+      setGlobalError("");
+    }
+  }, [authSystemError, authMessage, workspaceError, authPhase]);
 
   useEffect(() => {
     if (!activeTrack || !activeProject || !currentUser) {
@@ -676,7 +511,7 @@ export default function App() {
     queuedLyricsRef.current = null;
     retryAttemptRef.current = 0;
 
-    const scopeKey = buildLyricsDraftKey(currentUser.id, activeProject.id, activeTrack.id);
+    const scope = buildDraftScope(currentUser.id, activeProject.id, activeTrack.id);
     setDraftLyrics(activeTrack.lyrics);
     setDraftRevision(activeTrack.updatedAt);
     setDraftServerUpdatedAt(activeTrack.updatedAt);
@@ -689,11 +524,8 @@ export default function App() {
     lastSyncedLyricsRef.current = activeTrack.lyrics;
 
     void (async () => {
-      const localDraft = await readMergedLocalDraft({
-        key: scopeKey,
-        userId: currentUser.id,
-        projectId: activeProject.id,
-        trackId: activeTrack.id,
+      const localDraft = await readMergedDraft({
+        ...scope,
       });
 
       if (generation !== draftGenerationRef.current) return;
@@ -701,8 +533,9 @@ export default function App() {
       if (!localDraft) return;
 
       if (!shouldRestoreFromLocal(localDraft.content, activeTrack.lyrics)) {
-        await deleteLyricsDraft(scopeKey).catch(() => undefined);
-        clearEmergencyDraft(scopeKey);
+        await removeLocalDraft({
+          ...scope,
+        }).catch(() => undefined);
         return;
       }
 
@@ -717,11 +550,8 @@ export default function App() {
       setLyricsSaveStatus(localDraft.syncState === "conflict" ? "conflict" : "local");
     })();
 
-    setSelectedAudioVersionId((prev) => {
-      if (prev && activeTrack.audioVersions.some((version) => version.id === prev)) return prev;
-      return activeTrack.audioVersions[0]?.id ?? null;
-    });
-  }, [activeTrack?.id, activeProject?.id, currentUser?.id]);
+    syncSelectedAudioVersion(activeTrack.audioVersions);
+  }, [activeTrack?.id, activeProject?.id, currentUser?.id, syncSelectedAudioVersion]);
 
   useEffect(() => {
     if (authPhase !== "authenticated") return;
@@ -790,55 +620,16 @@ export default function App() {
     };
   }, [canEdit, lyricsSaveStatus]);
 
-  const handleLogin = async (payload: { login: string; password: string }) => {
-    const response = await login(payload);
-    clearWorkspace();
-    setCurrentUser(response.user);
-    setAuthPhase("authenticated");
-    setSessionExpired(false);
-    setAuthMessage("");
-    setGlobalError("");
-    await loadWorkspace({
-      projectId: parsedRoute.projectId,
-      trackId: parsedRoute.trackId,
-    });
-  };
-
-  const handleRegister = async (payload: { username: string; displayName: string; password: string; email?: string }) => {
-    const response = await register(payload);
-    clearWorkspace();
-    setCurrentUser(response.user);
-    setAuthPhase("authenticated");
-    setSessionExpired(false);
-    setAuthMessage("");
-    setGlobalError("");
-    await loadWorkspace({
-      projectId: parsedRoute.projectId,
-      trackId: parsedRoute.trackId,
-    });
-  };
-
-  const handleGoogleAuth = () => {
-    window.location.assign("/api/auth/google");
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } finally {
-      setCurrentUser(null);
-      setAuthPhase("unauthenticated");
-      setSessionExpired(false);
-      setAuthMessage("");
-      clearWorkspace();
-    }
-  };
-
   const handleCreateProject = async (title: string, type: "single" | "album", tags: string[], coverUrl?: string) => {
     const project = await withAuth(() => createProject({ title, type, tags, coverUrl }));
     setProjects((prev) => [project, ...prev]);
-    setActiveProjectId(project.id);
-    setActiveTrackId(project.tracks[0]?.id ?? null);
+    navigate(
+      buildPrivatePath({
+        projectId: project.id,
+        trackId: project.tracks[0]?.id ?? null,
+        tab: "lyrics",
+      }),
+    );
     setSelectedAudioVersionId(project.tracks[0]?.audioVersions[0]?.id ?? null);
   };
 
@@ -846,7 +637,6 @@ export default function App() {
     await withAuth(() => deleteProject(projectId));
     const nextProjects = projects.filter((project) => project.id !== projectId);
     setProjects(nextProjects);
-    syncProjectSelection(nextProjects);
   };
 
   const handleAddTrack = async (projectId: string, title: string) => {
@@ -861,8 +651,13 @@ export default function App() {
           : project,
       ),
     );
-    setActiveProjectId(projectId);
-    setActiveTrackId(track.id);
+    navigate(
+      buildPrivatePath({
+        projectId,
+        trackId: track.id,
+        tab: "lyrics",
+      }),
+    );
     setSelectedAudioVersionId(track.audioVersions[0]?.id ?? null);
   };
 
@@ -929,7 +724,7 @@ export default function App() {
   const handleRestoreLocalDraft = async () => {
     const scope = currentDraftScope();
     if (!scope || !activeTrack) return;
-    const localDraft = await readMergedLocalDraft(scope);
+    const localDraft = await readMergedDraft(scope);
     if (!localDraft) {
       setRestoreDraftSnapshot(null);
       return;
@@ -950,14 +745,13 @@ export default function App() {
     setLyricsSavedAt(activeTrack.updatedAt);
     setLyricsStatusMessage("");
     setRestoreDraftSnapshot(null);
-    await deleteLyricsDraft(scope.key).catch(() => undefined);
-    clearEmergencyDraft(scope.key);
+    await removeLocalDraft(scope).catch(() => undefined);
   };
 
   const handleDownloadLocalDraft = async () => {
     const scope = currentDraftScope();
     if (!scope) return;
-    const localDraft = await readMergedLocalDraft(scope);
+    const localDraft = await readMergedDraft(scope);
     if (!localDraft) return;
     const blob = new Blob([localDraft.content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -983,14 +777,14 @@ export default function App() {
         label,
       }),
     );
-    await refreshActiveTrack();
+    await refreshCurrentTrack();
     setLyricsSaveStatus("saved");
   };
 
   const handlePinVersion = async (versionId: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => pinLyricVersion(activeProject.id, activeTrack.id, versionId));
-    await refreshActiveTrack();
+    await refreshCurrentTrack();
   };
 
   const handleDirectFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1006,7 +800,7 @@ export default function App() {
     setUploadError("");
     try {
       await withAuth(() => uploadTrackAudio(activeProject.id, activeTrack.id, file));
-      await refreshActiveTrack();
+      await refreshCurrentTrack();
       setShowUploadModal(false);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -1037,7 +831,7 @@ export default function App() {
           externalProvider: extProvider,
         }),
       );
-      await refreshActiveTrack();
+      await refreshCurrentTrack();
       setExtUrl("");
       setExtLabel("");
       setShowUploadModal(false);
@@ -1051,37 +845,37 @@ export default function App() {
   const handleAddComment = async (text: string, lineIndex?: number) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => createComment(activeProject.id, activeTrack.id, { text, lineIndex }));
-    await Promise.all([refreshActiveTrack(), refreshNotifications()]);
+    await Promise.all([refreshCurrentTrack(), refreshNotifications()]);
   };
 
   const handleResolveComment = async (commentId: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => resolveComment(activeProject.id, activeTrack.id, commentId));
-    await refreshActiveTrack();
+    await refreshCurrentTrack();
   };
 
   const handleSendMessage = async (text: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => postChatMessage(activeProject.id, activeTrack.id, { text }));
-    await refreshActiveTrack();
+    await refreshCurrentTrack();
   };
 
   const handleAddTask = async (title: string, assignedToId?: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => createTask(activeProject.id, activeTrack.id, { title, assignedToId: assignedToId ?? null }));
-    await refreshActiveTrack();
+    await refreshCurrentTrack();
   };
 
   const handleUpdateTaskStatus = async (taskId: string, status: Task["status"]) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => updateTask(activeProject.id, activeTrack.id, taskId, { status }));
-    await refreshActiveTrack();
+    await refreshCurrentTrack();
   };
 
   const handleAddAnnotation = async (timestampSeconds: number, text: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => createAnnotation(activeProject.id, activeTrack.id, { timestampSeconds, text }));
-    await refreshActiveTrack();
+    await refreshCurrentTrack();
   };
 
   const handleReadNotification = async (id: string) => {
@@ -1103,11 +897,11 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-neutral-950 text-neutral-100">
       {!currentUser && (
         <AuthModal
-          onLogin={handleLogin}
-          onRegister={handleRegister}
-          onGoogleAuth={handleGoogleAuth}
+          onLogin={login}
+          onRegister={register}
+          onGoogleAuth={startGoogleAuth}
           currentUser={currentUser}
-          onLogout={handleLogout}
+          onLogout={logout}
           authLoading={isCheckingSession}
           sessionExpired={sessionExpired}
           authMessage={authMessage}
@@ -1119,11 +913,11 @@ export default function App() {
         <div className="flex items-center gap-2 select-none text-white font-bold">collabStudio Stage 4</div>
         {currentUser && (
           <AuthModal
-            onLogin={handleLogin}
-            onRegister={handleRegister}
-            onGoogleAuth={handleGoogleAuth}
+            onLogin={login}
+            onRegister={register}
+            onGoogleAuth={startGoogleAuth}
             currentUser={currentUser}
-            onLogout={handleLogout}
+            onLogout={logout}
             googleOAuthEnabled={googleOAuthEnabled}
           />
         )}
@@ -1148,15 +942,27 @@ export default function App() {
                   if (canEdit) {
                     void forceSyncLyricsDraft();
                   }
-                  setActiveProjectId(project.id);
-                  setActiveTrackId(project.tracks[0]?.id ?? null);
+                  navigate(
+                    buildPrivatePath({
+                      projectId: project.id,
+                      trackId: project.tracks[0]?.id ?? null,
+                      tab: "lyrics",
+                    }),
+                  );
                   setMobileTab("editor");
                 }}
                 onSelectTrack={(track) => {
                   if (canEdit) {
                     void forceSyncLyricsDraft();
                   }
-                  setActiveTrackId(track.id);
+                  const ownerProject = projects.find((project) => project.tracks.some((projectTrack) => projectTrack.id === track.id));
+                  navigate(
+                    buildPrivatePath({
+                      projectId: ownerProject?.id ?? activeProjectId,
+                      trackId: track.id,
+                      tab: "lyrics",
+                    }),
+                  );
                   setMobileTab("editor");
                 }}
                 onCreateProject={handleCreateProject}
@@ -1273,7 +1079,7 @@ export default function App() {
                         canEdit={canEdit}
                       />
                     )}
-                    {activeSidebar === "rhymes" && <RhymeFinder onUnauthorized={handleUnauthorized} />}
+                    {activeSidebar === "rhymes" && <RhymeFinder onUnauthorized={expireSession} />}
                   </div>
                 </div>
               ) : (

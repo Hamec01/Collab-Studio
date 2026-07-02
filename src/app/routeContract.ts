@@ -4,7 +4,7 @@ export const TRACK_TABS = ["lyrics", "audio", "team", "versions"] as const;
 
 export type TrackTab = (typeof TRACK_TABS)[number];
 
-type ParsedPath = {
+export type ParsedPrivatePath = {
   projectId: string | null;
   trackId: string | null;
   tab: TrackTab;
@@ -21,7 +21,7 @@ function normalizeSegment(value: string | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function parsePrivatePath(pathname: string): ParsedPath {
+export function parsePrivatePath(pathname: string): ParsedPrivatePath {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0 || segments[0] !== "app") {
     return {
