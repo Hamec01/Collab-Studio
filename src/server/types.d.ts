@@ -25,8 +25,7 @@ declare global {
 
     interface ProjectAccess {
       projectId: string;
-      role: ProjectRole | "admin";
-      isAdmin: boolean;
+      role: ProjectRole;
     }
 
     interface Request {

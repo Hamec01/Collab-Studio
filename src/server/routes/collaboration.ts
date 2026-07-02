@@ -100,7 +100,7 @@ async function resolveAssignee(db: CollaborationDb, projectId: string, assignedT
 router.post(
   "/:projectId/tracks/:trackId/comments",
   validateTrackParams,
-  requireProjectMember,
+  requireProjectEditor,
   asyncHandler(async (req, res) => {
     const user = requireCurrentUser(req);
     const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);
@@ -175,7 +175,7 @@ router.put(
 router.post(
   "/:projectId/tracks/:trackId/chat",
   validateTrackParams,
-  requireProjectMember,
+  requireProjectEditor,
   asyncHandler(async (req, res) => {
     const user = requireCurrentUser(req);
     const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);

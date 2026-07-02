@@ -30,7 +30,14 @@ router.get(
     const user = requireCurrentUser(req);
     const { limit } = notificationQuerySchema.parse(req.query);
     const notifications = await prisma.notification.findMany({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        project: {
+          members: {
+            some: { userId: user.id },
+          },
+        },
+      },
       include: notificationInclude,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit,
@@ -45,7 +52,15 @@ router.post(
   asyncHandler(async (req, res) => {
     const user = requireCurrentUser(req);
     const result = await prisma.notification.updateMany({
-      where: { userId: user.id, read: false },
+      where: {
+        userId: user.id,
+        read: false,
+        project: {
+          members: {
+            some: { userId: user.id },
+          },
+        },
+      },
       data: { read: true },
     });
     res.json({ success: true, updated: result.count });
@@ -63,7 +78,15 @@ router.post(
     const user = requireCurrentUser(req);
     const { notificationId } = notificationParamsSchema.parse(req.params);
     const result = await prisma.notification.updateMany({
-      where: { id: notificationId, userId: user.id },
+      where: {
+        id: notificationId,
+        userId: user.id,
+        project: {
+          members: {
+            some: { userId: user.id },
+          },
+        },
+      },
       data: { read: true },
     });
     if (result.count === 0) throw new AppError(404, "NOTIFICATION_NOT_FOUND", "Notification not found");

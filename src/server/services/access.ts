@@ -6,12 +6,12 @@ const projectRoleRank: Record<ProjectRole, number> = {
   owner: 3,
 };
 
-export function canEditProject(role: ProjectRole | "admin") {
-  return role === "admin" || role === "owner" || role === "editor";
+export function canEditProject(role: ProjectRole) {
+  return role === "owner" || role === "editor";
 }
 
-export function canOwnProject(role: ProjectRole | "admin") {
-  return role === "admin" || role === "owner";
+export function canOwnProject(role: ProjectRole) {
+  return role === "owner";
 }
 
 export function hasAtLeastProjectRole(role: ProjectRole | "admin", required: ProjectRole) {

@@ -58,21 +58,6 @@ export function requireProjectMember(req: Request, res: Response, next: NextFunc
       return;
     }
 
-    if (req.user?.role === "admin") {
-      prisma.project
-        .findUnique({ where: { id: projectId }, select: { id: true } })
-        .then((project) => {
-          if (!project) {
-            sendError(res, 404, "PROJECT_NOT_FOUND", "Project not found", req.requestId);
-            return;
-          }
-          req.projectAccess = { projectId, role: "admin", isAdmin: true };
-          next();
-        })
-        .catch(next);
-      return;
-    }
-
     prisma.project
       .findUnique({
         where: { id: projectId },
@@ -92,11 +77,11 @@ export function requireProjectMember(req: Request, res: Response, next: NextFunc
 
         const membership = project.members[0];
         if (!membership) {
-          sendError(res, 403, "FORBIDDEN", "Project access denied", req.requestId);
+          sendError(res, 404, "PROJECT_NOT_FOUND", "Project not found", req.requestId);
           return;
         }
 
-        req.projectAccess = { projectId, role: membership.role, isAdmin: false };
+        req.projectAccess = { projectId, role: membership.role };
         next();
       })
       .catch(next);

@@ -34,9 +34,22 @@ export function addProjectMember(projectId: string, payload: { login: string; ro
   return apiRequest<{ member: ProjectMember }>(`/api/projects/${projectId}/members`, {
     method: "POST",
     body: {
-      identifier: payload.login,
+      login: payload.login,
       role: payload.role,
     },
+  });
+}
+
+export function updateProjectMemberRole(projectId: string, userId: string, payload: { role: "viewer" | "editor" }) {
+  return apiRequest<{ member: ProjectMember }>(`/api/projects/${projectId}/members/${userId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function removeProjectMember(projectId: string, userId: string) {
+  return apiRequest<{ success: boolean }>(`/api/projects/${projectId}/members/${userId}`, {
+    method: "DELETE",
   });
 }
 

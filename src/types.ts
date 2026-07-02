@@ -12,11 +12,17 @@ export interface AuthUser {
 export interface ProjectMember {
   userId: string;
   username: string;
-  email: string | null;
   displayName: string;
   avatarUrl: string | null;
   role: "owner" | "editor" | "viewer";
   createdAt: string;
+}
+
+export interface ProjectOwnerSummary {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
 }
 
 export interface LyricVersion {
@@ -128,6 +134,8 @@ export interface Project {
   type: 'single' | 'album';
   coverUrl: string | null;
   tags: string[];
+  currentUserRole: "owner" | "editor" | "viewer" | null;
+  owner: ProjectOwnerSummary | null;
   participants: ProjectMember[];
   members: ProjectMember[];
   tracks: Track[];

@@ -9,6 +9,7 @@ import { getConfig } from "../config";
 import { prisma } from "../db";
 import { requireAuth, requireProjectEditor, requireProjectMember, requireProjectOwner } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
+import { inviteRateLimit } from "../middleware/rateLimits";
 import {
   addMemberSchema,
   createProjectSchema,
@@ -69,19 +70,6 @@ async function getTrackOrThrow(projectId: string, trackId: string) {
   });
   if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
   return track;
-}
-
-async function assertOwnerWouldRemain(tx: Prisma.TransactionClient, projectId: string, ignoredUserId?: string) {
-  const ownerCount = await tx.projectMember.count({
-    where: {
-      projectId,
-      role: "owner",
-      ...(ignoredUserId ? { NOT: { userId: ignoredUserId } } : {}),
-    },
-  });
-  if (ownerCount < 1) {
-    throw new AppError(409, "LAST_OWNER", "Project must keep at least one owner");
-  }
 }
 
 const MAX_AUDIO_SIZE_BYTES = 25 * 1024 * 1024;
@@ -382,19 +370,16 @@ router.get(
   asyncHandler(async (req, res) => {
     const user = requireCurrentUser(req);
     const projects = await prisma.project.findMany({
-      where:
-        user.role === "admin"
-          ? undefined
-          : {
-              members: {
-                some: { userId: user.id },
-              },
-            },
+      where: {
+        members: {
+          some: { userId: user.id },
+        },
+      },
       include: projectInclude,
       orderBy: { updatedAt: "desc" },
     });
 
-    res.json(projects.map(serializeProject));
+    res.json(projects.map((project) => serializeProject(project, user.id)));
   }),
 );
 
@@ -423,7 +408,7 @@ router.post(
       });
     });
 
-    res.status(201).json(serializeProject(project));
+    res.status(201).json(serializeProject(project, user.id));
   }),
 );
 
@@ -435,10 +420,11 @@ router.get(
   },
   requireProjectMember,
   asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
     const { projectId } = projectParamsSchema.parse(req.params);
     const project = await prisma.project.findUnique({ where: { id: projectId }, include: projectInclude });
     if (!project) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
-    res.json(serializeProject(project));
+    res.json(serializeProject(project, user.id));
   }),
 );
 
@@ -450,6 +436,7 @@ router.patch(
   },
   requireProjectOwner,
   asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
     const { projectId } = projectParamsSchema.parse(req.params);
     const input = updateProjectSchema.parse(req.body);
     const project = await prisma.project.update({
@@ -462,7 +449,7 @@ router.patch(
       },
       include: projectInclude,
     });
-    res.json(serializeProject(project));
+    res.json(serializeProject(project, user.id));
   }),
 );
 
@@ -492,10 +479,11 @@ router.post(
     next();
   },
   requireProjectOwner,
+  inviteRateLimit,
   asyncHandler(async (req, res) => {
     const { projectId } = projectParamsSchema.parse(req.params);
     const input = addMemberSchema.parse(req.body);
-    const identifier = normalizeIdentifier(input.identifier);
+    const identifier = normalizeIdentifier(input.login ?? input.identifier ?? "");
 
     const user = await prisma.user.findFirst({
       where: { OR: [{ username: identifier }, { email: identifier }] },
@@ -533,9 +521,7 @@ router.patch(
       async (tx) => {
         const existing = await tx.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } });
         if (!existing) throw new AppError(404, "MEMBER_NOT_FOUND", "Project member not found");
-        if (existing.role === "owner" && input.role !== "owner") {
-          await assertOwnerWouldRemain(tx, projectId, userId);
-        }
+        if (existing.role === "owner") throw new AppError(409, "OWNER_ROLE_CHANGE_FORBIDDEN", "Project owner role cannot be changed");
         return tx.projectMember.update({
           where: { projectId_userId: { projectId, userId } },
           data: { role: input.role },
@@ -563,7 +549,7 @@ router.delete(
       async (tx) => {
         const existing = await tx.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } });
         if (!existing) throw new AppError(404, "MEMBER_NOT_FOUND", "Project member not found");
-        if (existing.role === "owner") await assertOwnerWouldRemain(tx, projectId, userId);
+        if (existing.role === "owner") throw new AppError(409, "OWNER_REMOVAL_FORBIDDEN", "Project owner cannot be removed");
         await tx.projectMember.delete({ where: { projectId_userId: { projectId, userId } } });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -588,7 +574,7 @@ router.post(
       async (tx) => {
         const existing = await tx.projectMember.findUnique({ where: { projectId_userId: { projectId, userId: user.id } } });
         if (!existing) throw new AppError(404, "MEMBER_NOT_FOUND", "Project member not found");
-        if (existing.role === "owner") await assertOwnerWouldRemain(tx, projectId, user.id);
+        if (existing.role === "owner") throw new AppError(409, "OWNER_LEAVE_FORBIDDEN", "Project owner cannot leave without transfer");
         await tx.projectMember.delete({ where: { projectId_userId: { projectId, userId: user.id } } });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

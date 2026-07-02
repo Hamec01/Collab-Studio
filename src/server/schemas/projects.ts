@@ -27,11 +27,16 @@ export const updateProjectSchema = z
   })
   .refine((value) => Object.keys(value).length > 0, { message: "At least one field is required" });
 
-export const addMemberSchema = z.object({
-  identifier: z.string().trim().min(1).max(254),
-  role: z.enum(["editor", "viewer"]),
-});
+export const addMemberSchema = z
+  .object({
+    login: z.string().trim().min(1).max(254).optional(),
+    identifier: z.string().trim().min(1).max(254).optional(),
+    role: z.enum(["editor", "viewer"]),
+  })
+  .refine((value) => Boolean(value.login || value.identifier), {
+    message: "Login is required",
+  });
 
 export const updateMemberRoleSchema = z.object({
-  role: z.enum(["owner", "editor", "viewer"]),
+  role: z.enum(["editor", "viewer"]),
 });

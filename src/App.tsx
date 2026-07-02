@@ -31,7 +31,9 @@ import {
   listProjects,
   pinLyricVersion,
   postChatMessage,
+  removeProjectMember,
   resolveComment,
+  updateProjectMemberRole,
   updateTask,
   updateTrack,
   uploadTrackAudio,
@@ -90,11 +92,10 @@ export default function App() {
 
   const projectRole = useMemo(() => {
     if (!currentUser || !activeProject) return null;
-    if (currentUser.role === "admin") return "admin" as const;
-    return activeProject.participants.find((member) => member.userId === currentUser.id)?.role ?? null;
+    return activeProject.currentUserRole ?? activeProject.participants.find((member) => member.userId === currentUser.id)?.role ?? null;
   }, [currentUser, activeProject]);
 
-  const canEdit = projectRole === "admin" || projectRole === "owner" || projectRole === "editor";
+  const canEdit = projectRole === "owner" || projectRole === "editor";
   const canResolve = canEdit;
   const canSend = !!currentUser && !!activeProject && !!activeTrack;
 
@@ -111,6 +112,11 @@ export default function App() {
     setShowUploadModal(false);
     setUploadError("");
     setIsUploading(false);
+    setExtUrl("");
+    setExtLabel("");
+    setExtProvider("google");
+    setActiveSidebar("comments");
+    setMobileTab("projects");
   };
 
   const handleUnauthorized = () => {
@@ -373,6 +379,37 @@ export default function App() {
     );
   };
 
+  const handleUpdateProjectMemberRole = async (projectId: string, userId: string, role: "viewer" | "editor") => {
+    const response = await withAuth(() => updateProjectMemberRole(projectId, userId, { role }));
+    const incoming = response.member;
+    setProjects((prev) =>
+      prev.map((project) => {
+        if (project.id !== projectId) return project;
+        const nextParticipants = project.participants.map((member) => (member.userId === incoming.userId ? incoming : member));
+        return {
+          ...project,
+          participants: nextParticipants,
+          members: nextParticipants,
+        };
+      }),
+    );
+  };
+
+  const handleRemoveProjectMember = async (projectId: string, userId: string) => {
+    await withAuth(() => removeProjectMember(projectId, userId));
+    setProjects((prev) =>
+      prev.map((project) => {
+        if (project.id !== projectId) return project;
+        const nextParticipants = project.participants.filter((member) => member.userId !== userId);
+        return {
+          ...project,
+          participants: nextParticipants,
+          members: nextParticipants,
+        };
+      }),
+    );
+  };
+
   const handleUpdateLyrics = async (newLyrics: string, versionLabel?: string) => {
     if (!activeProject || !activeTrack) return;
     const updated = await withAuth(() => updateTrack(activeProject.id, activeTrack.id, { lyrics: newLyrics, versionLabel }));
@@ -557,6 +594,8 @@ export default function App() {
                 onCreateProject={handleCreateProject}
                 onAddTrack={handleAddTrack}
                 onAddMember={handleAddProjectMember}
+                onUpdateMemberRole={handleUpdateProjectMemberRole}
+                onRemoveMember={handleRemoveProjectMember}
                 onDeleteProject={handleDeleteProject}
                 currentUser={currentUser}
               />

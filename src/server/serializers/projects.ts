@@ -57,7 +57,6 @@ export function serializeProjectMember(member: MemberWithUser) {
   return {
     userId: member.userId,
     username: member.user.username,
-    email: member.user.email,
     displayName: member.user.displayName,
     avatarUrl: member.user.avatarUrl,
     role: member.role,
@@ -118,15 +117,30 @@ export function serializeTrack(track: TrackWithRelations) {
   };
 }
 
-export function serializeProject(project: ProjectWithRelations) {
+export function serializeProject(project: ProjectWithRelations, currentUserId?: string) {
+  const members = (project.members ?? []).map(serializeProjectMember);
+  const owner = members.find((member) => member.role === "owner") ?? null;
+  const currentUserRole = currentUserId
+    ? (members.find((member) => member.userId === currentUserId)?.role ?? null)
+    : null;
+
   return {
     id: project.id,
     title: project.title,
     type: project.type,
     coverUrl: project.coverUrl,
     tags: project.tags,
-    participants: (project.members ?? []).map(serializeProjectMember),
-    members: (project.members ?? []).map(serializeProjectMember),
+    currentUserRole,
+    owner: owner
+      ? {
+          userId: owner.userId,
+          username: owner.username,
+          displayName: owner.displayName,
+          avatarUrl: owner.avatarUrl,
+        }
+      : null,
+    participants: members,
+    members,
     tracks: (project.tracks ?? []).map(serializeTrack),
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),

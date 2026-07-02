@@ -18,6 +18,15 @@ export const authRateLimit = rateLimit({
   handler: (req, res) => sendError(res, 429, "AUTH_RATE_LIMITED", "Too many authentication attempts", req.requestId),
 });
 
+export const inviteRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.session.userId ?? req.ip ?? "unknown",
+  handler: (req, res) => sendError(res, 429, "INVITE_RATE_LIMITED", "Too many invite attempts", req.requestId),
+});
+
 export const geminiIpRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
