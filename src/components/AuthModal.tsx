@@ -6,21 +6,27 @@ import { AuthUser } from "../types";
 interface AuthModalProps {
   onLogin: (payload: { login: string; password: string }) => Promise<void>;
   onRegister: (payload: { username: string; displayName: string; password: string; email?: string }) => Promise<void>;
+  onGoogleAuth: () => void;
   currentUser: AuthUser | null;
   onLogout: () => Promise<void> | void;
   inviteProjectTitle?: string | null;
   authLoading?: boolean;
   sessionExpired?: boolean;
+  authMessage?: string;
+  googleOAuthEnabled?: boolean;
 }
 
 export default function AuthModal({
   onLogin,
   onRegister,
+  onGoogleAuth,
   currentUser,
   onLogout,
   inviteProjectTitle,
   authLoading = false,
   sessionExpired = false,
+  authMessage = "",
+  googleOAuthEnabled = false,
 }: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [login, setLogin] = useState("");
@@ -97,6 +103,15 @@ export default function AuthModal({
         >
           {logoutLoading ? "Выход..." : "Выйти"}
         </button>
+        {googleOAuthEnabled && (
+          <button
+            type="button"
+            onClick={onGoogleAuth}
+            className="text-[10px] sm:text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium px-2 sm:px-3 py-1 rounded-full border border-neutral-700 transition-colors cursor-pointer"
+          >
+            Привязать Google
+          </button>
+        )}
       </div>
     );
   }
@@ -122,9 +137,9 @@ export default function AuthModal({
           </div>
         )}
 
-        {sessionExpired && (
+        {(sessionExpired || authMessage) && (
           <div className="bg-amber-950/50 border border-amber-900/40 text-amber-300 text-xs p-3 rounded-lg mb-3 text-center">
-            Сессия истекла. Войдите снова.
+            {authMessage || "Сессия истекла. Войдите снова."}
           </div>
         )}
 
@@ -214,6 +229,24 @@ export default function AuthModal({
             )}
           </button>
         </form>
+
+        {googleOAuthEnabled && (
+          <>
+            <div className="flex items-center gap-3 my-4 text-neutral-500">
+              <div className="h-px flex-1 bg-neutral-800" />
+              <span className="text-xs uppercase tracking-[0.2em]">или</span>
+              <div className="h-px flex-1 bg-neutral-800" />
+            </div>
+            <button
+              type="button"
+              onClick={onGoogleAuth}
+              className="w-full bg-white hover:bg-neutral-200 text-neutral-950 font-medium p-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer border border-neutral-300"
+            >
+              <Sparkles className="w-4 h-4" />
+              Продолжить с Google
+            </button>
+          </>
+        )}
 
         <div className="mt-4 text-center">
           <button

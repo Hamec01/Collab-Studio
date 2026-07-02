@@ -27,6 +27,9 @@ const envSchema = z.object({
   ALLOW_PUBLIC_REGISTRATION: booleanFromEnv(false),
   TRUST_PROXY: booleanFromEnv(false),
   COOKIE_SECURE: booleanFromEnv(false),
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  GOOGLE_CALLBACK_URL: z.string().url().optional(),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

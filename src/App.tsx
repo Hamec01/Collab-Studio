@@ -18,7 +18,7 @@ import RhymeFinder from "./components/RhymeFinder";
 import NotificationsPanel from "./components/NotificationsPanel";
 import { FolderOpen, MessageSquare, Music, Sparkles } from "lucide-react";
 import { ApiError, isApiError } from "./api/client";
-import { getCurrentUser, login, logout, register } from "./api/auth";
+import { getAuthProviders, getCurrentUser, login, logout, register } from "./api/auth";
 import {
   addProjectMember,
   attachExternalAudio,
@@ -56,6 +56,8 @@ export default function App() {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -193,11 +195,32 @@ export default function App() {
     setIsCheckingSession(true);
     (async () => {
       try {
-        const response = await getCurrentUser(controller.signal);
-        setCurrentUser(response.user);
-        setAuthPhase("authenticated");
-        setSessionExpired(false);
-        await loadWorkspace();
+        const [providersResult, userResult] = await Promise.allSettled([
+          getAuthProviders(controller.signal),
+          getCurrentUser(controller.signal),
+        ]);
+
+        if (controller.signal.aborted) return;
+
+        setGoogleOAuthEnabled(providersResult.status === "fulfilled" ? providersResult.value.googleOAuthEnabled : false);
+
+        if (userResult.status === "fulfilled") {
+          setCurrentUser(userResult.value.user);
+          setAuthPhase("authenticated");
+          setSessionExpired(false);
+          await loadWorkspace();
+          return;
+        }
+
+        if (isApiError(userResult.reason) && userResult.reason.status === 401) {
+          setCurrentUser(null);
+          setAuthPhase("unauthenticated");
+          return;
+        }
+
+        setCurrentUser(null);
+        setAuthPhase("unauthenticated");
+        setGlobalError("Не удалось загрузить сессию.");
       } catch (error) {
         if (controller.signal.aborted) return;
         if (isApiError(error) && error.status === 401) {
@@ -215,6 +238,32 @@ export default function App() {
       }
     })();
     return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("authError");
+    if (!authError) return;
+
+    const authMessages: Record<string, string> = {
+      google_cancelled: "Вход через Google был отменен.",
+      google_missing_code: "Google не вернул код авторизации.",
+      google_invalid_state: "Безопасность входа не подтвердилась. Повторите попытку.",
+      google_not_configured: "Вход через Google временно недоступен.",
+      google_token_exchange_failed: "Не удалось завершить вход через Google.",
+      google_email_not_verified: "Google не подтвердил email.",
+      google_email_conflict: "Этот email уже связан с другим аккаунтом.",
+      google_link_conflict: "Этот Google-аккаунт уже связан с другим пользователем.",
+      google_network_error: "Сетевая ошибка при входе через Google.",
+      google_auth_failed: "Не удалось выполнить вход через Google.",
+    };
+
+    const message = authMessages[authError] || "Не удалось выполнить вход через Google.";
+    setAuthMessage(message);
+    setGlobalError(message);
+    params.delete("authError");
+    const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, document.title, nextUrl);
   }, []);
 
   useEffect(() => {
@@ -242,6 +291,7 @@ export default function App() {
     setCurrentUser(response.user);
     setAuthPhase("authenticated");
     setSessionExpired(false);
+    setAuthMessage("");
     setGlobalError("");
     await loadWorkspace();
   };
@@ -252,8 +302,13 @@ export default function App() {
     setCurrentUser(response.user);
     setAuthPhase("authenticated");
     setSessionExpired(false);
+    setAuthMessage("");
     setGlobalError("");
     await loadWorkspace();
+  };
+
+  const handleGoogleAuth = () => {
+    window.location.assign("/api/auth/google");
   };
 
   const handleLogout = async () => {
@@ -263,6 +318,7 @@ export default function App() {
       setCurrentUser(null);
       setAuthPhase("unauthenticated");
       setSessionExpired(false);
+      setAuthMessage("");
       clearWorkspace();
     }
   };
@@ -450,16 +506,28 @@ export default function App() {
         <AuthModal
           onLogin={handleLogin}
           onRegister={handleRegister}
+          onGoogleAuth={handleGoogleAuth}
           currentUser={currentUser}
           onLogout={handleLogout}
           authLoading={isCheckingSession}
           sessionExpired={sessionExpired}
+          authMessage={authMessage}
+          googleOAuthEnabled={googleOAuthEnabled}
         />
       )}
 
       <header className="border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-neutral-950/80 border-neutral-900">
         <div className="flex items-center gap-2 select-none text-white font-bold">collabStudio Stage 4</div>
-        {currentUser && <AuthModal onLogin={handleLogin} onRegister={handleRegister} currentUser={currentUser} onLogout={handleLogout} />}
+        {currentUser && (
+          <AuthModal
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+            onGoogleAuth={handleGoogleAuth}
+            currentUser={currentUser}
+            onLogout={handleLogout}
+            googleOAuthEnabled={googleOAuthEnabled}
+          />
+        )}
       </header>
 
       {globalError && (

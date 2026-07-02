@@ -5,6 +5,8 @@ import type { ProjectRole, UserRole } from "@prisma/client";
 declare module "express-session" {
   interface SessionData {
     userId?: string;
+    googleOAuthState?: string;
+    googleOAuthMode?: "login" | "link";
   }
 }
 

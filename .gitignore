@@ -8,5 +8,6 @@ coverage/
 !.env.example
 backups/
 *.sql
+!prisma/migrations/**/*.sql
 *.sql.gz
 *.dump
