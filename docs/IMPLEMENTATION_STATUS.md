@@ -15,25 +15,26 @@
 - Branch: `main`
 - Baseline commit: `010efea`
 - Active Stage: `Stage 0`
-- Active slice: не начат
+- Active slice: Stage 0 blocker-fix slice (pipeline/tests/ci/flags/restore drill)
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
 ## Проверенный baseline
 
-- `npm run prisma:generate` — проходит.
-- `npm run lint` после Prisma generate — проходит.
-- `npx tsx --test src/utils/lyricsDraftRecovery.test.ts` — 4/4 проходят.
-- `npm run build` — проходит.
-- Clean `npm ci → npm run lint` — падает без предварительного Prisma generate; исправляется в Stage 0.
-- Единого `npm test` script пока нет.
-- Playwright/E2E foundation пока нет.
+- Clean pipeline `npm ci → npm run prisma:generate → npm run lint → npm test → npm run build → npm run e2e` — проходит.
+- `npm test` объединяет unit + component tests.
+- Component test foundation добавлен (Vitest + RTL + jsdom + jest-dom).
+- Default `npm run e2e` изолирован локально (`127.0.0.1`) и не ходит в production.
+- Добавлен явный `npm run e2e:production-smoke` для отдельного ручного запуска.
+- CI workflow добавлен: `.github/workflows/ci.yml`.
+- Feature flag infrastructure добавлена: `src/app/featureFlags.ts` + tests.
+- Реальный isolated restore drill выполнен и задокументирован: `docs/RESTORE_DRILL_2026-07-02.md`.
 
 ## Stage status
 
 | Stage | Статус | Gate |
 |---|---|---|
-| Stage 0 — Baseline, pipeline и recovery | pending | Не пройден |
+| Stage 0 — Baseline, pipeline и recovery | completed | Пройден |
 | Stage 1 — Router и state boundaries | pending | Не начат |
 | Stage 2 — i18n, design tokens и shell | pending | Не начат |
 | Stage 3 — Projects, scopes и invitations | pending | Не начат |
@@ -51,17 +52,17 @@
 
 ## Следующий разрешённый slice
 
-Stage 0:
+Stage 1 (не начинать без отдельного подтверждения):
 
-1. Исправить clean-install pipeline: Prisma Client генерируется до typecheck.
-2. Добавить единый `npm test` script, включающий существующие tests.
-3. Не начинать router/UI/schema changes.
+1. Router и state boundaries по канонической карте.
+2. Без visual/schema redesign вне scope Stage 1.
 
 ## Журнал slices
 
 | Дата | Stage/slice | Результат | Commit/branch | Gate/tests | Следующий шаг |
 |---|---|---|---|---|---|
 | 2026-07-02 | Baseline audit | Зафиксирован текущий baseline | `main@010efea` | generate/lint/unit/build проходят в правильной ручной последовательности | Stage 0 slice 1 |
+| 2026-07-02 | Stage 0 blocker-fix slice | Закрыты блокеры: local e2e default, component tests, CI, feature flags, isolated restore drill, artifact ignore | `main` (working tree changes, без commit) | clean pipeline + e2e проходят; restore drill PASS в isolated env | Ожидание подтверждения перед Stage 1 |
 
 ## Blockers
 
