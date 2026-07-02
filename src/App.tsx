@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Annotation,
   AppNotification,
@@ -53,6 +54,12 @@ import {
   pickMostRecentDraft,
   shouldRestoreFromLocal,
 } from "./utils/lyricsDraftRecovery";
+import {
+  buildPrivatePath,
+  mobileStateFromTab,
+  parsePrivatePath,
+  type TrackTab,
+} from "./app/routeContract";
 
 type AuthPhase = "loading" | "authenticated" | "unauthenticated";
 type Sidebar = "comments" | "chat" | "tasks" | "rhymes";
@@ -98,6 +105,7 @@ export default function App() {
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
   const [activeSidebar, setActiveSidebar] = useState<Sidebar>("comments");
   const [mobileTab, setMobileTab] = useState<MobileTab>("projects");
+  const [routeTab, setRouteTab] = useState<TrackTab>("lyrics");
   const [globalError, setGlobalError] = useState<string>("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -126,6 +134,10 @@ export default function App() {
   const draftLyricsRef = useRef("");
   const draftRevisionRef = useRef<string | null>(null);
   const lastSyncedLyricsRef = useRef("");
+
+  const location = useLocation();
+  const navigate = useNavigate();
+  const parsedRoute = useMemo(() => parsePrivatePath(location.pathname), [location.pathname]);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) || null,
@@ -297,7 +309,11 @@ export default function App() {
     }
   };
 
-  const syncProjectSelection = (projectList: Project[]) => {
+  const syncProjectSelection = (
+    projectList: Project[],
+    preferredProjectId: string | null = null,
+    preferredTrackId: string | null = null,
+  ) => {
     if (projectList.length === 0) {
       setActiveProjectId(null);
       setActiveTrackId(null);
@@ -305,10 +321,13 @@ export default function App() {
       return;
     }
 
-    const selectedProject = projectList.find((project) => project.id === activeProjectId) || projectList[0];
+    const candidateProjectId = preferredProjectId ?? activeProjectId;
+    const candidateTrackId = preferredTrackId ?? activeTrackId;
+
+    const selectedProject = projectList.find((project) => project.id === candidateProjectId) || projectList[0];
     setActiveProjectId(selectedProject.id);
 
-    const selectedTrack = selectedProject.tracks.find((track) => track.id === activeTrackId) || selectedProject.tracks[0] || null;
+    const selectedTrack = selectedProject.tracks.find((track) => track.id === candidateTrackId) || selectedProject.tracks[0] || null;
     setActiveTrackId(selectedTrack?.id ?? null);
     setSelectedAudioVersionId((prev) => {
       if (!selectedTrack) return null;
@@ -317,13 +336,17 @@ export default function App() {
     });
   };
 
-  const loadWorkspace = async () => {
+  const loadWorkspace = async (preferredRoute?: { projectId: string | null; trackId: string | null }) => {
     const seq = ++requestSeq.current;
     const [projectList, notificationList] = await Promise.all([listProjects(), listNotifications()]);
     if (seq !== requestSeq.current) return;
     setProjects(projectList);
     setNotifications(notificationList);
-    syncProjectSelection(projectList);
+    syncProjectSelection(
+      projectList,
+      preferredRoute?.projectId ?? null,
+      preferredRoute?.trackId ?? null,
+    );
   };
 
   const refreshActiveTrack = async () => {
@@ -508,6 +531,59 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (location.pathname.startsWith("/app") && !parsedRoute.isCanonical) {
+      navigate(
+        buildPrivatePath({
+          projectId: parsedRoute.projectId,
+          trackId: parsedRoute.trackId,
+          tab: parsedRoute.tab,
+        }),
+        { replace: true },
+      );
+    }
+  }, [location.pathname, navigate, parsedRoute]);
+
+  useEffect(() => {
+    if (authPhase !== "authenticated") return;
+    setRouteTab(parsedRoute.tab);
+    setMobileTab(parsedRoute.trackId ? mobileStateFromTab(parsedRoute.tab) : "projects");
+    setActiveProjectId(parsedRoute.projectId);
+    setActiveTrackId(parsedRoute.trackId);
+    if (parsedRoute.tab === "team") {
+      setActiveSidebar("comments");
+    }
+  }, [authPhase, parsedRoute]);
+
+  useEffect(() => {
+    if (authPhase !== "authenticated") return;
+
+    const nextTab: TrackTab =
+      mobileTab === "rightPanel"
+        ? "team"
+        : routeTab === "team"
+          ? "lyrics"
+          : routeTab;
+
+    const nextPath = buildPrivatePath({
+      projectId: activeProjectId,
+      trackId: mobileTab === "projects" ? null : activeTrackId,
+      tab: mobileTab === "projects" ? "lyrics" : nextTab,
+    });
+
+    if (location.pathname !== nextPath) {
+      navigate(nextPath);
+    }
+  }, [
+    authPhase,
+    activeProjectId,
+    activeTrackId,
+    mobileTab,
+    routeTab,
+    location.pathname,
+    navigate,
+  ]);
+
+  useEffect(() => {
     const controller = new AbortController();
     setAuthPhase("loading");
     setIsCheckingSession(true);
@@ -526,7 +602,10 @@ export default function App() {
           setCurrentUser(userResult.value.user);
           setAuthPhase("authenticated");
           setSessionExpired(false);
-          await loadWorkspace();
+          await loadWorkspace({
+            projectId: parsedRoute.projectId,
+            trackId: parsedRoute.trackId,
+          });
           return;
         }
 
@@ -556,7 +635,7 @@ export default function App() {
       }
     })();
     return () => controller.abort();
-  }, []);
+  }, [parsedRoute.projectId, parsedRoute.trackId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -719,7 +798,10 @@ export default function App() {
     setSessionExpired(false);
     setAuthMessage("");
     setGlobalError("");
-    await loadWorkspace();
+    await loadWorkspace({
+      projectId: parsedRoute.projectId,
+      trackId: parsedRoute.trackId,
+    });
   };
 
   const handleRegister = async (payload: { username: string; displayName: string; password: string; email?: string }) => {
@@ -730,7 +812,10 @@ export default function App() {
     setSessionExpired(false);
     setAuthMessage("");
     setGlobalError("");
-    await loadWorkspace();
+    await loadWorkspace({
+      projectId: parsedRoute.projectId,
+      trackId: parsedRoute.trackId,
+    });
   };
 
   const handleGoogleAuth = () => {
