@@ -4,16 +4,19 @@ import { BrowserRouter } from 'react-router-dom';
 import AppRouter from './app/AppRouter.tsx';
 import { AuthProvider } from './app/auth/AuthProvider.tsx';
 import { PlayerProvider } from './app/player/PlayerProvider.tsx';
+import { I18nProvider } from './app/i18n/I18nProvider.tsx';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <PlayerProvider>
-          <AppRouter />
-        </PlayerProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <I18nProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <PlayerProvider>
+            <AppRouter />
+          </PlayerProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </I18nProvider>
   </StrictMode>,
 );

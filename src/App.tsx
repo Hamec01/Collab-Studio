@@ -16,10 +16,12 @@ import ChatRoom from "./components/ChatRoom";
 import TaskBoard from "./components/TaskBoard";
 import RhymeFinder from "./components/RhymeFinder";
 import NotificationsPanel from "./components/NotificationsPanel";
-import { FolderOpen, MessageSquare, Music, Sparkles } from "lucide-react";
+import { FolderOpen, MessageSquare, Music } from "lucide-react";
 import { ApiError, isApiError } from "./api/client";
 import { useAuth } from "./app/auth/AuthProvider";
 import { usePlayer } from "./app/player/PlayerProvider";
+import { useI18n } from "./app/i18n/I18nProvider";
+import AppShell from "./app/shell/AppShell";
 import {
   addProjectMember,
   attachExternalAudio,
@@ -62,6 +64,8 @@ import {
   saveEmergencyDraft,
   writeLocalDraft,
 } from "./app/draft/draftInterface";
+import Button from "./shared/ui/Button";
+import StateView from "./shared/ui/StateView";
 
 type Sidebar = "comments" | "chat" | "tasks" | "rhymes";
 type MobileTab = "projects" | "editor" | "rightPanel";
@@ -76,6 +80,7 @@ const LYRICS_RETRY_MAX_MS = 30000;
 type DraftSyncState = "local-only" | "synced" | "conflict" | "error";
 
 export default function App() {
+  const { t } = useI18n();
   const {
     authPhase,
     isCheckingSession,
@@ -894,7 +899,27 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-950 text-neutral-100">
+    <AppShell
+      title={t("shell.brand")}
+      headerRight={
+        currentUser ? (
+          <AuthModal
+            onLogin={login}
+            onRegister={register}
+            onGoogleAuth={startGoogleAuth}
+            currentUser={currentUser}
+            onLogout={logout}
+            googleOAuthEnabled={googleOAuthEnabled}
+          />
+        ) : undefined
+      }
+      showMobileNav={Boolean(currentUser)}
+      mobileNavItems={[
+        { key: "projects", label: t("shell.projects"), icon: FolderOpen, active: mobileTab === "projects", onPress: () => setMobileTab("projects") },
+        { key: "editor", label: t("shell.editor"), icon: Music, active: mobileTab === "editor", onPress: () => setMobileTab("editor") },
+        { key: "discussion", label: t("shell.discussion"), icon: MessageSquare, active: mobileTab === "rightPanel", onPress: () => setMobileTab("rightPanel") },
+      ]}
+    >
       {!currentUser && (
         <AuthModal
           onLogin={login}
@@ -909,23 +934,9 @@ export default function App() {
         />
       )}
 
-      <header className="border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-neutral-950/80 border-neutral-900">
-        <div className="flex items-center gap-2 select-none text-white font-bold">collabStudio Stage 4</div>
-        {currentUser && (
-          <AuthModal
-            onLogin={login}
-            onRegister={register}
-            onGoogleAuth={startGoogleAuth}
-            currentUser={currentUser}
-            onLogout={logout}
-            googleOAuthEnabled={googleOAuthEnabled}
-          />
-        )}
-      </header>
-
       {globalError && (
         <div className="max-w-7xl mx-auto w-full px-4 mt-3">
-          <div className="bg-red-950/50 border border-red-900/40 rounded-lg p-2 text-xs text-red-300">{globalError}</div>
+          <StateView kind="error" message={globalError} compact />
         </div>
       )}
 
@@ -985,15 +996,18 @@ export default function App() {
                         {activeProject?.title}
                       </div>
                       <h2 className="text-base font-bold text-white mt-0.5">{activeTrack.title}</h2>
+                      {!canEdit && <div className="mt-2"><StateView kind="readOnly" message={t("state.readOnly")} compact /></div>}
                     </div>
 
                     {canEdit && (
-                      <button
+                      <Button
                         onClick={() => setShowUploadModal(true)}
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 px-3.5 rounded-lg text-xs font-semibold"
+                        variant="primary"
+                        size="sm"
+                        className="font-semibold"
                       >
                         Загрузить аудио
-                      </button>
+                      </Button>
                     )}
                   </div>
 
@@ -1032,10 +1046,7 @@ export default function App() {
                   />
                 </>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border border-dashed border-neutral-800 rounded-2xl bg-neutral-900/10 min-h-[400px]">
-                  <FolderOpen className="w-12 h-12 text-neutral-700 mb-3 animate-pulse" />
-                  <p className="text-xs text-neutral-400">Выберите проект и трек для работы.</p>
-                </div>
+                <StateView kind="empty" message={t("state.track.empty")} className="min-h-[220px] flex items-center" />
               )}
               </div>
 
@@ -1083,10 +1094,7 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-6 text-center h-full min-h-[300px]">
-                  <Sparkles className="w-8 h-8 text-neutral-800 mb-2 mx-auto" />
-                  <p className="text-[11px] text-neutral-500">Выберите трек, чтобы открыть правки, чат, задачи и AI-рифмы.</p>
-                </div>
+                <StateView kind="empty" message={t("state.sidebar.empty")} className="h-full min-h-[220px] flex items-center" />
               )}
               </div>
             </div>
@@ -1099,31 +1107,14 @@ export default function App() {
               />
             </div>
           </div>
-
-          <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-4 pt-2 bg-gradient-to-t from-black/95 via-black/90 to-transparent">
-            <div className="mx-auto max-w-md rounded-2xl flex items-center justify-around p-1.5 shadow-2xl border backdrop-blur-lg bg-neutral-900/90 border-neutral-800">
-              <button onClick={() => setMobileTab("projects")} className="flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-neutral-300">
-                <FolderOpen className="w-5 h-5 mb-1" />
-                <span className="text-[10px] font-bold">Проекты</span>
-              </button>
-              <button onClick={() => setMobileTab("editor")} className="flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-neutral-300">
-                <Music className="w-5 h-5 mb-1" />
-                <span className="text-[10px] font-bold">Редактор</span>
-              </button>
-              <button onClick={() => setMobileTab("rightPanel")} className="flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-neutral-300">
-                <MessageSquare className="w-5 h-5 mb-1" />
-                <span className="text-[10px] font-bold">Обсуждение</span>
-              </button>
-            </div>
-          </div>
         </>
       )}
 
       {showUploadModal && activeProject && activeTrack && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-neutral-950 border border-neutral-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
-            <h3 className="text-lg font-bold text-white mb-1">Добавление аудио</h3>
-            <p className="text-xs text-neutral-400 mb-6">Поддерживаются форматы: mp3, wav, flac, ogg, aac, m4a, webm. Лимит 25 МБ.</p>
+            <h3 className="text-lg font-bold text-white mb-1">{t("modal.audioUpload")}</h3>
+            <p className="text-xs text-neutral-400 mb-6">{t("modal.audioFormats")}</p>
 
             {uploadError && <div className="bg-red-950/40 border border-red-900/30 p-2.5 rounded-lg text-red-400 text-xs text-center mb-4">{uploadError}</div>}
 
@@ -1179,13 +1170,13 @@ export default function App() {
             </div>
 
             <div className="flex justify-end mt-6 border-t border-neutral-900 pt-4">
-              <button type="button" onClick={() => setShowUploadModal(false)} className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 rounded-lg cursor-pointer">
-                Закрыть
-              </button>
+              <Button type="button" variant="secondary" onClick={() => setShowUploadModal(false)}>
+                {t("modal.close")}
+              </Button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </AppShell>
   );
 }

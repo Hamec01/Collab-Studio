@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { FolderPlus, Disc, Layers, Music, Users, Plus, Tag, ArrowRight, Trash2, UserPlus } from "lucide-react";
 import { AuthUser, Project, Track } from "../types";
 import { ApiError } from "../api/client";
+import CoverImage from "../shared/ui/CoverImage";
+import Avatar from "../shared/ui/Avatar";
 
 interface ProjectListProps {
   projects: Project[];
@@ -195,12 +197,7 @@ export default function ProjectList({
           onClick={() => onSelectProject(proj)}
           className="p-3 flex items-start gap-3 cursor-pointer select-none relative"
         >
-          <img
-            src={proj.coverUrl || "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=300&q=80"}
-            alt={proj.title}
-            className="w-12 h-12 rounded-lg object-cover bg-neutral-850 border border-neutral-800 shrink-0"
-            referrerPolicy="no-referrer"
-          />
+          <CoverImage src={proj.coverUrl} title={proj.title} className="shrink-0" />
 
           <div className="flex-1 min-w-0 pr-6">
             <div className="flex items-center gap-1.5">
@@ -490,7 +487,10 @@ export default function ProjectList({
           <div className="space-y-2">
             {activeProject.participants.map((part) => (
               <div key={part.userId} className="flex items-center justify-between gap-2 p-1 rounded hover:bg-neutral-900/40">
-                <span className="text-[11px] font-medium text-white">{part.displayName}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Avatar src={part.avatarUrl} name={part.displayName} size="sm" />
+                  <span className="text-[11px] font-medium text-white truncate">{part.displayName}</span>
+                </div>
                 {canInvite && part.role !== "owner" ? (
                   <div className="flex items-center gap-1.5">
                     <select
