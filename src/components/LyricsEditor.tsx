@@ -1,34 +1,56 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Edit3, Eye, Save, History, MessageSquare, Maximize2, Minimize2, ArrowRight } from "lucide-react";
-import { AuthUser, LyricVersion } from "../types";
+import { LyricVersion } from "../types";
+
+export type LyricsSaveStatus = "idle" | "dirty" | "saving" | "saved" | "local" | "error" | "conflict";
+
+export type RestoreDraftSnapshot = {
+  localSavedAt: string;
+  serverUpdatedAt: string;
+  localPreview: string;
+  serverPreview: string;
+};
 
 interface LyricsEditorProps {
-  lyrics: string;
-  onUpdateLyrics: (newLyrics: string, versionLabel?: string, makeOriginal?: boolean) => void;
+  draftLyrics: string;
+  onChangeDraftLyrics: (newLyrics: string) => void;
+  onCreateVersion: (label: string) => Promise<void>;
   onPinVersion?: (versionId: string) => void;
   versionHistory: LyricVersion[];
   selectedLineIndex: number | null;
   onSelectLine: (index: number | null) => void;
-  currentUser: AuthUser | null;
   trackCommentsCount: (lineIdx: number) => number;
   canEdit: boolean;
+  saveStatus: LyricsSaveStatus;
+  savedAt?: string | null;
+  statusMessage?: string;
+  restoreDraft: RestoreDraftSnapshot | null;
+  onRestoreLocalDraft: () => void;
+  onUseServerDraft: () => void;
+  onDownloadLocalDraft: () => void;
 }
 
 export default function LyricsEditor({
-  lyrics,
-  onUpdateLyrics,
+  draftLyrics,
+  onChangeDraftLyrics,
+  onCreateVersion,
   onPinVersion,
   versionHistory = [],
   selectedLineIndex,
   onSelectLine,
-  currentUser,
   trackCommentsCount,
   canEdit,
+  saveStatus,
+  savedAt,
+  statusMessage,
+  restoreDraft,
+  onRestoreLocalDraft,
+  onUseServerDraft,
+  onDownloadLocalDraft,
 }: LyricsEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedText, setEditedText] = useState(lyrics);
   const [versionLabel, setVersionLabel] = useState("");
-  const [makeOriginalOnSave, setMakeOriginalOnSave] = useState(false);
+  const [isCreatingVersion, setIsCreatingVersion] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<string>("current");
@@ -44,42 +66,56 @@ export default function LyricsEditor({
     };
   }, [isFullscreen]);
 
-  // Sync editedText with current lyrics when starting to edit
-  useEffect(() => {
-    if (!isEditing) {
-      setEditedText(lyrics);
-    }
-  }, [lyrics, isEditing]);
-
-  // Determine active lyrics depending on the selected version
   const activeVersion = versionHistory.find((v) => v.id === selectedVersionId);
-  const displayedLyrics = activeVersion ? activeVersion.lyrics : lyrics;
+  const displayedLyrics = activeVersion ? activeVersion.lyrics : draftLyrics;
   const lines = displayedLyrics.split("\n");
 
-  const handleSave = () => {
-    onUpdateLyrics(editedText, versionLabel.trim() || undefined, makeOriginalOnSave);
-    setIsEditing(false);
-    setVersionLabel("");
-    setMakeOriginalOnSave(false);
-    setSelectedVersionId("current"); // Return to viewing the live/current version after edit
+  const saveStatusLabel = useMemo(() => {
+    if (!canEdit) return "Только чтение";
+    if (saveStatus === "saving") return "Сохранение...";
+    if (saveStatus === "saved") {
+      if (!savedAt) return "Сохранено";
+      const dt = new Date(savedAt);
+      const hh = String(dt.getHours()).padStart(2, "0");
+      const mm = String(dt.getMinutes()).padStart(2, "0");
+      return `Сохранено в ${hh}:${mm}`;
+    }
+    if (saveStatus === "local") return "Нет соединения - сохранено локально";
+    if (saveStatus === "error") return "Ошибка сохранения";
+    if (saveStatus === "conflict") return "Конфликт черновика";
+    if (saveStatus === "dirty") return "Есть несохраненные изменения";
+    return "";
+  }, [canEdit, saveStatus, savedAt]);
+
+  const saveStatusTone = useMemo(() => {
+    if (!canEdit) return "text-neutral-500";
+    if (saveStatus === "saved") return "text-emerald-400";
+    if (saveStatus === "saving") return "text-indigo-300";
+    if (saveStatus === "local") return "text-amber-400";
+    if (saveStatus === "error" || saveStatus === "conflict") return "text-red-400";
+    if (saveStatus === "dirty") return "text-neutral-300";
+    return "text-neutral-500";
+  }, [canEdit, saveStatus]);
+
+  const handleCreateVersion = async () => {
+    if (!canEdit || isCreatingVersion) return;
+    const label = versionLabel.trim() || "Ручная версия";
+    setIsCreatingVersion(true);
+    try {
+      await onCreateVersion(label);
+      setVersionLabel("");
+    } finally {
+      setIsCreatingVersion(false);
+    }
   };
 
   const handleStartEdit = () => {
-    setEditedText(lyrics);
+    if (!canEdit) return;
     setIsEditing(true);
-    setSelectedVersionId("current"); // Automatically focus on the current live text for editing
+    setSelectedVersionId("current");
   };
 
   const lyricAuthor = (authorId: string | null) => (authorId ? authorId.slice(0, 8) : "Deleted user");
-
-  const restoreVersion = (ver: LyricVersion) => {
-    if (confirm(`Вы уверены, что хотите восстановить версию от ${lyricAuthor(ver.authorId)} (${ver.label})?`)) {
-      onUpdateLyrics(ver.lyrics, `Восстановлено из истории: ${ver.label}`);
-      setEditedText(ver.lyrics);
-      setIsEditing(false);
-      setSelectedVersionId("current");
-    }
-  };
 
   const originalVersion = versionHistory.find((v) => v.isOriginal);
 
@@ -155,6 +191,11 @@ export default function LyricsEditor({
             </button>
           </div>
         )}
+
+        <div className={`text-[11px] ${saveStatusTone} text-left px-1`}>
+          {saveStatusLabel}
+          {statusMessage ? <span className="ml-1 text-neutral-500">{statusMessage}</span> : null}
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -233,14 +274,15 @@ export default function LyricsEditor({
                   {activeVersion.isOriginal ? "Снять 👑" : "Закрепить как Оригинал"}
                 </button>
               )}
-              <button
-                onClick={() => {
-                  if (!canEdit) return;
-                  if (confirm(`Вы уверены, что хотите восстановить эту версию как основную рабочую версию проекта?`)) {
-                    onUpdateLyrics(activeVersion.lyrics, `Восстановлено из архива: ${activeVersion.label}`);
-                    setSelectedVersionId("current");
-                  }
-                }}
+                    <button
+                      onClick={() => {
+                        if (!canEdit) return;
+                        if (confirm("Применить эту версию к текущему черновику?")) {
+                          onChangeDraftLyrics(activeVersion.lyrics);
+                          setIsEditing(true);
+                          setSelectedVersionId("current");
+                        }
+                      }}
                 disabled={!canEdit}
                 className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg transition-all cursor-pointer shadow-md shrink-0"
               >
@@ -291,7 +333,13 @@ export default function LyricsEditor({
                   </div>
                   <div className="flex flex-col gap-1.5 shrink-0">
                     <button
-                      onClick={() => restoreVersion(ver)}
+                      onClick={() => {
+                        if (confirm(`Применить версию \"${ver.label}\" к текущему черновику?`)) {
+                          onChangeDraftLyrics(ver.lyrics);
+                          setIsEditing(true);
+                          setSelectedVersionId("current");
+                        }
+                      }}
                       className="text-[10px] bg-indigo-950/40 hover:bg-indigo-900/40 border border-indigo-900/30 hover:border-indigo-500 text-indigo-400 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer font-bold shrink-0 text-center"
                     >
                       Применить
@@ -317,39 +365,31 @@ export default function LyricsEditor({
           /* TEXTAREA EDIT MODE */
           <div className="flex-1 flex flex-col gap-3">
             <textarea
-              value={editedText}
-              onChange={(e) => setEditedText(e.target.value)}
+              value={draftLyrics}
+              onChange={(e) => onChangeDraftLyrics(e.target.value)}
               placeholder="Вставьте или напишите текст песни..."
+              readOnly={!canEdit}
               className={`flex-1 bg-neutral-900/40 border border-neutral-800 focus:border-indigo-500 rounded-xl p-3 text-sm text-neutral-200 focus:outline-none font-serif leading-relaxed resize-none ${
                 isFullscreen ? "min-h-[400px] text-base p-5" : "min-h-[260px]"
               }`}
             />
-            {/* Version label input and save */}
+
             <div className="flex flex-col gap-2 pt-1">
               <input
                 type="text"
                 value={versionLabel}
                 onChange={(e) => setVersionLabel(e.target.value)}
-                placeholder="Комментарий к изменениям (например: Добавлен бридж / правки)"
+                placeholder="Название версии (например: Куплет 2 финал)"
                 className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder-neutral-500"
+                disabled={!canEdit || isCreatingVersion}
               />
-              <div className="flex items-center justify-between px-1 py-1 flex-wrap gap-2">
-                <label className="flex items-center gap-2 text-xs text-neutral-400 hover:text-white cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={makeOriginalOnSave}
-                    onChange={(e) => setMakeOriginalOnSave(e.target.checked)}
-                    className="rounded border-neutral-800 text-indigo-600 focus:ring-indigo-500 bg-neutral-900 cursor-pointer"
-                  />
-                  <span>Закрепить эту версию как Оригинал (Master)</span>
-                </label>
-              </div>
               <button
-                onClick={handleSave}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-900/20"
+                onClick={handleCreateVersion}
+                disabled={!canEdit || isCreatingVersion}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white font-bold py-3 px-4 rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-900/20"
               >
                 <Save className="w-4 h-4" />
-                <span>Сохранить новую версию</span>
+                <span>{isCreatingVersion ? "Создаём версию..." : "Создать версию"}</span>
               </button>
             </div>
           </div>
@@ -451,6 +491,54 @@ export default function LyricsEditor({
           </div>
         )}
       </div>
+
+      {restoreDraft && (
+        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-neutral-950 border border-neutral-800 rounded-2xl p-4 sm:p-5 space-y-4">
+            <div className="text-left">
+              <h4 className="text-white font-semibold">Найден несохраненный черновик</h4>
+              <p className="text-xs text-neutral-400 mt-1">Выберите, какую версию использовать для текущего трека.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="bg-neutral-900/40 border border-neutral-800 rounded-xl p-3 text-left">
+                <div className="text-[10px] font-mono text-neutral-400 uppercase">Локальный черновик</div>
+                <div className="text-[11px] text-neutral-500 mt-1">{new Date(restoreDraft.localSavedAt).toLocaleString("ru-RU")}</div>
+                <p className="mt-2 text-xs text-neutral-200 whitespace-pre-wrap break-words line-clamp-6">{restoreDraft.localPreview || "(пусто)"}</p>
+              </div>
+              <div className="bg-neutral-900/20 border border-neutral-800 rounded-xl p-3 text-left">
+                <div className="text-[10px] font-mono text-neutral-400 uppercase">Серверный черновик</div>
+                <div className="text-[11px] text-neutral-500 mt-1">{new Date(restoreDraft.serverUpdatedAt).toLocaleString("ru-RU")}</div>
+                <p className="mt-2 text-xs text-neutral-300 whitespace-pre-wrap break-words line-clamp-6">{restoreDraft.serverPreview || "(пусто)"}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onDownloadLocalDraft}
+                className="px-3 py-1.5 rounded-lg text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-100"
+              >
+                Сохранить локальную копию
+              </button>
+              <button
+                type="button"
+                onClick={onUseServerDraft}
+                className="px-3 py-1.5 rounded-lg text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-100"
+              >
+                Использовать серверный
+              </button>
+              <button
+                type="button"
+                onClick={onRestoreLocalDraft}
+                className="px-3 py-1.5 rounded-lg text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
+              >
+                Восстановить локальный
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

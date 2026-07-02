@@ -18,7 +18,7 @@ import {
   updateMemberRoleSchema,
   updateProjectSchema,
 } from "../schemas/projects";
-import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
+import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, trackParamsSchema, updateLyricsDraftSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
 import { serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
 import { collaborationUserSelect } from "../serializers/collaboration";
 import { createProjectMemberNotifications } from "../services/notifications";
@@ -666,7 +666,6 @@ router.patch(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
     const input = updateTrackSchema.parse(req.body);
 
@@ -674,7 +673,6 @@ router.patch(
       const existing = await tx.track.findFirst({ where: { id: trackId, projectId } });
       if (!existing) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
 
-      const lyricsChanged = input.lyrics !== undefined && input.lyrics !== existing.lyrics;
       const updated = await tx.track.update({
         where: { id: trackId },
         data: {
@@ -684,17 +682,6 @@ router.patch(
         },
       });
 
-      if (lyricsChanged) {
-        await tx.lyricVersion.create({
-          data: {
-            trackId,
-            lyrics: input.lyrics ?? "",
-            authorId: user.id,
-            label: input.versionLabel ?? "Lyrics update",
-          },
-        });
-      }
-
       return tx.track.findUniqueOrThrow({
         where: { id: updated.id },
         include: trackRelationsInclude,
@@ -702,6 +689,54 @@ router.patch(
     });
 
     res.json(serializeTrack(track));
+  }),
+);
+
+router.put(
+  "/:projectId/tracks/:trackId/lyrics/draft",
+  (req, _res, next) => {
+    trackParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId, trackId } = trackParamsSchema.parse(req.params);
+    const input = updateLyricsDraftSchema.parse(req.body);
+
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.track.findFirst({
+          where: { id: trackId, projectId },
+          select: { id: true, lyrics: true, updatedAt: true },
+        });
+        if (!existing) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+
+        if (input.baseRevision && existing.updatedAt.toISOString() !== input.baseRevision) {
+          throw new AppError(409, "LYRICS_DRAFT_CONFLICT", "Lyrics draft revision conflict");
+        }
+
+        const updated = await tx.track.update({
+          where: { id: trackId },
+          data: { lyrics: input.content },
+          select: { lyrics: true, updatedAt: true },
+        });
+
+        return {
+          content: updated.lyrics,
+          revision: updated.updatedAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
+          updatedBy: {
+            id: user.id,
+            displayName: user.displayName,
+            avatarUrl: user.avatarUrl,
+          },
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    res.json(result);
   }),
 );
 

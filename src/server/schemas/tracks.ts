@@ -33,6 +33,11 @@ export const createLyricVersionSchema = z.object({
   label: z.string().trim().min(1).max(160),
 });
 
+export const updateLyricsDraftSchema = z.object({
+  content: z.string().max(200000),
+  baseRevision: z.string().datetime().optional(),
+});
+
 function isPrivateAudioHostname(hostname: string) {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (normalized === "localhost" || normalized.endsWith(".localhost") || normalized.endsWith(".local")) return true;

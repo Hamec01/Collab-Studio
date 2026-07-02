@@ -9,7 +9,7 @@ import {
 } from "./types";
 import AuthModal from "./components/AuthModal";
 import ProjectList from "./components/ProjectList";
-import LyricsEditor from "./components/LyricsEditor";
+import LyricsEditor, { type LyricsSaveStatus, type RestoreDraftSnapshot } from "./components/LyricsEditor";
 import AudioPlayer from "./components/AudioPlayer";
 import CommentsPanel from "./components/CommentsPanel";
 import ChatRoom from "./components/ChatRoom";
@@ -24,6 +24,7 @@ import {
   attachExternalAudio,
   createAnnotation,
   createComment,
+  createLyricVersion,
   createProject,
   createTask,
   createTrack,
@@ -31,11 +32,11 @@ import {
   listProjects,
   pinLyricVersion,
   postChatMessage,
+  saveLyricsDraft,
   removeProjectMember,
   resolveComment,
   updateProjectMemberRole,
   updateTask,
-  updateTrack,
   uploadTrackAudio,
   deleteProject,
 } from "./api/projects";
@@ -44,6 +45,14 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "./api/notifications";
+import { buildLyricsDraftKey, deleteLyricsDraft, readLyricsDraft, writeLyricsDraft } from "./utils/lyricsDraftStore";
+import {
+  DraftScope,
+  EmergencyDraftSnapshot,
+  isLatestContentSynced,
+  pickMostRecentDraft,
+  shouldRestoreFromLocal,
+} from "./utils/lyricsDraftRecovery";
 
 type AuthPhase = "loading" | "authenticated" | "unauthenticated";
 type Sidebar = "comments" | "chat" | "tasks" | "rhymes";
@@ -52,6 +61,27 @@ type ExternalProvider = "google" | "yandex" | "telegram" | "other";
 
 const AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
 const AUDIO_ACCEPT = ".mp3,.wav,.flac,.ogg,.aac,.m4a,.webm,audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/ogg,audio/aac,audio/mp4,audio/webm";
+const LYRICS_AUTOSAVE_DEBOUNCE_MS = 1500;
+const LYRICS_RETRY_BASE_MS = 1200;
+const LYRICS_RETRY_MAX_MS = 30000;
+
+type DraftSyncState = "local-only" | "synced" | "conflict" | "error";
+
+function emergencyDraftStorageKey(key: string) {
+  return `lyrics-draft-emergency:${key}`;
+}
+
+function parseEmergencyDraft(raw: string | null): EmergencyDraftSnapshot | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as EmergencyDraftSnapshot;
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed.key !== "string" || typeof parsed.content !== "string" || typeof parsed.savedAt !== "string") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 export default function App() {
   const [authPhase, setAuthPhase] = useState<AuthPhase>("loading");
@@ -75,10 +105,27 @@ export default function App() {
   const [extUrl, setExtUrl] = useState("");
   const [extLabel, setExtLabel] = useState("");
   const [extProvider, setExtProvider] = useState<ExternalProvider>("google");
+  const [draftLyrics, setDraftLyrics] = useState("");
+  const [draftRevision, setDraftRevision] = useState<string | null>(null);
+  const [draftServerUpdatedAt, setDraftServerUpdatedAt] = useState<string | null>(null);
+  const [lyricsSaveStatus, setLyricsSaveStatus] = useState<LyricsSaveStatus>("idle");
+  const [lyricsSavedAt, setLyricsSavedAt] = useState<string | null>(null);
+  const [lyricsStatusMessage, setLyricsStatusMessage] = useState<string>("");
+  const [restoreDraftSnapshot, setRestoreDraftSnapshot] = useState<RestoreDraftSnapshot | null>(null);
 
   const requestSeq = useRef(0);
   const trackRequestSeq = useRef(0);
   const notificationRequestSeq = useRef(0);
+  const draftGenerationRef = useRef(0);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
+  const saveInFlightRef = useRef(false);
+  const queuedLyricsRef = useRef<string | null>(null);
+  const retryAttemptRef = useRef(0);
+  const persistFailureRef = useRef(false);
+  const draftLyricsRef = useRef("");
+  const draftRevisionRef = useRef<string | null>(null);
+  const lastSyncedLyricsRef = useRef("");
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) || null,
@@ -99,6 +146,103 @@ export default function App() {
   const canResolve = canEdit;
   const canSend = !!currentUser && !!activeProject && !!activeTrack;
 
+  const clearDraftTimers = () => {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  };
+
+  const resetDraftRuntime = () => {
+    draftGenerationRef.current += 1;
+    clearDraftTimers();
+    saveInFlightRef.current = false;
+    queuedLyricsRef.current = null;
+    retryAttemptRef.current = 0;
+    persistFailureRef.current = false;
+    setDraftLyrics("");
+    setDraftRevision(null);
+    setDraftServerUpdatedAt(null);
+    setLyricsSaveStatus("idle");
+    setLyricsSavedAt(null);
+    setLyricsStatusMessage("");
+    setRestoreDraftSnapshot(null);
+    draftLyricsRef.current = "";
+    draftRevisionRef.current = null;
+    lastSyncedLyricsRef.current = "";
+  };
+
+  const currentDraftScope = () => {
+    if (!currentUser || !activeProjectId || !activeTrackId) return null;
+    return {
+      userId: currentUser.id,
+      projectId: activeProjectId,
+      trackId: activeTrackId,
+      key: buildLyricsDraftKey(currentUser.id, activeProjectId, activeTrackId),
+    };
+  };
+
+  const readMergedLocalDraft = async (scope: DraftScope) => {
+    const [indexedDbDraft, emergencyDraft] = await Promise.all([
+      readLyricsDraft(scope.key).catch(() => null),
+      Promise.resolve(parseEmergencyDraft(sessionStorage.getItem(emergencyDraftStorageKey(scope.key)))),
+    ]);
+    return pickMostRecentDraft(indexedDbDraft, emergencyDraft, scope);
+  };
+
+  const persistLocalDraft = async (syncState: DraftSyncState, contentOverride?: string) => {
+    const scope = currentDraftScope();
+    if (!scope) return;
+    const content = contentOverride ?? draftLyricsRef.current;
+    try {
+      await writeLyricsDraft({
+        key: scope.key,
+        userId: scope.userId,
+        projectId: scope.projectId,
+        trackId: scope.trackId,
+        content,
+        baseRevision: draftRevisionRef.current ?? undefined,
+        savedAt: new Date().toISOString(),
+        serverUpdatedAt: draftServerUpdatedAt ?? undefined,
+        syncState,
+      });
+      persistFailureRef.current = false;
+    } catch {
+      persistFailureRef.current = true;
+    }
+  };
+
+  const persistEmergencyDraft = (syncState: DraftSyncState, contentOverride?: string) => {
+    const scope = currentDraftScope();
+    if (!scope) return;
+    const content = contentOverride ?? draftLyricsRef.current;
+    try {
+      const payload: EmergencyDraftSnapshot = {
+        key: scope.key,
+        content,
+        savedAt: new Date().toISOString(),
+        baseRevision: draftRevisionRef.current ?? undefined,
+        serverUpdatedAt: draftServerUpdatedAt ?? undefined,
+        syncState,
+      };
+      sessionStorage.setItem(emergencyDraftStorageKey(scope.key), JSON.stringify(payload));
+    } catch {
+      // ignore sessionStorage errors; IndexedDB remains primary
+    }
+  };
+
+  const clearEmergencyDraft = (key: string) => {
+    try {
+      sessionStorage.removeItem(emergencyDraftStorageKey(key));
+    } catch {
+      // ignore sessionStorage errors
+    }
+  };
+
   const clearWorkspace = () => {
     requestSeq.current += 1;
     trackRequestSeq.current += 1;
@@ -117,7 +261,22 @@ export default function App() {
     setExtProvider("google");
     setActiveSidebar("comments");
     setMobileTab("projects");
+    resetDraftRuntime();
   };
+
+  useEffect(() => {
+    draftLyricsRef.current = draftLyrics;
+  }, [draftLyrics]);
+
+  useEffect(() => {
+    draftRevisionRef.current = draftRevision;
+  }, [draftRevision]);
+
+  useEffect(() => {
+    return () => {
+      clearDraftTimers();
+    };
+  }, []);
 
   const handleUnauthorized = () => {
     if (authPhase === "unauthenticated" && !currentUser) return;
@@ -193,6 +352,159 @@ export default function App() {
     const list = await withAuth(() => listNotifications());
     if (seq !== notificationRequestSeq.current) return;
     setNotifications(list);
+  };
+
+  const updateTrackDraftState = (projectId: string, trackId: string, lyrics: string, updatedAt: string) => {
+    setProjects((prev) =>
+      prev.map((project) =>
+        project.id !== projectId
+          ? project
+          : {
+              ...project,
+              tracks: project.tracks.map((track) =>
+                track.id !== trackId
+                  ? track
+                  : {
+                      ...track,
+                      lyrics,
+                      updatedAt,
+                    },
+              ),
+            },
+      ),
+    );
+  };
+
+  const scheduleRetryAutosave = () => {
+    if (retryTimerRef.current !== null) return;
+    const waitMs = Math.min(LYRICS_RETRY_MAX_MS, LYRICS_RETRY_BASE_MS * 2 ** retryAttemptRef.current);
+    retryTimerRef.current = window.setTimeout(() => {
+      retryTimerRef.current = null;
+      void flushLyricsAutosave(draftLyricsRef.current);
+    }, waitMs);
+    retryAttemptRef.current += 1;
+  };
+
+  const flushLyricsAutosave = async (contentOverride?: string) => {
+    const scope = currentDraftScope();
+    if (!scope || !canEdit) return false;
+
+    const generation = draftGenerationRef.current;
+    const content = contentOverride ?? draftLyricsRef.current;
+
+    if (saveInFlightRef.current) {
+      queuedLyricsRef.current = content;
+      return false;
+    }
+
+    if (content === lastSyncedLyricsRef.current) {
+      if (lyricsSaveStatus !== "saved") {
+        setLyricsSaveStatus("saved");
+      }
+      return true;
+    }
+
+    saveInFlightRef.current = true;
+    setLyricsSaveStatus("saving");
+    setLyricsStatusMessage("");
+
+    try {
+      const response = await withAuth(() =>
+        saveLyricsDraft(scope.projectId, scope.trackId, {
+          content,
+          ...(draftRevisionRef.current ? { baseRevision: draftRevisionRef.current } : {}),
+        }),
+      );
+
+      if (generation !== draftGenerationRef.current) return false;
+
+      setDraftRevision(response.revision);
+      setDraftServerUpdatedAt(response.updatedAt);
+      retryAttemptRef.current = 0;
+      const latestLocalContent = draftLyricsRef.current;
+      const isLatestSynced = isLatestContentSynced(response.content, latestLocalContent);
+
+      if (isLatestSynced) {
+        setLyricsSaveStatus("saved");
+        setLyricsSavedAt(response.updatedAt);
+        setLyricsStatusMessage("");
+        lastSyncedLyricsRef.current = response.content;
+        updateTrackDraftState(scope.projectId, scope.trackId, response.content, response.updatedAt);
+        await deleteLyricsDraft(scope.key).catch(() => undefined);
+        clearEmergencyDraft(scope.key);
+      } else {
+        setLyricsSaveStatus("dirty");
+        setLyricsStatusMessage("");
+      }
+
+      return true;
+    } catch (error) {
+      if (generation !== draftGenerationRef.current) return false;
+      if (isApiError(error) && error.status === 409) {
+        setLyricsSaveStatus("conflict");
+        setLyricsStatusMessage("Текст был изменен в другом окне или другим редактором");
+        persistEmergencyDraft("conflict", content);
+        await persistLocalDraft("conflict", content);
+        const latest = await withAuth(() => getTrack(scope.projectId, scope.trackId)).catch(() => null);
+        if (latest) {
+          updateTrackDraftState(scope.projectId, scope.trackId, latest.lyrics, latest.updatedAt);
+          setRestoreDraftSnapshot({
+            localSavedAt: new Date().toISOString(),
+            serverUpdatedAt: latest.updatedAt,
+            localPreview: content.slice(0, 240),
+            serverPreview: latest.lyrics.slice(0, 240),
+          });
+        }
+        return false;
+      }
+
+      if (isApiError(error) && error.status === 401) {
+        setLyricsSaveStatus("error");
+        return false;
+      }
+
+      if (isApiError(error) && error.status === 403) {
+        setLyricsSaveStatus("error");
+        setLyricsStatusMessage("Недостаточно прав для сохранения черновика");
+        persistEmergencyDraft("error", content);
+        await persistLocalDraft("error", content);
+        return false;
+      }
+
+      setLyricsSaveStatus("local");
+      setLyricsStatusMessage("Нет соединения - сохранено локально");
+      persistEmergencyDraft("local-only", content);
+      await persistLocalDraft("local-only", content);
+      scheduleRetryAutosave();
+      return false;
+    } finally {
+      if (generation === draftGenerationRef.current) {
+        saveInFlightRef.current = false;
+      }
+      const queued = queuedLyricsRef.current;
+      queuedLyricsRef.current = null;
+      if (queued !== null && queued !== content) {
+        void flushLyricsAutosave(queued);
+      }
+    }
+  };
+
+  const scheduleLyricsAutosave = (nextContent: string) => {
+    if (!canEdit) return;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null;
+      void flushLyricsAutosave(nextContent);
+    }, LYRICS_AUTOSAVE_DEBOUNCE_MS);
+  };
+
+  const forceSyncLyricsDraft = async () => {
+    if (!canEdit) return true;
+    clearDraftTimers();
+    return flushLyricsAutosave(draftLyricsRef.current);
   };
 
   useEffect(() => {
@@ -273,15 +585,64 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!activeTrack) {
+    if (!activeTrack || !activeProject || !currentUser) {
       setMobileTab("projects");
+      resetDraftRuntime();
       return;
     }
+
+    const generation = ++draftGenerationRef.current;
+    clearDraftTimers();
+    saveInFlightRef.current = false;
+    queuedLyricsRef.current = null;
+    retryAttemptRef.current = 0;
+
+    const scopeKey = buildLyricsDraftKey(currentUser.id, activeProject.id, activeTrack.id);
+    setDraftLyrics(activeTrack.lyrics);
+    setDraftRevision(activeTrack.updatedAt);
+    setDraftServerUpdatedAt(activeTrack.updatedAt);
+    setLyricsSaveStatus("idle");
+    setLyricsSavedAt(activeTrack.updatedAt);
+    setLyricsStatusMessage("");
+    setRestoreDraftSnapshot(null);
+    draftLyricsRef.current = activeTrack.lyrics;
+    draftRevisionRef.current = activeTrack.updatedAt;
+    lastSyncedLyricsRef.current = activeTrack.lyrics;
+
+    void (async () => {
+      const localDraft = await readMergedLocalDraft({
+        key: scopeKey,
+        userId: currentUser.id,
+        projectId: activeProject.id,
+        trackId: activeTrack.id,
+      });
+
+      if (generation !== draftGenerationRef.current) return;
+
+      if (!localDraft) return;
+
+      if (!shouldRestoreFromLocal(localDraft.content, activeTrack.lyrics)) {
+        await deleteLyricsDraft(scopeKey).catch(() => undefined);
+        clearEmergencyDraft(scopeKey);
+        return;
+      }
+
+      setDraftLyrics(localDraft.content);
+      draftLyricsRef.current = localDraft.content;
+      setRestoreDraftSnapshot({
+        localSavedAt: localDraft.savedAt,
+        serverUpdatedAt: activeTrack.updatedAt,
+        localPreview: localDraft.content.slice(0, 240),
+        serverPreview: activeTrack.lyrics.slice(0, 240),
+      });
+      setLyricsSaveStatus(localDraft.syncState === "conflict" ? "conflict" : "local");
+    })();
+
     setSelectedAudioVersionId((prev) => {
       if (prev && activeTrack.audioVersions.some((version) => version.id === prev)) return prev;
       return activeTrack.audioVersions[0]?.id ?? null;
     });
-  }, [activeTrack]);
+  }, [activeTrack?.id, activeProject?.id, currentUser?.id]);
 
   useEffect(() => {
     if (authPhase !== "authenticated") return;
@@ -290,6 +651,65 @@ export default function App() {
     }, 15000);
     return () => window.clearInterval(interval);
   }, [authPhase]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      if (lyricsSaveStatus === "local" || lyricsSaveStatus === "error") {
+        void flushLyricsAutosave(draftLyricsRef.current);
+      }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [lyricsSaveStatus]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      if (!canEdit) return;
+      persistEmergencyDraft("local-only");
+      void persistLocalDraft("local-only");
+      const scope = currentDraftScope();
+      if (!scope) return;
+      if (lyricsSaveStatus === "dirty" || lyricsSaveStatus === "local" || lyricsSaveStatus === "error") {
+        void fetch(`/api/projects/${scope.projectId}/tracks/${scope.trackId}/lyrics/draft`, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: draftLyricsRef.current,
+            ...(draftRevisionRef.current ? { baseRevision: draftRevisionRef.current } : {}),
+          }),
+          keepalive: true,
+        }).catch(() => undefined);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        onPageHide();
+      }
+    };
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!canEdit) return;
+      persistEmergencyDraft("local-only");
+      void persistLocalDraft("local-only");
+      const unsynced = lyricsSaveStatus === "dirty" || lyricsSaveStatus === "local" || lyricsSaveStatus === "error" || lyricsSaveStatus === "conflict";
+      if (unsynced && persistFailureRef.current) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [canEdit, lyricsSaveStatus]);
 
   const handleLogin = async (payload: { login: string; password: string }) => {
     const response = await login(payload);
@@ -410,19 +830,76 @@ export default function App() {
     );
   };
 
-  const handleUpdateLyrics = async (newLyrics: string, versionLabel?: string) => {
-    if (!activeProject || !activeTrack) return;
-    const updated = await withAuth(() => updateTrack(activeProject.id, activeTrack.id, { lyrics: newLyrics, versionLabel }));
-    setProjects((prev) =>
-      prev.map((project) =>
-        project.id !== activeProject.id
-          ? project
-          : {
-              ...project,
-              tracks: project.tracks.map((track) => (track.id === updated.id ? updated : track)),
-            },
-      ),
+  const handleDraftLyricsChange = (newLyrics: string) => {
+    draftLyricsRef.current = newLyrics;
+    setDraftLyrics(newLyrics);
+    if (!canEdit) return;
+    setLyricsSaveStatus("dirty");
+    setLyricsStatusMessage("");
+    persistEmergencyDraft("local-only", newLyrics);
+    void persistLocalDraft("local-only", newLyrics);
+    scheduleLyricsAutosave(newLyrics);
+  };
+
+  const handleRestoreLocalDraft = async () => {
+    const scope = currentDraftScope();
+    if (!scope || !activeTrack) return;
+    const localDraft = await readMergedLocalDraft(scope);
+    if (!localDraft) {
+      setRestoreDraftSnapshot(null);
+      return;
+    }
+    setDraftLyrics(localDraft.content);
+    setLyricsSaveStatus(localDraft.syncState === "conflict" ? "conflict" : "dirty");
+    setLyricsStatusMessage("");
+    setRestoreDraftSnapshot(null);
+  };
+
+  const handleUseServerDraft = async () => {
+    const scope = currentDraftScope();
+    if (!scope || !activeTrack) return;
+    setDraftLyrics(activeTrack.lyrics);
+    setDraftRevision(activeTrack.updatedAt);
+    setDraftServerUpdatedAt(activeTrack.updatedAt);
+    setLyricsSaveStatus("saved");
+    setLyricsSavedAt(activeTrack.updatedAt);
+    setLyricsStatusMessage("");
+    setRestoreDraftSnapshot(null);
+    await deleteLyricsDraft(scope.key).catch(() => undefined);
+    clearEmergencyDraft(scope.key);
+  };
+
+  const handleDownloadLocalDraft = async () => {
+    const scope = currentDraftScope();
+    if (!scope) return;
+    const localDraft = await readMergedLocalDraft(scope);
+    if (!localDraft) return;
+    const blob = new Blob([localDraft.content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lyrics-draft-${scope.trackId}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCreateLyricVersion = async (label: string) => {
+    if (!activeProject || !activeTrack || !canEdit) return;
+    const synced = await forceSyncLyricsDraft();
+    if (!synced) {
+      setLyricsStatusMessage("Сначала синхронизируйте черновик с сервером");
+      return;
+    }
+    await withAuth(() =>
+      createLyricVersion(activeProject.id, activeTrack.id, {
+        lyrics: draftLyricsRef.current,
+        label,
+      }),
     );
+    await refreshActiveTrack();
+    setLyricsSaveStatus("saved");
   };
 
   const handlePinVersion = async (versionId: string) => {
@@ -583,11 +1060,17 @@ export default function App() {
                 activeProject={activeProject}
                 activeTrack={activeTrack}
                 onSelectProject={(project) => {
+                  if (canEdit) {
+                    void forceSyncLyricsDraft();
+                  }
                   setActiveProjectId(project.id);
                   setActiveTrackId(project.tracks[0]?.id ?? null);
                   setMobileTab("editor");
                 }}
                 onSelectTrack={(track) => {
+                  if (canEdit) {
+                    void forceSyncLyricsDraft();
+                  }
                   setActiveTrackId(track.id);
                   setMobileTab("editor");
                 }}
@@ -624,15 +1107,22 @@ export default function App() {
                   </div>
 
                   <LyricsEditor
-                    lyrics={activeTrack.lyrics}
-                    onUpdateLyrics={handleUpdateLyrics}
+                    draftLyrics={draftLyrics}
+                    onChangeDraftLyrics={handleDraftLyricsChange}
+                    onCreateVersion={handleCreateLyricVersion}
                     onPinVersion={handlePinVersion}
                     versionHistory={activeTrack.lyricVersions}
                     selectedLineIndex={selectedLineIndex}
                     onSelectLine={setSelectedLineIndex}
-                    currentUser={currentUser}
                     trackCommentsCount={trackCommentsCount}
                     canEdit={canEdit}
+                    saveStatus={lyricsSaveStatus}
+                    savedAt={lyricsSavedAt}
+                    statusMessage={lyricsStatusMessage}
+                    restoreDraft={restoreDraftSnapshot}
+                    onRestoreLocalDraft={handleRestoreLocalDraft}
+                    onUseServerDraft={handleUseServerDraft}
+                    onDownloadLocalDraft={handleDownloadLocalDraft}
                   />
 
                   <AudioPlayer
@@ -681,7 +1171,7 @@ export default function App() {
                         canResolve={canResolve}
                         selectedLineIndex={selectedLineIndex}
                         onClearSelectedLine={() => setSelectedLineIndex(null)}
-                        lyricsLines={activeTrack.lyrics.split("\n")}
+                        lyricsLines={draftLyrics.split("\n")}
                       />
                     )}
                     {activeSidebar === "chat" && <ChatRoom chat={activeTrack.chat} onSendMessage={handleSendMessage} currentUser={currentUser} canSend={canSend} />}

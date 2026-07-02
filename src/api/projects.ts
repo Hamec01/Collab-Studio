@@ -77,6 +77,27 @@ export function pinLyricVersion(projectId: string, trackId: string, versionId: s
   });
 }
 
+export function createLyricVersion(projectId: string, trackId: string, payload: { lyrics: string; label: string }) {
+  return apiRequest<LyricVersion>(`/api/projects/${projectId}/tracks/${trackId}/versions`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function saveLyricsDraft(
+  projectId: string,
+  trackId: string,
+  payload: { content: string; baseRevision?: string },
+) {
+  return apiRequest<{ content: string; revision: string; updatedAt: string; updatedBy: { id: string; displayName: string; avatarUrl: string | null } }>(
+    `/api/projects/${projectId}/tracks/${trackId}/lyrics/draft`,
+    {
+      method: "PUT",
+      body: payload,
+    },
+  );
+}
+
 export function createComment(projectId: string, trackId: string, payload: { text: string; lineIndex?: number }) {
   return apiRequest<Comment>(`/api/projects/${projectId}/tracks/${trackId}/comments`, {
     method: "POST",
