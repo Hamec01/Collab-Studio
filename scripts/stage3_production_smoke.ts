@@ -2,12 +2,13 @@ import { promises as fsp } from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import argon2 from "argon2";
-import dotenv from "dotenv";
 import { PrismaClient, type ProjectType, type UserRole } from "@prisma/client";
 import {
+  DEFAULT_STAGE3_SMOKE_ENV_FILE,
   STAGE3_SMOKE_PREFIX,
   assertSafeUploadFilePath,
   assertStage3SmokeMarker,
+  initializeSmokeDatabaseEnv,
   makeStage3SmokeName,
 } from "./stage3SmokeSafety";
 
@@ -55,11 +56,14 @@ class CookieJar {
   }
 }
 
-if (!process.env.DATABASE_URL) {
-  dotenv.config({ path: process.env.ENV_FILE ?? "/home/deploy/secrets/collab-studio.env" });
-}
+const smokeDb = initializeSmokeDatabaseEnv(process.env.ENV_FILE ?? DEFAULT_STAGE3_SMOKE_ENV_FILE);
+console.log(`STAGE3_SMOKE_DB_TARGET: ${smokeDb.diagnostics}`);
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: { url: smokeDb.databaseUrl },
+  },
+});
 
 function jsonBodyOrNull(text: string) {
   try {
