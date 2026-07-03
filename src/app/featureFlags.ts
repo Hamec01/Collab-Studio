@@ -1,4 +1,4 @@
-export const FEATURE_FLAG_KEYS = ["internalDiagnostics"] as const;
+export const FEATURE_FLAG_KEYS = ["internalDiagnostics", "lyricsStructuredEditor"] as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
@@ -6,12 +6,14 @@ export type FeatureFlags = Record<FeatureFlagKey, boolean>;
 export type PublicFeatureFlagEnv = {
   VITE_FEATURE_FLAGS?: string;
   VITE_FLAG_INTERNAL_DIAGNOSTICS?: string;
+  VITE_FLAG_LYRICS_STRUCTURED_EDITOR?: string;
 };
 
 const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled"]);
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   internalDiagnostics: false,
+  lyricsStructuredEditor: false,
 };
 
 function parseBoolean(raw: string | undefined): boolean | null {
@@ -56,6 +58,11 @@ export function resolveFeatureFlags(env: PublicFeatureFlagEnv): FeatureFlags {
   const diagnosticsOverride = parseBoolean(env.VITE_FLAG_INTERNAL_DIAGNOSTICS);
   if (diagnosticsOverride !== null) {
     flags.internalDiagnostics = diagnosticsOverride;
+  }
+
+  const lyricsStructuredEditorOverride = parseBoolean(env.VITE_FLAG_LYRICS_STRUCTURED_EDITOR);
+  if (lyricsStructuredEditorOverride !== null) {
+    flags.lyricsStructuredEditor = lyricsStructuredEditorOverride;
   }
 
   return flags;

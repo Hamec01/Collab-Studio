@@ -13,9 +13,9 @@
 ## Текущая точка
 
 - Branch: `main`
-- Baseline commit: `010efea`
+- Stage 4A baseline commit: `f2875d0`
 - Active Stage: `Stage 4B`
-- Active slice: ожидание отдельного подтверждения на старт Stage 4B
+- Active slice: foundation — editor/document ADR, pure codec, serialization tests и migration rehearsal plan
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -38,8 +38,8 @@
 | Stage 1 — Router и state boundaries | completed | Пройден |
 | Stage 2 — i18n, design tokens и shell | completed | Пройден |
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
-| Stage 4A — Plain-text Lyrics Workspace | completed | Пройден |
-| Stage 4B — WYSIWYG и stable anchors | pending | Не начат |
+| Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
+| Stage 4B — WYSIWYG и stable anchors | pending | Foundation active; implementation не начат |
 | Stage 5A — TrackAsset migration | pending | Не начат |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
@@ -52,10 +52,13 @@
 
 ## Следующий разрешённый slice
 
-Stage 4B (не начинать без отдельного подтверждения):
+Stage 4B foundation:
 
-1. Limited WYSIWYG и stable anchors только после ADR editor library и migration rehearsal.
-2. Без audio migration/public/social scope.
+1. ADR editor library и document contract.
+2. Pure codec + serialization tests.
+3. Migration rehearsal plan без Prisma migration и deploy.
+4. Limited WYSIWYG, schema/API/UI и stable anchors не начинать до отдельного подтверждения следующего slice.
+5. Без audio migration/public/social scope.
 
 ## Журнал slices
 
@@ -66,10 +69,9 @@ Stage 4B (не начинать без отдельного подтвержде
 | 2026-07-02 | Stage 1 final slices | Введены boundary: AuthProvider, route selection URL source-of-truth, query/server-state hook c abort, PlayerProvider, draft interface; добавлены тесты route/auth/player/stale-abort | `main` | lint/test/build/e2e PASS; component tests 25 PASS | Stage 2 только после отдельного подтверждения |
 | 2026-07-02 | Stage 2 final slices | Введены foundation: ru/en i18n provider, design tokens, UI primitives, responsive AppShell, safe-area layout, cover/avatar fallbacks, viewport+a11y tests | `main` | lint/test/build/e2e PASS; component tests 35 PASS | Stage 3 только после отдельного подтверждения |
 | 2026-07-03 | Stage 3 final slices | Добавлены access foundations: capability presets/custom, invite lifecycle (create/accept/revoke/expiry), track grants, guest links (listen/no-download), ownership transfer audit, break-glass audit validation, verification+18+ write gates, additive migration + ADR | `main` | lint/test/build/e2e PASS; component tests 45 PASS; migrate deploy validated on empty+existing DB | Stage 4A только после отдельного подтверждения |
-| 2026-07-03 | Stage 4A final slices | Добавлены read-first plain-text workspace, explicit edit lease, monotonic lyricsRevision/OCC, safe recovery/compare UX, persistent player placeholder и mobile context comments; App.tsx не увеличен | `main` (working tree changes до commit) | schema valid; lint/test/build/e2e PASS; component tests 59 PASS; migration PASS на empty+existing DB | Stage 4B только после отдельного подтверждения |
+| 2026-07-03 | Stage 4A final slices | Добавлены read-first plain-text workspace, explicit edit lease, monotonic lyricsRevision/OCC, safe recovery/compare UX, persistent player placeholder и mobile context comments; App.tsx не увеличен | `main@f2875d0` | schema valid; lint/test/build/e2e PASS; component tests 59 PASS; migration PASS на empty+existing DB | Stage 4B foundation только после отдельного подтверждения |
 
 ## Blockers
 
 - Нет отдельного staging VPS; все изменения проверяются локально до controlled production deploy.
 - Payment intentionally deferred.
-

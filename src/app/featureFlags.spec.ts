@@ -12,6 +12,7 @@ describe("feature flag defaults", () => {
     });
 
     expect(flags.internalDiagnostics).toBe(false);
+    expect(flags.lyricsStructuredEditor).toBe(false);
   });
 
   it("parses known flags from list and explicit override", () => {
@@ -25,5 +26,16 @@ describe("feature flag defaults", () => {
       VITE_FLAG_INTERNAL_DIAGNOSTICS: "false",
     });
     expect(overridden.internalDiagnostics).toBe(false);
+  });
+
+  it("keeps the structured lyrics editor off by default and supports an explicit override", () => {
+    expect(resolveFeatureFlags({}).lyricsStructuredEditor).toBe(false);
+    expect(resolveFeatureFlags({
+      VITE_FEATURE_FLAGS: "lyricsStructuredEditor=true",
+    }).lyricsStructuredEditor).toBe(true);
+    expect(resolveFeatureFlags({
+      VITE_FEATURE_FLAGS: "lyricsStructuredEditor=true",
+      VITE_FLAG_LYRICS_STRUCTURED_EDITOR: "false",
+    }).lyricsStructuredEditor).toBe(false);
   });
 });
