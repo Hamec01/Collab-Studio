@@ -104,6 +104,8 @@ Existing IndexedDB and sessionStorage records with string `content` remain reada
 
 The previous Stage 4A application must be able to read the legacy fields written by the new backend. Application rollback never requires a destructive down migration. Structured fields remain additive, and cleanup of legacy fields requires a later ADR and observation period.
 
+If the Stage 4A backend saves while rolled back, only legacy text and the OCC revision change. On roll-forward, the compatibility reader may use legacy fallback only when the stored document still matches its stored derived text and legacy text is the sole drift. It does not mutate or silently backfill the row; integrity verification stops until a reviewed save through the new backend restores atomic dual-write consistency.
+
 ## Feature flag
 
 `lyricsStructuredEditor` is a frontend rollout flag and defaults to `false`.

@@ -14,8 +14,9 @@
 
 - Branch: `main`
 - Stage 4A baseline commit: `f2875d0`
+- Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 4B`
-- Active slice: foundation — editor/document ADR, pure codec, serialization tests и migration rehearsal plan
+- Active slice: slices 3–4 completed locally — structured persistence, dual-write и resumable backfill; ожидание отдельного подтверждения следующего slice
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -39,7 +40,7 @@
 | Stage 2 — i18n, design tokens и shell | completed | Пройден |
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
-| Stage 4B — WYSIWYG и stable anchors | pending | Foundation active; implementation не начат |
+| Stage 4B — WYSIWYG и stable anchors | pending | Foundation + persistence slices пройдены; editor/anchors не начаты |
 | Stage 5A — TrackAsset migration | pending | Не начат |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
@@ -52,13 +53,12 @@
 
 ## Следующий разрешённый slice
 
-Stage 4B foundation:
+Stage 4B:
 
-1. ADR editor library и document contract.
-2. Pure codec + serialization tests.
-3. Migration rehearsal plan без Prisma migration и deploy.
-4. Limited WYSIWYG, schema/API/UI и stable anchors не начинать до отдельного подтверждения следующего slice.
-5. Без audio migration/public/social scope.
+1. Foundation slices 1–2 завершены в `97aca32`.
+2. Persistence slices 3–4 завершены локально: additive migration, dual-read/write, bounded resumable backfill и rollback rehearsal.
+3. Следующий slice не начинать без отдельного подтверждения.
+4. Editor UI, comments/anchors, rich snapshots UI, audio migration и public/social scope не начаты.
 
 ## Журнал slices
 
@@ -70,6 +70,8 @@ Stage 4B foundation:
 | 2026-07-02 | Stage 2 final slices | Введены foundation: ru/en i18n provider, design tokens, UI primitives, responsive AppShell, safe-area layout, cover/avatar fallbacks, viewport+a11y tests | `main` | lint/test/build/e2e PASS; component tests 35 PASS | Stage 3 только после отдельного подтверждения |
 | 2026-07-03 | Stage 3 final slices | Добавлены access foundations: capability presets/custom, invite lifecycle (create/accept/revoke/expiry), track grants, guest links (listen/no-download), ownership transfer audit, break-glass audit validation, verification+18+ write gates, additive migration + ADR | `main` | lint/test/build/e2e PASS; component tests 45 PASS; migrate deploy validated on empty+existing DB | Stage 4A только после отдельного подтверждения |
 | 2026-07-03 | Stage 4A final slices | Добавлены read-first plain-text workspace, explicit edit lease, monotonic lyricsRevision/OCC, safe recovery/compare UX, persistent player placeholder и mobile context comments; App.tsx не увеличен | `main@f2875d0` | schema valid; lint/test/build/e2e PASS; component tests 59 PASS; migration PASS на empty+existing DB | Stage 4B foundation только после отдельного подтверждения |
+| 2026-07-03 | Stage 4B slices 1–2 | Зафиксированы Lexical ADR, app-owned document contract, pure codec, deterministic serialization и migration rehearsal plan | `main@97aca32` | lint/test/build/diff PASS; 68 Vitest tests | Stage 4B persistence только после отдельного подтверждения |
+| 2026-07-03 | Stage 4B slices 3–4 | Добавлены nullable structured fields, legacy/structured dual-read/write, atomic lease+OCC save и bounded resumable backfill | `main`, local commit | prisma validate; empty/existing/repeat/Stage 4A rollback rehearsal; lint/test/build/e2e/diff PASS; 77 Vitest tests; zero mismatches | Следующий Stage 4B slice только после отдельного подтверждения |
 
 ## Blockers
 

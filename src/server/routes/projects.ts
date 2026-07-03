@@ -26,14 +26,19 @@ import {
   updateMemberRoleSchema,
   updateProjectSchema,
 } from "../schemas/projects";
-import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, lyricsLeaseTokenSchema, trackParamsSchema, updateLyricsDraftSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
+import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, lyricsLeaseTokenSchema, parseUpdateLyricsDraft, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
 import { serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
+import {
+  prepareLyricsWrite,
+  saveLyricsDraftAtomic,
+  structuredTrackWriteData,
+  structuredVersionWriteData,
+} from "../services/structuredLyrics";
 import { collaborationUserSelect } from "../serializers/collaboration";
 import { createProjectMemberNotifications } from "../services/notifications";
 import {
   canAcquireLyricsLease,
   nextLyricsLeaseExpiry,
-  requireLyricsLease,
 } from "../services/lyricsWorkspace";
 import {
   ensureVerifiedForProtectedWrite,
@@ -934,13 +939,14 @@ router.post(
     const { projectId } = projectParamsSchema.parse(req.params);
     const input = createTrackSchema.parse(req.body);
     const lyrics = input.lyrics ?? "";
+    const preparedLyrics = prepareLyricsWrite({ content: lyrics, baseRevision: 0, leaseToken: "" });
 
     const track = await prisma.$transaction(async (tx) => {
       const created = await tx.track.create({
         data: {
           projectId,
           title: input.title,
-          lyrics,
+          ...structuredTrackWriteData(preparedLyrics),
           tags: input.tags ?? [],
         },
       });
@@ -948,7 +954,7 @@ router.post(
         await tx.lyricVersion.create({
           data: {
             trackId: created.id,
-            lyrics,
+            ...structuredVersionWriteData(preparedLyrics),
             authorId: user.id,
             label: input.versionLabel ?? "Initial version",
           },
@@ -1134,51 +1140,23 @@ router.put(
   asyncHandler(async (req, res) => {
     const user = requireVerifiedWriter(req);
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
-    const input = updateLyricsDraftSchema.parse(req.body);
+    const input = parseUpdateLyricsDraft(req.body);
+    const result = await saveLyricsDraftAtomic(prisma, {
+      projectId,
+      trackId,
+      userId: user.id,
+      write: input,
+      now: nowUtc(),
+    });
 
-    const result = await prisma.$transaction(
-      async (tx) => {
-        const existing = await tx.track.findFirst({
-          where: { id: trackId, projectId },
-          select: { id: true, lyrics: true, lyricsRevision: true, updatedAt: true },
-        });
-        if (!existing) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
-
-        const now = nowUtc();
-        const lease = await tx.lyricsEditLease.findUnique({
-          where: { trackId },
-          select: { userId: true, tokenHash: true, expiresAt: true },
-        });
-        requireLyricsLease(lease, { userId: user.id, leaseToken: input.leaseToken, now });
-
-        const updated = await tx.track.updateMany({
-          where: { id: trackId, projectId, lyricsRevision: input.baseRevision },
-          data: { lyrics: input.content, lyricsRevision: { increment: 1 } },
-        });
-        if (updated.count !== 1) {
-          throw new AppError(409, "LYRICS_CONFLICT", "Lyrics revision conflict");
-        }
-
-        const saved = await tx.track.findUniqueOrThrow({
-          where: { id: trackId },
-          select: { lyrics: true, lyricsRevision: true, updatedAt: true },
-        });
-
-        return {
-          content: saved.lyrics,
-          revision: saved.lyricsRevision,
-          updatedAt: saved.updatedAt.toISOString(),
-          updatedBy: {
-            id: user.id,
-            displayName: user.displayName,
-            avatarUrl: user.avatarUrl,
-          },
-        };
+    res.json({
+      ...result,
+      updatedBy: {
+        id: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
-
-    res.json(result);
+    });
   }),
 );
 
@@ -1228,8 +1206,14 @@ router.post(
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
     const input = createLyricVersionSchema.parse(req.body);
     await getTrackOrThrow(projectId, trackId);
+    const preparedLyrics = prepareLyricsWrite({ content: input.lyrics, baseRevision: 0, leaseToken: "" });
     const version = await prisma.lyricVersion.create({
-      data: { trackId, lyrics: input.lyrics, label: input.label, authorId: user.id },
+      data: {
+        trackId,
+        ...structuredVersionWriteData(preparedLyrics),
+        label: input.label,
+        authorId: user.id,
+      },
     });
     res.status(201).json(serializeLyricVersion(version));
   }),

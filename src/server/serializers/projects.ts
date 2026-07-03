@@ -7,6 +7,7 @@ import {
   serializeTask,
 } from "./collaboration";
 import { httpsExternalAudioUrl } from "../schemas/tracks";
+import { readTrackLyrics, resolveLyricVersion } from "../services/structuredLyrics";
 
 export const trackRelationsInclude = {
   lyricVersions: {
@@ -65,9 +66,13 @@ export function serializeProjectMember(member: MemberWithUser) {
 }
 
 export function serializeLyricVersion(version: LyricVersion) {
+  const lyrics = resolveLyricVersion(version);
   return {
     id: version.id,
-    lyrics: version.lyrics,
+    lyrics: lyrics.plainText,
+    document: lyrics.document,
+    plainText: lyrics.plainText,
+    schemaVersion: lyrics.document.schemaVersion,
     authorId: version.authorId,
     label: version.label,
     isOriginal: version.isOriginal,
@@ -100,10 +105,13 @@ export function serializeAudioVersion(audio: TrackWithRelations["audioVersions"]
 }
 
 export function serializeTrack(track: TrackWithRelations) {
+  const lyrics = readTrackLyrics(track);
   return {
     id: track.id,
     title: track.title,
-    lyrics: track.lyrics,
+    lyrics: lyrics.plainText,
+    lyricsDocument: lyrics.document,
+    lyricsPlainText: lyrics.plainText,
     lyricsRevision: track.lyricsRevision,
     tags: track.tags,
     versionHistory: track.lyricVersions.map(serializeLyricVersion),

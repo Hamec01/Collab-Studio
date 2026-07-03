@@ -23,6 +23,8 @@
     "prisma:seed": "tsx scripts/seed.ts",
     "create-admin": "tsx scripts/create-admin.ts",
     "smoke:stage3:production-safe": "tsx scripts/stage3_production_smoke.ts",
+    "backfill:stage4b:lyrics": "tsx scripts/backfill-stage4b-lyrics.ts",
+    "rehearsal:stage4b:lyrics": "tsx scripts/rehearse-stage4b-lyrics.ts",
     "audit-orphan-audio": "tsx scripts/audit-orphan-audio.ts",
     "backup": "bash scripts/backup.sh",
     "restore": "bash scripts/restore.sh"

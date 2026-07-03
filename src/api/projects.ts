@@ -10,6 +10,7 @@ import type {
   Task,
   Track,
 } from "../types";
+import type { LyricsDocument } from "../features/track-workspace/lyrics/lyricsDocument";
 
 export function listProjects(signal?: AbortSignal) {
   return apiRequest<Project[]>("/api/projects", { signal });
@@ -114,9 +115,19 @@ export function releaseLyricsLease(projectId: string, trackId: string, leaseToke
 export function saveLyricsDraft(
   projectId: string,
   trackId: string,
-  payload: { content: string; baseRevision: number; leaseToken: string },
+  payload:
+    | { content: string; baseRevision: number; leaseToken: string }
+    | { document: LyricsDocument; baseRevision: number; leaseToken: string },
 ) {
-  return apiRequest<{ content: string; revision: number; updatedAt: string; updatedBy: { id: string; displayName: string; avatarUrl: string | null } }>(
+  return apiRequest<{
+    content: string;
+    document: LyricsDocument;
+    plainText: string;
+    schemaVersion: number;
+    revision: number;
+    updatedAt: string;
+    updatedBy: { id: string; displayName: string; avatarUrl: string | null };
+  }>(
     `/api/projects/${projectId}/tracks/${trackId}/lyrics/draft`,
     {
       method: "PUT",

@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  isLyricsDocument,
+  normalizeLyricsDocument,
+  type LyricsDocument,
+} from "../../features/track-workspace/lyrics/lyricsDocument";
 import { uuidParam } from "./projects";
 
 export const trackParamsSchema = z.object({
@@ -36,11 +41,38 @@ export const lyricsLeaseTokenSchema = z.object({
   leaseToken: z.string().min(32).max(256).regex(/^[a-zA-Z0-9_-]+$/),
 });
 
-export const updateLyricsDraftSchema = z.object({
+const lyricsDraftBaseSchema = {
   content: z.string().max(200000),
   baseRevision: z.number().int().nonnegative(),
   leaseToken: lyricsLeaseTokenSchema.shape.leaseToken,
-});
+};
+
+const structuredLyricsDocumentSchema = z
+  .unknown()
+  .refine(isLyricsDocument, "Invalid lyrics document");
+
+export const updateLyricsDraftSchema = z.union([
+  z.object(lyricsDraftBaseSchema).strict(),
+  z.object({
+    document: structuredLyricsDocumentSchema,
+    baseRevision: lyricsDraftBaseSchema.baseRevision,
+    leaseToken: lyricsDraftBaseSchema.leaseToken,
+  }).strict(),
+]);
+
+export type UpdateLyricsDraftInput =
+  | { content: string; baseRevision: number; leaseToken: string }
+  | { document: LyricsDocument; baseRevision: number; leaseToken: string };
+
+export function parseUpdateLyricsDraft(input: unknown): UpdateLyricsDraftInput {
+  const parsed = updateLyricsDraftSchema.parse(input);
+  if ("content" in parsed) return parsed;
+  return {
+    document: normalizeLyricsDocument(parsed.document),
+    baseRevision: parsed.baseRevision,
+    leaseToken: parsed.leaseToken,
+  };
+}
 
 function isPrivateAudioHostname(hostname: string) {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");

@@ -1,3 +1,5 @@
+import type { LyricsDocument } from "./features/track-workspace/lyrics/lyricsDocument";
+
 export interface AuthUser {
   id: string;
   username: string;
@@ -30,6 +32,9 @@ export interface ProjectOwnerSummary {
 export interface LyricVersion {
   id: string;
   lyrics: string;
+  document?: LyricsDocument;
+  plainText?: string;
+  schemaVersion?: number;
   authorId: string | null;
   label: string;
   isOriginal: boolean;
@@ -118,6 +123,8 @@ export interface Track {
   id: string;
   title: string;
   lyrics: string;
+  lyricsDocument?: LyricsDocument;
+  lyricsPlainText?: string;
   lyricsRevision: number;
   tags: string[];
   versionHistory: LyricVersion[];

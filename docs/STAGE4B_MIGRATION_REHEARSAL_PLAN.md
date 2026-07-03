@@ -1,6 +1,6 @@
 # Stage 4B lyrics migration rehearsal plan
 
-Status: plan only — no Prisma migration and no production deploy in foundation slices 1–2.
+Status: executed locally for slices 3–4; production deploy not performed. See `docs/STAGE4B_MIGRATION_REHEARSAL_2026-07-03.md`.
 
 ## Proposed additive shape
 
