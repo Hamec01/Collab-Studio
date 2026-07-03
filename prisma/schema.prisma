@@ -63,52 +63,53 @@ enum ExternalProvider {
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  username     String   @unique
-  email        String?  @unique
-  displayName  String
-  avatarUrl    String?
-  passwordHash String
-  role         UserRole @default(user)
-  emailVerifiedAt DateTime?
+  id                String    @id @default(uuid()) @db.Uuid
+  username          String    @unique
+  email             String?   @unique
+  displayName       String
+  avatarUrl         String?
+  passwordHash      String
+  role              UserRole  @default(user)
+  emailVerifiedAt   DateTime?
   ageAcknowledgedAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  authAccounts       AuthAccount[]
-  emailVerificationTokens EmailVerificationToken[]
-  passwordResetTokens PasswordResetToken[]
-  memberships        ProjectMember[]
-  trackAccessGrants  TrackAccessGrant[]
-  lyricVersions      LyricVersion[]
-  audioVersions      AudioVersion[]
-  comments           Comment[]       @relation("CommentAuthor")
-  resolvedComments   Comment[]       @relation("CommentResolver")
-  chatMessages       ChatMessage[]
-  createdTasks       Task[]          @relation("TaskCreator")
-  assignedTasks      Task[]          @relation("TaskAssignee")
-  annotations        Annotation[]
-  notifications      Notification[]  @relation("NotificationRecipient")
-  actedNotifications Notification[]  @relation("NotificationActor")
-  createdInvites     ProjectInvite[] @relation("InviteCreator")
-  acceptedInvites    ProjectInvite[] @relation("InviteAcceptor")
-  assignedInvites    ProjectInvite[] @relation("InviteTargetUser")
+  authAccounts                AuthAccount[]
+  emailVerificationTokens     EmailVerificationToken[]
+  passwordResetTokens         PasswordResetToken[]
+  memberships                 ProjectMember[]
+  trackAccessGrants           TrackAccessGrant[]
+  lyricVersions               LyricVersion[]
+  audioVersions               AudioVersion[]
+  comments                    Comment[]                @relation("CommentAuthor")
+  resolvedComments            Comment[]                @relation("CommentResolver")
+  chatMessages                ChatMessage[]
+  createdTasks                Task[]                   @relation("TaskCreator")
+  assignedTasks               Task[]                   @relation("TaskAssignee")
+  annotations                 Annotation[]
+  notifications               Notification[]           @relation("NotificationRecipient")
+  actedNotifications          Notification[]           @relation("NotificationActor")
+  createdInvites              ProjectInvite[]          @relation("InviteCreator")
+  acceptedInvites             ProjectInvite[]          @relation("InviteAcceptor")
+  assignedInvites             ProjectInvite[]          @relation("InviteTargetUser")
   initiatedOwnershipTransfers OwnershipTransferAudit[] @relation("OwnershipTransferFrom")
-  receivedOwnershipTransfers OwnershipTransferAudit[] @relation("OwnershipTransferTo")
-  breakGlassInitiated BreakGlassAccessAudit[] @relation("BreakGlassInitiator")
-  activityEvents ActivityEvent[]
+  receivedOwnershipTransfers  OwnershipTransferAudit[] @relation("OwnershipTransferTo")
+  breakGlassInitiated         BreakGlassAccessAudit[]  @relation("BreakGlassInitiator")
+  activityEvents              ActivityEvent[]
+  lyricsEditLeases            LyricsEditLease[]
 
   @@index([role])
   @@index([createdAt])
 }
 
 model EmailVerificationToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  tokenHash String   @unique
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -117,12 +118,12 @@ model EmailVerificationToken {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  tokenHash String   @unique
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -155,38 +156,38 @@ model Session {
 }
 
 model Project {
-  id        String      @id @default(uuid()) @db.Uuid
-  title     String
-  type      ProjectType
-  coverUrl  String?
-  tags      String[]    @default([])
-  quotaTier String      @default("free")
-  entitlements Json     @default("{}")
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id           String      @id @default(uuid()) @db.Uuid
+  title        String
+  type         ProjectType
+  coverUrl     String?
+  tags         String[]    @default([])
+  quotaTier    String      @default("free")
+  entitlements Json        @default("{}")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  members       ProjectMember[]
-  invites       ProjectInvite[]
-  trackAccessGrants TrackAccessGrant[]
-  guestLinks    GuestLink[]
+  members            ProjectMember[]
+  invites            ProjectInvite[]
+  trackAccessGrants  TrackAccessGrant[]
+  guestLinks         GuestLink[]
   ownershipTransfers OwnershipTransferAudit[]
-  breakGlassAudits BreakGlassAccessAudit[]
-  activityEvents ActivityEvent[]
-  tracks        Track[]
-  notifications Notification[]
+  breakGlassAudits   BreakGlassAccessAudit[]
+  activityEvents     ActivityEvent[]
+  tracks             Track[]
+  notifications      Notification[]
 
   @@index([updatedAt])
   @@index([createdAt])
 }
 
 model ProjectMember {
-  id        String      @id @default(uuid()) @db.Uuid
-  projectId String      @db.Uuid
-  userId    String      @db.Uuid
-  role      ProjectRole
-  capabilityPreset CapabilityPreset @default(legacy)
-  customCapabilities Json @default("{}")
-  createdAt DateTime    @default(now())
+  id                 String           @id @default(uuid()) @db.Uuid
+  projectId          String           @db.Uuid
+  userId             String           @db.Uuid
+  role               ProjectRole
+  capabilityPreset   CapabilityPreset @default(legacy)
+  customCapabilities Json             @default("{}")
+  createdAt          DateTime         @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -198,28 +199,28 @@ model ProjectMember {
 }
 
 model ProjectInvite {
-  id         String      @id @default(uuid()) @db.Uuid
-  projectId  String      @db.Uuid
-  createdById String     @db.Uuid
-  invitedUserId String?  @db.Uuid
-  invitedEmail String?
-  role       ProjectRole
-  scope      AccessScope @default(project)
-  trackId    String?     @db.Uuid
-  tokenHash  String      @unique
-  status     InviteStatus @default(pending)
-  customCapabilities Json @default("{}")
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  acceptedAt DateTime?
-  acceptedById String?   @db.Uuid
-  createdAt  DateTime    @default(now())
+  id                 String       @id @default(uuid()) @db.Uuid
+  projectId          String       @db.Uuid
+  createdById        String       @db.Uuid
+  invitedUserId      String?      @db.Uuid
+  invitedEmail       String?
+  role               ProjectRole
+  scope              AccessScope  @default(project)
+  trackId            String?      @db.Uuid
+  tokenHash          String       @unique
+  status             InviteStatus @default(pending)
+  customCapabilities Json         @default("{}")
+  expiresAt          DateTime
+  revokedAt          DateTime?
+  acceptedAt         DateTime?
+  acceptedById       String?      @db.Uuid
+  createdAt          DateTime     @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  track   Track?   @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  createdBy User @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  acceptedBy User? @relation("InviteAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
-  invitedUser User? @relation("InviteTargetUser", fields: [invitedUserId], references: [id], onDelete: SetNull)
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  track       Track?  @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  createdBy   User    @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  acceptedBy  User?   @relation("InviteAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+  invitedUser User?   @relation("InviteTargetUser", fields: [invitedUserId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([trackId])
@@ -229,16 +230,16 @@ model ProjectInvite {
 }
 
 model TrackAccessGrant {
-  id         String      @id @default(uuid()) @db.Uuid
-  projectId  String      @db.Uuid
-  trackId    String      @db.Uuid
-  userId     String      @db.Uuid
-  role       ProjectRole @default(viewer)
-  canDownload Boolean    @default(false)
-  customCapabilities Json @default("{}")
-  expiresAt  DateTime?
-  revokedAt  DateTime?
-  createdAt  DateTime    @default(now())
+  id                 String      @id @default(uuid()) @db.Uuid
+  projectId          String      @db.Uuid
+  trackId            String      @db.Uuid
+  userId             String      @db.Uuid
+  role               ProjectRole @default(viewer)
+  canDownload        Boolean     @default(false)
+  customCapabilities Json        @default("{}")
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  createdAt          DateTime    @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   track   Track   @relation(fields: [trackId], references: [id], onDelete: Cascade)
@@ -252,15 +253,15 @@ model TrackAccessGrant {
 }
 
 model GuestLink {
-  id          String   @id @default(uuid()) @db.Uuid
-  projectId   String   @db.Uuid
-  trackId     String?  @db.Uuid
-  tokenHash   String   @unique
-  canListen   Boolean  @default(true)
-  canDownload Boolean  @default(false)
+  id          String    @id @default(uuid()) @db.Uuid
+  projectId   String    @db.Uuid
+  trackId     String?   @db.Uuid
+  tokenHash   String    @unique
+  canListen   Boolean   @default(true)
+  canDownload Boolean   @default(false)
   expiresAt   DateTime
   revokedAt   DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   track   Track?  @relation(fields: [trackId], references: [id], onDelete: SetNull)
@@ -271,16 +272,16 @@ model GuestLink {
 }
 
 model OwnershipTransferAudit {
-  id          String   @id @default(uuid()) @db.Uuid
-  projectId   String   @db.Uuid
-  fromUserId  String   @db.Uuid
-  toUserId    String   @db.Uuid
-  reason      String
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  projectId  String   @db.Uuid
+  fromUserId String   @db.Uuid
+  toUserId   String   @db.Uuid
+  reason     String
+  createdAt  DateTime @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  fromUser User @relation("OwnershipTransferFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
-  toUser   User @relation("OwnershipTransferTo", fields: [toUserId], references: [id], onDelete: Restrict)
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromUser User    @relation("OwnershipTransferFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUser   User    @relation("OwnershipTransferTo", fields: [toUserId], references: [id], onDelete: Restrict)
 
   @@index([projectId])
   @@index([fromUserId])
@@ -288,17 +289,17 @@ model OwnershipTransferAudit {
 }
 
 model BreakGlassAccessAudit {
-  id          String   @id @default(uuid()) @db.Uuid
-  projectId   String   @db.Uuid
-  adminUserId String   @db.Uuid
+  id          String           @id @default(uuid()) @db.Uuid
+  projectId   String           @db.Uuid
+  adminUserId String           @db.Uuid
   reason      String
   status      BreakGlassStatus @default(active)
   expiresAt   DateTime
   releasedAt  DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime         @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  adminUser User @relation("BreakGlassInitiator", fields: [adminUserId], references: [id], onDelete: Restrict)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  adminUser User    @relation("BreakGlassInitiator", fields: [adminUserId], references: [id], onDelete: Restrict)
 
   @@index([projectId])
   @@index([adminUserId])
@@ -324,28 +325,46 @@ model ActivityEvent {
 }
 
 model Track {
-  id        String   @id @default(uuid()) @db.Uuid
-  projectId String   @db.Uuid
-  title     String
-  lyrics    String   @default("")
-  tags      String[] @default([])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  projectId      String   @db.Uuid
+  title          String
+  lyrics         String   @default("")
+  lyricsRevision Int      @default(0)
+  tags           String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lyricVersions LyricVersion[]
-  audioVersions AudioVersion[]
-  comments      Comment[]
-  chatMessages  ChatMessage[]
-  tasks         Task[]
-  annotations   Annotation[]
-  notifications Notification[]
-  invites       ProjectInvite[]
-  accessGrants  TrackAccessGrant[]
-  guestLinks    GuestLink[]
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lyricVersions   LyricVersion[]
+  audioVersions   AudioVersion[]
+  comments        Comment[]
+  chatMessages    ChatMessage[]
+  tasks           Task[]
+  annotations     Annotation[]
+  notifications   Notification[]
+  invites         ProjectInvite[]
+  accessGrants    TrackAccessGrant[]
+  guestLinks      GuestLink[]
+  lyricsEditLease LyricsEditLease?
 
   @@index([projectId])
   @@index([projectId, updatedAt])
+}
+
+model LyricsEditLease {
+  id          String   @id @default(uuid()) @db.Uuid
+  trackId     String   @unique @db.Uuid
+  userId      String   @db.Uuid
+  tokenHash   String   @unique
+  acquiredAt  DateTime @default(now())
+  heartbeatAt DateTime @default(now())
+  expiresAt   DateTime
+
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model LyricVersion {

@@ -84,12 +84,39 @@ export function createLyricVersion(projectId: string, trackId: string, payload: 
   });
 }
 
+export type LyricsLease = {
+  leaseToken: string;
+  acquiredAt: string;
+  expiresAt: string;
+  heartbeatIntervalMs: number;
+};
+
+export function acquireLyricsLease(projectId: string, trackId: string) {
+  return apiRequest<LyricsLease>(`/api/projects/${projectId}/tracks/${trackId}/lyrics/lease`, {
+    method: "POST",
+  });
+}
+
+export function heartbeatLyricsLease(projectId: string, trackId: string, leaseToken: string) {
+  return apiRequest<{ expiresAt: string }>(`/api/projects/${projectId}/tracks/${trackId}/lyrics/lease`, {
+    method: "PUT",
+    body: { leaseToken },
+  });
+}
+
+export function releaseLyricsLease(projectId: string, trackId: string, leaseToken: string) {
+  return apiRequest<{ released: boolean }>(`/api/projects/${projectId}/tracks/${trackId}/lyrics/lease`, {
+    method: "DELETE",
+    body: { leaseToken },
+  });
+}
+
 export function saveLyricsDraft(
   projectId: string,
   trackId: string,
-  payload: { content: string; baseRevision?: string },
+  payload: { content: string; baseRevision: number; leaseToken: string },
 ) {
-  return apiRequest<{ content: string; revision: string; updatedAt: string; updatedBy: { id: string; displayName: string; avatarUrl: string | null } }>(
+  return apiRequest<{ content: string; revision: number; updatedAt: string; updatedBy: { id: string; displayName: string; avatarUrl: string | null } }>(
     `/api/projects/${projectId}/tracks/${trackId}/lyrics/draft`,
     {
       method: "PUT",

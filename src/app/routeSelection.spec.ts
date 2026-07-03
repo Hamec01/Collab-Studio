@@ -6,6 +6,7 @@ import { resolveRouteSelection, shouldNavigateToCanonicalPath } from "./routeSel
 function makeProjects(): Project[] {
   const baseTrack = {
     lyrics: "",
+    lyricsRevision: 0,
     tags: [],
     versionHistory: [],
     lyricVersions: [],

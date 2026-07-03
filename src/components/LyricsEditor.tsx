@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Edit3, Eye, Save, History, MessageSquare, Maximize2, Minimize2, ArrowRight } from "lucide-react";
 import { LyricVersion } from "../types";
+import { useI18n } from "../app/i18n/I18nProvider";
+import type { LyricsEditState } from "../features/track-workspace/lyrics/useLyricsEditLease";
 
 export type LyricsSaveStatus = "idle" | "dirty" | "saving" | "saved" | "local" | "error" | "conflict";
 
@@ -21,6 +23,10 @@ interface LyricsEditorProps {
   onSelectLine: (index: number | null) => void;
   trackCommentsCount: (lineIdx: number) => number;
   canEdit: boolean;
+  isEditing: boolean;
+  editState: LyricsEditState;
+  onStartEdit: () => Promise<boolean>;
+  onStopEdit: () => void;
   saveStatus: LyricsSaveStatus;
   savedAt?: string | null;
   statusMessage?: string;
@@ -37,6 +43,10 @@ export default function LyricsEditor({
   onCreateVersion,
   onPinVersion,
   versionHistory = [],
+  isEditing,
+  editState,
+  onStartEdit,
+  onStopEdit,
   selectedLineIndex,
   onSelectLine,
   trackCommentsCount,
@@ -50,7 +60,7 @@ export default function LyricsEditor({
   onDownloadLocalDraft,
   onJumpToDiscussion,
 }: LyricsEditorProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const { t } = useI18n();
   const [versionLabel, setVersionLabel] = useState("");
   const [isCreatingVersion, setIsCreatingVersion] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -111,10 +121,11 @@ export default function LyricsEditor({
     }
   };
 
-  const handleStartEdit = () => {
-    if (!canEdit) return;
-    setIsEditing(true);
-    setSelectedVersionId("current");
+  const handleStartEdit = async () => {
+    if (!canEdit) return false;
+    const acquired = await onStartEdit();
+    if (acquired) setSelectedVersionId("current");
+    return acquired;
   };
 
   const lyricAuthor = (authorId: string | null) => (authorId ? authorId.slice(0, 8) : "Deleted user");
@@ -169,7 +180,7 @@ export default function LyricsEditor({
         {!showHistory && (
           <div className="grid grid-cols-2 bg-neutral-900 p-1 rounded-xl w-full">
             <button
-              onClick={() => setIsEditing(false)}
+              onClick={onStopEdit}
               className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 !isEditing
                   ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/25"
@@ -180,8 +191,8 @@ export default function LyricsEditor({
               <span>Чтение и Обсуждение</span>
             </button>
             <button
-              onClick={handleStartEdit}
-              disabled={!canEdit}
+              onClick={() => void handleStartEdit()}
+              disabled={!canEdit || editState === "acquiring"}
               className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 isEditing
                   ? "bg-indigo-600 text-white shadow-md shadow-indigo-900/25"
@@ -189,7 +200,7 @@ export default function LyricsEditor({
               }`}
             >
               <Edit3 className="w-3.5 h-3.5" />
-              <span>Редактирование</span>
+              <span>{editState === "acquiring" ? t("lyrics.edit.acquiring") : "Редактирование"}</span>
             </button>
           </div>
         )}
@@ -277,14 +288,14 @@ export default function LyricsEditor({
                 </button>
               )}
                     <button
-                      onClick={() => {
+                      onClick={() => void (async () => {
                         if (!canEdit) return;
                         if (confirm("Применить эту версию к текущему черновику?")) {
+                          if (!(await handleStartEdit())) return;
                           onChangeDraftLyrics(activeVersion.lyrics);
-                          setIsEditing(true);
                           setSelectedVersionId("current");
                         }
-                      }}
+                      })()}
                 disabled={!canEdit}
                 className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg transition-all cursor-pointer shadow-md shrink-0"
               >
@@ -335,13 +346,14 @@ export default function LyricsEditor({
                   </div>
                   <div className="flex flex-col gap-1.5 shrink-0">
                     <button
-                      onClick={() => {
+                      onClick={() => void (async () => {
                         if (confirm(`Применить версию \"${ver.label}\" к текущему черновику?`)) {
+                          if (!(await handleStartEdit())) return;
                           onChangeDraftLyrics(ver.lyrics);
-                          setIsEditing(true);
                           setSelectedVersionId("current");
                         }
-                      }}
+                      })()}
+                      disabled={!canEdit}
                       className="text-[10px] bg-indigo-950/40 hover:bg-indigo-900/40 border border-indigo-900/30 hover:border-indigo-500 text-indigo-400 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer font-bold shrink-0 text-center"
                     >
                       Применить
@@ -407,10 +419,11 @@ export default function LyricsEditor({
                 const isSectionHeader = line.startsWith("[") && line.endsWith("]");
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={idx}
                     onClick={() => onSelectLine(isSelected ? null : idx)}
-                    className={`group flex items-center justify-between gap-3 p-1.5 px-3 rounded-lg transition-all cursor-pointer select-none border ${
+                    className={`group flex w-full items-center justify-between gap-3 p-1.5 px-3 rounded-lg transition-all cursor-pointer select-none border text-left ${
                       isSectionHeader
                         ? "border-transparent bg-transparent mt-2 first:mt-0"
                         : isSelected
@@ -418,12 +431,7 @@ export default function LyricsEditor({
                         : "border-transparent bg-transparent hover:bg-neutral-900/30"
                     }`}
                   >
-                    {/* Line Index & Content wrapper */}
-                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                      <span className="font-mono text-[9px] sm:text-xs text-neutral-500 w-4 text-right mt-1 select-none shrink-0">
-                        {idx + 1}
-                      </span>
-
+                    <div className="flex items-start flex-1 min-w-0">
                       <div className="flex-1 min-w-0">
                         {isSectionHeader ? (
                           <span className="font-mono font-bold tracking-wide text-indigo-400 text-[11px] sm:text-xs uppercase">
@@ -451,7 +459,7 @@ export default function LyricsEditor({
                     {isSelected && !isSectionHeader && (
                       <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>

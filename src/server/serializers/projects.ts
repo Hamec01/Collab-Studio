@@ -104,6 +104,7 @@ export function serializeTrack(track: TrackWithRelations) {
     id: track.id,
     title: track.title,
     lyrics: track.lyrics,
+    lyricsRevision: track.lyricsRevision,
     tags: track.tags,
     versionHistory: track.lyricVersions.map(serializeLyricVersion),
     lyricVersions: track.lyricVersions.map(serializeLyricVersion),

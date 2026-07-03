@@ -91,6 +91,7 @@ describe("useWorkspaceQuery abort behavior", () => {
         id: "t2",
         title: "Track 2",
         lyrics: "",
+        lyricsRevision: 0,
         tags: [],
         versionHistory: [],
         lyricVersions: [],

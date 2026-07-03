@@ -26,10 +26,15 @@ import {
   updateMemberRoleSchema,
   updateProjectSchema,
 } from "../schemas/projects";
-import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, trackParamsSchema, updateLyricsDraftSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
+import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, lyricsLeaseTokenSchema, trackParamsSchema, updateLyricsDraftSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
 import { serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
 import { collaborationUserSelect } from "../serializers/collaboration";
 import { createProjectMemberNotifications } from "../services/notifications";
+import {
+  canAcquireLyricsLease,
+  nextLyricsLeaseExpiry,
+  requireLyricsLease,
+} from "../services/lyricsWorkspace";
 import {
   ensureVerifiedForProtectedWrite,
   hashOpaqueToken,
@@ -993,7 +998,6 @@ router.patch(
         where: { id: trackId },
         data: {
           ...(input.title !== undefined ? { title: input.title } : {}),
-          ...(input.lyrics !== undefined ? { lyrics: input.lyrics } : {}),
           ...(input.tags !== undefined ? { tags: input.tags } : {}),
         },
       });
@@ -1005,6 +1009,118 @@ router.patch(
     });
 
     res.json(serializeTrack(track));
+  }),
+);
+
+router.post(
+  "/:projectId/tracks/:trackId/lyrics/lease",
+  (req, _res, next) => {
+    trackParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    const { projectId, trackId } = trackParamsSchema.parse(req.params);
+    const now = nowUtc();
+    const leaseToken = newOpaqueToken();
+
+    try {
+      const lease = await prisma.$transaction(
+        async (tx) => {
+          const track = await tx.track.findFirst({
+            where: { id: trackId, projectId },
+            select: { id: true },
+          });
+          if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+
+          const existing = await tx.lyricsEditLease.findUnique({
+            where: { trackId },
+            select: { id: true, expiresAt: true },
+          });
+          if (!canAcquireLyricsLease(existing, now)) {
+            throw new AppError(409, "LYRICS_LEASE_HELD", "Lyrics are being edited in another session");
+          }
+          if (existing) {
+            await tx.lyricsEditLease.deleteMany({
+              where: { id: existing.id, expiresAt: { lte: now } },
+            });
+          }
+
+          return tx.lyricsEditLease.create({
+            data: {
+              trackId,
+              userId: user.id,
+              tokenHash: hashOpaqueToken(leaseToken),
+              acquiredAt: now,
+              heartbeatAt: now,
+              expiresAt: nextLyricsLeaseExpiry(now),
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+
+      res.status(201).json({
+        leaseToken,
+        acquiredAt: lease.acquiredAt.toISOString(),
+        expiresAt: lease.expiresAt.toISOString(),
+        heartbeatIntervalMs: 30_000,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2002" || error.code === "P2034")) {
+        throw new AppError(409, "LYRICS_LEASE_HELD", "Lyrics are being edited in another session");
+      }
+      throw error;
+    }
+  }),
+);
+
+router.put(
+  "/:projectId/tracks/:trackId/lyrics/lease",
+  (req, _res, next) => {
+    trackParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    const { projectId, trackId } = trackParamsSchema.parse(req.params);
+    const { leaseToken } = lyricsLeaseTokenSchema.parse(req.body);
+    const now = nowUtc();
+    const expiresAt = nextLyricsLeaseExpiry(now);
+    const updated = await prisma.lyricsEditLease.updateMany({
+      where: {
+        trackId,
+        track: { projectId },
+        userId: user.id,
+        tokenHash: hashOpaqueToken(leaseToken),
+        expiresAt: { gt: now },
+      },
+      data: { heartbeatAt: now, expiresAt },
+    });
+    if (updated.count !== 1) {
+      throw new AppError(409, "LYRICS_LEASE_LOST", "Lyrics edit lease is missing or expired");
+    }
+    res.json({ expiresAt: expiresAt.toISOString() });
+  }),
+);
+
+router.delete(
+  "/:projectId/tracks/:trackId/lyrics/lease",
+  (req, _res, next) => {
+    trackParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    const { projectId, trackId } = trackParamsSchema.parse(req.params);
+    const { leaseToken } = lyricsLeaseTokenSchema.parse(req.body);
+    const released = await prisma.lyricsEditLease.deleteMany({
+      where: { trackId, track: { projectId }, userId: user.id, tokenHash: hashOpaqueToken(leaseToken) },
+    });
+    res.json({ released: released.count === 1 });
   }),
 );
 
@@ -1024,24 +1140,34 @@ router.put(
       async (tx) => {
         const existing = await tx.track.findFirst({
           where: { id: trackId, projectId },
-          select: { id: true, lyrics: true, updatedAt: true },
+          select: { id: true, lyrics: true, lyricsRevision: true, updatedAt: true },
         });
         if (!existing) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
 
-        if (input.baseRevision && existing.updatedAt.toISOString() !== input.baseRevision) {
-          throw new AppError(409, "LYRICS_DRAFT_CONFLICT", "Lyrics draft revision conflict");
+        const now = nowUtc();
+        const lease = await tx.lyricsEditLease.findUnique({
+          where: { trackId },
+          select: { userId: true, tokenHash: true, expiresAt: true },
+        });
+        requireLyricsLease(lease, { userId: user.id, leaseToken: input.leaseToken, now });
+
+        const updated = await tx.track.updateMany({
+          where: { id: trackId, projectId, lyricsRevision: input.baseRevision },
+          data: { lyrics: input.content, lyricsRevision: { increment: 1 } },
+        });
+        if (updated.count !== 1) {
+          throw new AppError(409, "LYRICS_CONFLICT", "Lyrics revision conflict");
         }
 
-        const updated = await tx.track.update({
+        const saved = await tx.track.findUniqueOrThrow({
           where: { id: trackId },
-          data: { lyrics: input.content },
-          select: { lyrics: true, updatedAt: true },
+          select: { lyrics: true, lyricsRevision: true, updatedAt: true },
         });
 
         return {
-          content: updated.lyrics,
-          revision: updated.updatedAt.toISOString(),
-          updatedAt: updated.updatedAt.toISOString(),
+          content: saved.lyrics,
+          revision: saved.lyricsRevision,
+          updatedAt: saved.updatedAt.toISOString(),
           updatedBy: {
             id: user.id,
             displayName: user.displayName,

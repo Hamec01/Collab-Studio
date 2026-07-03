@@ -6,7 +6,7 @@ export type StoredLyricsDraft = {
   projectId: string;
   trackId: string;
   content: string;
-  baseRevision?: string;
+  baseRevision?: number;
   savedAt: string;
   serverUpdatedAt?: string;
   syncState: LyricsDraftSyncState;

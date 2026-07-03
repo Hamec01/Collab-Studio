@@ -22,7 +22,6 @@ export const createTrackSchema = z.object({
 export const updateTrackSchema = z
   .object({
     title: z.string().trim().min(1).max(160).optional(),
-    lyrics: z.string().max(200000).optional(),
     tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
     versionLabel: z.string().trim().min(1).max(160).optional(),
   })
@@ -33,9 +32,14 @@ export const createLyricVersionSchema = z.object({
   label: z.string().trim().min(1).max(160),
 });
 
+export const lyricsLeaseTokenSchema = z.object({
+  leaseToken: z.string().min(32).max(256).regex(/^[a-zA-Z0-9_-]+$/),
+});
+
 export const updateLyricsDraftSchema = z.object({
   content: z.string().max(200000),
-  baseRevision: z.string().datetime().optional(),
+  baseRevision: z.number().int().nonnegative(),
+  leaseToken: lyricsLeaseTokenSchema.shape.leaseToken,
 });
 
 function isPrivateAudioHostname(hostname: string) {

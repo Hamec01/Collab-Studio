@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Annotation,
   AppNotification,
   Project,
   Task,
@@ -9,12 +8,7 @@ import {
 } from "./types";
 import AuthModal from "./components/AuthModal";
 import ProjectList from "./components/ProjectList";
-import LyricsEditor, { type LyricsSaveStatus, type RestoreDraftSnapshot } from "./components/LyricsEditor";
-import AudioPlayer from "./components/AudioPlayer";
-import CommentsPanel from "./components/CommentsPanel";
-import ChatRoom from "./components/ChatRoom";
-import TaskBoard from "./components/TaskBoard";
-import RhymeFinder from "./components/RhymeFinder";
+import { type LyricsSaveStatus, type RestoreDraftSnapshot } from "./components/LyricsEditor";
 import NotificationsPanel from "./components/NotificationsPanel";
 import { FolderOpen, MessageSquare, Music } from "lucide-react";
 import { ApiError, isApiError } from "./api/client";
@@ -64,10 +58,14 @@ import {
   saveEmergencyDraft,
   writeLocalDraft,
 } from "./app/draft/draftInterface";
+import { useLyricsEditLease } from "./features/track-workspace/lyrics/useLyricsEditLease";
+import { TrackLyricsWorkspace } from "./features/track-workspace/lyrics/TrackLyricsWorkspace";
+import { TrackContextPanel, type TrackSidebar } from "./features/track-workspace/TrackContextPanel";
+import { LyricsCommentsSheet } from "./features/track-workspace/lyrics/LyricsCommentsSheet";
+import { LyricsPlayerPlaceholder } from "./features/track-workspace/lyrics/LyricsPlayerPlaceholder";
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
 
-type Sidebar = "comments" | "chat" | "tasks" | "rhymes";
 type MobileTab = "projects" | "editor" | "rightPanel";
 type ExternalProvider = "google" | "yandex" | "telegram" | "other";
 
@@ -103,7 +101,8 @@ export default function App() {
   } = usePlayer();
   const [globalError, setGlobalError] = useState<string>("");
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
-  const [activeSidebar, setActiveSidebar] = useState<Sidebar>("comments");
+  const [showLyricsComments, setShowLyricsComments] = useState(false);
+  const [activeSidebar, setActiveSidebar] = useState<TrackSidebar>("comments");
   const [mobileTab, setMobileTab] = useState<MobileTab>("projects");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -112,7 +111,7 @@ export default function App() {
   const [extLabel, setExtLabel] = useState("");
   const [extProvider, setExtProvider] = useState<ExternalProvider>("google");
   const [draftLyrics, setDraftLyrics] = useState("");
-  const [draftRevision, setDraftRevision] = useState<string | null>(null);
+  const [draftRevision, setDraftRevision] = useState<number | null>(null);
   const [draftServerUpdatedAt, setDraftServerUpdatedAt] = useState<string | null>(null);
   const [lyricsSaveStatus, setLyricsSaveStatus] = useState<LyricsSaveStatus>("idle");
   const [lyricsSavedAt, setLyricsSavedAt] = useState<string | null>(null);
@@ -127,7 +126,7 @@ export default function App() {
   const retryAttemptRef = useRef(0);
   const persistFailureRef = useRef(false);
   const draftLyricsRef = useRef("");
-  const draftRevisionRef = useRef<string | null>(null);
+  const draftRevisionRef = useRef<number | null>(null);
   const lastSyncedLyricsRef = useRef("");
 
   const location = useLocation();
@@ -174,6 +173,13 @@ export default function App() {
   }, [currentUser, activeProject]);
 
   const canEdit = projectRole === "owner" || projectRole === "editor";
+  const lyricsLease = useLyricsEditLease({
+    projectId: activeProjectId,
+    trackId: activeTrackId,
+    canEdit,
+    withAuth,
+  });
+
   const canResolve = canEdit;
   const canSend = !!currentUser && !!activeProject && !!activeTrack;
 
@@ -247,6 +253,7 @@ export default function App() {
     resetWorkspaceQuery();
     setSelectedAudioVersionId(null);
     setSelectedLineIndex(null);
+    setShowLyricsComments(false);
     setShowUploadModal(false);
     setUploadError("");
     setIsUploading(false);
@@ -272,10 +279,11 @@ export default function App() {
     };
   }, []);
 
-  const updateTrackDraftState = (projectId: string, trackId: string, lyrics: string, updatedAt: string) => {
+  const updateTrackDraftState = (projectId: string, trackId: string, lyrics: string, lyricsRevision: number, updatedAt: string) => {
     updateTrackInProjects(projectId, trackId, (track) => ({
       ...track,
       lyrics,
+      lyricsRevision,
       updatedAt,
     }));
   };
@@ -297,7 +305,7 @@ export default function App() {
 
   const flushLyricsAutosave = async (contentOverride?: string) => {
     const scope = currentDraftScope();
-    if (!scope || !canEdit) return false;
+    if (!scope || !canEdit || !lyricsLease.leaseToken || draftRevisionRef.current === null) return false;
 
     const generation = draftGenerationRef.current;
     const content = contentOverride ?? draftLyricsRef.current;
@@ -322,13 +330,15 @@ export default function App() {
       const response = await withAuth(() =>
         saveLyricsDraft(scope.projectId, scope.trackId, {
           content,
-          ...(draftRevisionRef.current ? { baseRevision: draftRevisionRef.current } : {}),
+          baseRevision: draftRevisionRef.current!,
+          leaseToken: lyricsLease.leaseToken!,
         }),
       );
 
       if (generation !== draftGenerationRef.current) return false;
 
       setDraftRevision(response.revision);
+      draftRevisionRef.current = response.revision;
       setDraftServerUpdatedAt(response.updatedAt);
       retryAttemptRef.current = 0;
       const latestLocalContent = draftLyricsRef.current;
@@ -339,7 +349,7 @@ export default function App() {
         setLyricsSavedAt(response.updatedAt);
         setLyricsStatusMessage("");
         lastSyncedLyricsRef.current = response.content;
-        updateTrackDraftState(scope.projectId, scope.trackId, response.content, response.updatedAt);
+        updateTrackDraftState(scope.projectId, scope.trackId, response.content, response.revision, response.updatedAt);
         await removeLocalDraft(scope).catch(() => undefined);
       } else {
         setLyricsSaveStatus("dirty");
@@ -349,6 +359,14 @@ export default function App() {
       return true;
     } catch (error) {
       if (generation !== draftGenerationRef.current) return false;
+      if (isApiError(error) && error.code === "LYRICS_LEASE_LOST") {
+        lyricsLease.markLost();
+        setLyricsSaveStatus("local");
+        setLyricsStatusMessage("Сеанс редактирования истёк — черновик сохранён локально");
+        persistEmergencyDraft("local-only", content);
+        await persistLocalDraft("local-only", content);
+        return false;
+      }
       if (isApiError(error) && error.status === 409) {
         setLyricsSaveStatus("conflict");
         setLyricsStatusMessage("Текст был изменен в другом окне или другим редактором");
@@ -356,7 +374,7 @@ export default function App() {
         await persistLocalDraft("conflict", content);
         const latest = await withAuth(() => getTrack(scope.projectId, scope.trackId)).catch(() => null);
         if (latest) {
-          updateTrackDraftState(scope.projectId, scope.trackId, latest.lyrics, latest.updatedAt);
+          updateTrackDraftState(scope.projectId, scope.trackId, latest.lyrics, latest.lyricsRevision, latest.updatedAt);
           setRestoreDraftSnapshot({
             localSavedAt: new Date().toISOString(),
             serverUpdatedAt: latest.updatedAt,
@@ -414,6 +432,12 @@ export default function App() {
     if (!canEdit) return true;
     clearDraftTimers();
     return flushLyricsAutosave(draftLyricsRef.current);
+  };
+
+  const stopLyricsEditing = async () => {
+    clearDraftTimers();
+    await flushLyricsAutosave(draftLyricsRef.current);
+    await lyricsLease.release();
   };
 
   useEffect(() => {
@@ -518,14 +542,14 @@ export default function App() {
 
     const scope = buildDraftScope(currentUser.id, activeProject.id, activeTrack.id);
     setDraftLyrics(activeTrack.lyrics);
-    setDraftRevision(activeTrack.updatedAt);
+    setDraftRevision(activeTrack.lyricsRevision);
     setDraftServerUpdatedAt(activeTrack.updatedAt);
     setLyricsSaveStatus("idle");
     setLyricsSavedAt(activeTrack.updatedAt);
     setLyricsStatusMessage("");
     setRestoreDraftSnapshot(null);
     draftLyricsRef.current = activeTrack.lyrics;
-    draftRevisionRef.current = activeTrack.updatedAt;
+    draftRevisionRef.current = activeTrack.lyricsRevision;
     lastSyncedLyricsRef.current = activeTrack.lyrics;
 
     void (async () => {
@@ -578,7 +602,7 @@ export default function App() {
 
   useEffect(() => {
     const onPageHide = () => {
-      if (!canEdit) return;
+      if (!canEdit || !lyricsLease.leaseToken || draftRevisionRef.current === null) return;
       persistEmergencyDraft("local-only");
       void persistLocalDraft("local-only");
       const scope = currentDraftScope();
@@ -590,7 +614,8 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             content: draftLyricsRef.current,
-            ...(draftRevisionRef.current ? { baseRevision: draftRevisionRef.current } : {}),
+            baseRevision: draftRevisionRef.current,
+            leaseToken: lyricsLease.leaseToken,
           }),
           keepalive: true,
         }).catch(() => undefined);
@@ -623,7 +648,7 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
-  }, [canEdit, lyricsSaveStatus]);
+  }, [canEdit, lyricsLease.leaseToken, lyricsSaveStatus]);
 
   const handleCreateProject = async (title: string, type: "single" | "album", tags: string[], coverUrl?: string) => {
     const project = await withAuth(() => createProject({ title, type, tags, coverUrl }));
@@ -736,6 +761,10 @@ export default function App() {
     }
     setDraftLyrics(localDraft.content);
     setLyricsSaveStatus(localDraft.syncState === "conflict" ? "conflict" : "dirty");
+    draftLyricsRef.current = localDraft.content;
+    setDraftRevision(activeTrack.lyricsRevision);
+    draftRevisionRef.current = activeTrack.lyricsRevision;
+    setDraftServerUpdatedAt(activeTrack.updatedAt);
     setLyricsStatusMessage("");
     setRestoreDraftSnapshot(null);
   };
@@ -744,7 +773,10 @@ export default function App() {
     const scope = currentDraftScope();
     if (!scope || !activeTrack) return;
     setDraftLyrics(activeTrack.lyrics);
-    setDraftRevision(activeTrack.updatedAt);
+    draftLyricsRef.current = activeTrack.lyrics;
+    setDraftRevision(activeTrack.lyricsRevision);
+    draftRevisionRef.current = activeTrack.lyricsRevision;
+    lastSyncedLyricsRef.current = activeTrack.lyrics;
     setDraftServerUpdatedAt(activeTrack.updatedAt);
     setLyricsSaveStatus("saved");
     setLyricsSavedAt(activeTrack.updatedAt);
@@ -893,10 +925,9 @@ export default function App() {
     setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
   };
 
-  const trackCommentsCount = (lineIdx: number) => {
-    if (!activeTrack) return 0;
-    return activeTrack.comments.filter((comment) => comment.lineIndex === lineIdx && !comment.resolved).length;
-  };
+  const lyricsWorkspaceStatusMessage = lyricsLease.editState === "locked"
+    ? t("lyrics.lease.locked")
+    : lyricsLease.editState === "lost" ? t("lyrics.lease.lost") : lyricsStatusMessage;
 
   return (
     <AppShell
@@ -988,63 +1019,36 @@ export default function App() {
 
               <div className={`lg:col-span-6 min-h-0 flex-col gap-5 ${mobileTab === "editor" ? "flex" : "hidden lg:flex"}`}>
               {activeTrack ? (
-                <>
-                  <div className="p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-neutral-900/60 border-neutral-800">
-                    <div className="text-left">
-                      <div className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider flex items-center gap-1">
-                        <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
-                        {activeProject?.title}
-                      </div>
-                      <h2 className="text-base font-bold text-white mt-0.5">{activeTrack.title}</h2>
-                      {!canEdit && <div className="mt-2"><StateView kind="readOnly" message={t("state.readOnly")} compact /></div>}
-                    </div>
-
-                    {canEdit && (
-                      <Button
-                        onClick={() => setShowUploadModal(true)}
-                        variant="primary"
-                        size="sm"
-                        className="font-semibold"
-                      >
-                        Загрузить аудио
-                      </Button>
-                    )}
-                  </div>
-
-                  <LyricsEditor
-                    draftLyrics={draftLyrics}
-                    onChangeDraftLyrics={handleDraftLyricsChange}
-                    onCreateVersion={handleCreateLyricVersion}
-                    onPinVersion={handlePinVersion}
-                    versionHistory={activeTrack.lyricVersions}
-                    selectedLineIndex={selectedLineIndex}
-                    onSelectLine={setSelectedLineIndex}
-                    trackCommentsCount={trackCommentsCount}
-                    canEdit={canEdit}
-                    saveStatus={lyricsSaveStatus}
-                    savedAt={lyricsSavedAt}
-                    statusMessage={lyricsStatusMessage}
-                    restoreDraft={restoreDraftSnapshot}
-                    onRestoreLocalDraft={handleRestoreLocalDraft}
-                    onUseServerDraft={handleUseServerDraft}
-                    onDownloadLocalDraft={handleDownloadLocalDraft}
-                    onJumpToDiscussion={() => {
-                      setActiveSidebar("comments");
-                      setMobileTab("rightPanel");
-                    }}
-                  />
-
-                  <AudioPlayer
-                    audioVersions={activeTrack.audioVersions}
-                    annotations={activeTrack.annotations as Annotation[]}
-                    onAddAnnotation={handleAddAnnotation}
-                    onSelectAudioVersion={setSelectedAudioVersionId}
-                    selectedAudioVersionId={selectedAudioVersionId}
-                    canAnnotate={canEdit}
-                    onRequestUploadFile={() => setShowUploadModal(true)}
-                    onRequestAddLink={() => setShowUploadModal(true)}
-                  />
-                </>
+                <TrackLyricsWorkspace
+                  projectTitle={activeProject?.title}
+                  track={activeTrack}
+                  canEdit={canEdit}
+                  draftLyrics={draftLyrics}
+                  isEditing={lyricsLease.isEditing}
+                  editState={lyricsLease.editState}
+                  saveStatus={lyricsSaveStatus}
+                  savedAt={lyricsSavedAt}
+                  statusMessage={lyricsWorkspaceStatusMessage}
+                  restoreDraft={restoreDraftSnapshot}
+                  selectedLineIndex={selectedLineIndex}
+                  selectedAudioVersionId={selectedAudioVersionId}
+                  onChangeDraftLyrics={handleDraftLyricsChange}
+                  onCreateVersion={handleCreateLyricVersion}
+                  onPinVersion={handlePinVersion}
+                  onSelectLine={setSelectedLineIndex}
+                  onStartEdit={lyricsLease.requestEdit}
+                  onStopEdit={() => void stopLyricsEditing()}
+                  onRestoreLocalDraft={handleRestoreLocalDraft}
+                  onUseServerDraft={handleUseServerDraft}
+                  onDownloadLocalDraft={handleDownloadLocalDraft}
+                  onJumpToDiscussion={() => {
+                    setActiveSidebar("comments");
+                    setShowLyricsComments(true);
+                  }}
+                  onRequestUpload={() => setShowUploadModal(true)}
+                  onAddAnnotation={handleAddAnnotation}
+                  onSelectAudioVersion={setSelectedAudioVersionId}
+                />
               ) : (
                 <StateView kind="empty" message={t("state.track.empty")} className="min-h-[220px] flex items-center" />
               )}
@@ -1052,47 +1056,25 @@ export default function App() {
 
               <div className={`lg:col-span-3 min-h-0 flex-col gap-4 ${mobileTab === "rightPanel" ? "flex" : "hidden lg:flex"}`}>
               {activeTrack ? (
-                <div className="flex flex-col h-full space-y-4">
-                  <div className="bg-neutral-950 border border-neutral-800 p-1 rounded-xl flex items-center justify-between">
-                    <button onClick={() => setActiveSidebar("comments")} className={`flex-1 text-[10px] font-bold p-2 py-2 rounded-lg ${activeSidebar === "comments" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}>
-                      Правки
-                    </button>
-                    <button onClick={() => setActiveSidebar("chat")} className={`flex-1 text-[10px] font-bold p-2 py-2 rounded-lg ${activeSidebar === "chat" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}>
-                      Чат
-                    </button>
-                    <button onClick={() => setActiveSidebar("tasks")} className={`flex-1 text-[10px] font-bold p-2 py-2 rounded-lg ${activeSidebar === "tasks" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}>
-                      Задачи
-                    </button>
-                    <button onClick={() => setActiveSidebar("rhymes")} className={`flex-1 text-[10px] font-bold p-2 py-2 rounded-lg ${activeSidebar === "rhymes" ? "bg-indigo-600 text-white" : "text-neutral-400"}`}>
-                      AI
-                    </button>
-                  </div>
-
-                  <div className="flex-1 min-h-[360px]">
-                    {activeSidebar === "comments" && (
-                      <CommentsPanel
-                        comments={activeTrack.comments}
-                        onAddComment={handleAddComment}
-                        onResolveComment={handleResolveComment}
-                        canResolve={canResolve}
-                        selectedLineIndex={selectedLineIndex}
-                        onClearSelectedLine={() => setSelectedLineIndex(null)}
-                        lyricsLines={draftLyrics.split("\n")}
-                      />
-                    )}
-                    {activeSidebar === "chat" && <ChatRoom chat={activeTrack.chat} onSendMessage={handleSendMessage} currentUser={currentUser} canSend={canSend} />}
-                    {activeSidebar === "tasks" && (
-                      <TaskBoard
-                        tasks={activeTrack.tasks}
-                        onAddTask={handleAddTask}
-                        onUpdateTaskStatus={handleUpdateTaskStatus}
-                        participants={activeProject ? activeProject.participants : []}
-                        canEdit={canEdit}
-                      />
-                    )}
-                    {activeSidebar === "rhymes" && <RhymeFinder onUnauthorized={expireSession} />}
-                  </div>
-                </div>
+                <TrackContextPanel
+                  track={activeTrack}
+                  project={activeProject}
+                  currentUser={currentUser}
+                  activeSidebar={activeSidebar}
+                  canResolve={canResolve}
+                  canEdit={canEdit}
+                  canSend={canSend}
+                  draftLyrics={draftLyrics}
+                  selectedLineIndex={selectedLineIndex}
+                  onSelectSidebar={setActiveSidebar}
+                  onClearSelectedLine={() => setSelectedLineIndex(null)}
+                  onAddComment={handleAddComment}
+                  onResolveComment={handleResolveComment}
+                  onSendMessage={handleSendMessage}
+                  onAddTask={handleAddTask}
+                  onUpdateTaskStatus={handleUpdateTaskStatus}
+                  onUnauthorized={expireSession}
+                />
               ) : (
                 <StateView kind="empty" message={t("state.sidebar.empty")} className="h-full min-h-[220px] flex items-center" />
               )}
@@ -1108,6 +1090,24 @@ export default function App() {
             </div>
           </div>
         </>
+      )}
+
+      {currentUser && (
+        <LyricsPlayerPlaceholder track={activeTrack} selectedAudioVersionId={selectedAudioVersionId} />
+      )}
+
+      {activeTrack && (
+        <LyricsCommentsSheet
+          open={showLyricsComments}
+          comments={activeTrack.comments}
+          selectedLineIndex={selectedLineIndex}
+          lyricsLines={draftLyrics.split("\n")}
+          canResolve={canResolve}
+          onClose={() => setShowLyricsComments(false)}
+          onClearSelectedLine={() => setSelectedLineIndex(null)}
+          onAddComment={handleAddComment}
+          onResolveComment={handleResolveComment}
+        />
       )}
 
       {showUploadModal && activeProject && activeTrack && (

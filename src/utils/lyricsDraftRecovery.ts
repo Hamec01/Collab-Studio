@@ -11,7 +11,7 @@ export type EmergencyDraftSnapshot = {
   key: string;
   content: string;
   savedAt: string;
-  baseRevision?: string;
+  baseRevision?: number;
   serverUpdatedAt?: string;
   syncState: LyricsDraftSyncState;
 };

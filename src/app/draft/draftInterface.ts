@@ -57,7 +57,7 @@ export async function readMergedDraft(scope: DraftScope) {
 
 export async function writeLocalDraft(scope: DraftScope, payload: {
   content: string;
-  baseRevision?: string;
+  baseRevision?: number;
   serverUpdatedAt?: string;
   syncState: "local-only" | "synced" | "conflict" | "error";
 }) {
