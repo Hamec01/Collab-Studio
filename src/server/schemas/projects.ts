@@ -40,3 +40,53 @@ export const addMemberSchema = z
 export const updateMemberRoleSchema = z.object({
   role: z.enum(["editor", "viewer"]),
 });
+
+export const createInviteSchema = z
+  .object({
+    email: z.string().trim().email().max(254).optional(),
+    userId: uuidParam.optional(),
+    role: z.enum(["editor", "viewer"]),
+    scope: z.enum(["project", "track"]).default("project"),
+    trackId: uuidParam.optional(),
+    expiresInHours: z.number().int().min(1).max(24 * 30).default(72),
+  })
+  .refine((value) => Boolean(value.email || value.userId), { message: "email or userId is required" });
+
+export const inviteParamsSchema = z.object({
+  projectId: uuidParam,
+  inviteId: uuidParam,
+});
+
+export const acceptInviteSchema = z.object({
+  token: z.string().trim().min(20).max(256),
+});
+
+export const transferOwnershipSchema = z.object({
+  toUserId: uuidParam,
+  reason: z.string().trim().min(8).max(500),
+});
+
+export const trackGrantParamsSchema = z.object({
+  projectId: uuidParam,
+  trackId: uuidParam,
+  userId: uuidParam,
+});
+
+export const createTrackGrantSchema = z.object({
+  userId: uuidParam,
+  role: z.enum(["editor", "viewer"]),
+  canDownload: z.boolean().default(false),
+  expiresInHours: z.number().int().min(1).max(24 * 30).optional(),
+  customCapabilities: z.record(z.string(), z.boolean()).optional(),
+});
+
+export const createGuestLinkSchema = z.object({
+  trackId: uuidParam.optional(),
+  canDownload: z.boolean().default(false),
+  expiresInHours: z.number().int().min(1).max(24 * 30).default(48),
+});
+
+export const guestLinkParamsSchema = z.object({
+  projectId: uuidParam,
+  guestLinkId: uuidParam,
+});

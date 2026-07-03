@@ -5,6 +5,8 @@ export interface AuthUser {
   avatarUrl: string | null;
   email: string | null;
   role: "admin" | "user";
+  emailVerifiedAt?: string | null;
+  ageAcknowledgedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

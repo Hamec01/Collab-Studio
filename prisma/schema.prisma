@@ -18,6 +18,32 @@ enum ProjectRole {
   viewer
 }
 
+enum CapabilityPreset {
+  legacy
+  owner
+  editor
+  viewer
+  custom
+}
+
+enum AccessScope {
+  project
+  track
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+enum BreakGlassStatus {
+  active
+  released
+  expired
+}
+
 enum ProjectType {
   single
   album
@@ -44,11 +70,16 @@ model User {
   avatarUrl    String?
   passwordHash String
   role         UserRole @default(user)
+  emailVerifiedAt DateTime?
+  ageAcknowledgedAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   authAccounts       AuthAccount[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
   memberships        ProjectMember[]
+  trackAccessGrants  TrackAccessGrant[]
   lyricVersions      LyricVersion[]
   audioVersions      AudioVersion[]
   comments           Comment[]       @relation("CommentAuthor")
@@ -59,9 +90,44 @@ model User {
   annotations        Annotation[]
   notifications      Notification[]  @relation("NotificationRecipient")
   actedNotifications Notification[]  @relation("NotificationActor")
+  createdInvites     ProjectInvite[] @relation("InviteCreator")
+  acceptedInvites    ProjectInvite[] @relation("InviteAcceptor")
+  assignedInvites    ProjectInvite[] @relation("InviteTargetUser")
+  initiatedOwnershipTransfers OwnershipTransferAudit[] @relation("OwnershipTransferFrom")
+  receivedOwnershipTransfers OwnershipTransferAudit[] @relation("OwnershipTransferTo")
+  breakGlassInitiated BreakGlassAccessAudit[] @relation("BreakGlassInitiator")
+  activityEvents ActivityEvent[]
 
   @@index([role])
   @@index([createdAt])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model AuthAccount {
@@ -94,10 +160,18 @@ model Project {
   type      ProjectType
   coverUrl  String?
   tags      String[]    @default([])
+  quotaTier String      @default("free")
+  entitlements Json     @default("{}")
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
   members       ProjectMember[]
+  invites       ProjectInvite[]
+  trackAccessGrants TrackAccessGrant[]
+  guestLinks    GuestLink[]
+  ownershipTransfers OwnershipTransferAudit[]
+  breakGlassAudits BreakGlassAccessAudit[]
+  activityEvents ActivityEvent[]
   tracks        Track[]
   notifications Notification[]
 
@@ -110,6 +184,8 @@ model ProjectMember {
   projectId String      @db.Uuid
   userId    String      @db.Uuid
   role      ProjectRole
+  capabilityPreset CapabilityPreset @default(legacy)
+  customCapabilities Json @default("{}")
   createdAt DateTime    @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -119,6 +195,132 @@ model ProjectMember {
   @@index([projectId])
   @@index([userId])
   @@index([userId, role])
+}
+
+model ProjectInvite {
+  id         String      @id @default(uuid()) @db.Uuid
+  projectId  String      @db.Uuid
+  createdById String     @db.Uuid
+  invitedUserId String?  @db.Uuid
+  invitedEmail String?
+  role       ProjectRole
+  scope      AccessScope @default(project)
+  trackId    String?     @db.Uuid
+  tokenHash  String      @unique
+  status     InviteStatus @default(pending)
+  customCapabilities Json @default("{}")
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  acceptedAt DateTime?
+  acceptedById String?   @db.Uuid
+  createdAt  DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  track   Track?   @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  createdBy User @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  acceptedBy User? @relation("InviteAcceptor", fields: [acceptedById], references: [id], onDelete: SetNull)
+  invitedUser User? @relation("InviteTargetUser", fields: [invitedUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([trackId])
+  @@index([invitedEmail])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model TrackAccessGrant {
+  id         String      @id @default(uuid()) @db.Uuid
+  projectId  String      @db.Uuid
+  trackId    String      @db.Uuid
+  userId     String      @db.Uuid
+  role       ProjectRole @default(viewer)
+  canDownload Boolean    @default(false)
+  customCapabilities Json @default("{}")
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  track   Track   @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([trackId, userId])
+  @@index([projectId])
+  @@index([trackId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model GuestLink {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @db.Uuid
+  trackId     String?  @db.Uuid
+  tokenHash   String   @unique
+  canListen   Boolean  @default(true)
+  canDownload Boolean  @default(false)
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  track   Track?  @relation(fields: [trackId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([trackId])
+  @@index([expiresAt])
+}
+
+model OwnershipTransferAudit {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @db.Uuid
+  fromUserId  String   @db.Uuid
+  toUserId    String   @db.Uuid
+  reason      String
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromUser User @relation("OwnershipTransferFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUser   User @relation("OwnershipTransferTo", fields: [toUserId], references: [id], onDelete: Restrict)
+
+  @@index([projectId])
+  @@index([fromUserId])
+  @@index([toUserId])
+}
+
+model BreakGlassAccessAudit {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @db.Uuid
+  adminUserId String   @db.Uuid
+  reason      String
+  status      BreakGlassStatus @default(active)
+  expiresAt   DateTime
+  releasedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  adminUser User @relation("BreakGlassInitiator", fields: [adminUserId], references: [id], onDelete: Restrict)
+
+  @@index([projectId])
+  @@index([adminUserId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model ActivityEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @db.Uuid
+  actorId   String?  @db.Uuid
+  type      String
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([actorId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 model Track {
@@ -138,6 +340,9 @@ model Track {
   tasks         Task[]
   annotations   Annotation[]
   notifications Notification[]
+  invites       ProjectInvite[]
+  accessGrants  TrackAccessGrant[]
+  guestLinks    GuestLink[]
 
   @@index([projectId])
   @@index([projectId, updatedAt])

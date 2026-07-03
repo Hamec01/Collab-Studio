@@ -11,10 +11,18 @@ import { requireAuth, requireProjectEditor, requireProjectMember, requireProject
 import { AppError } from "../middleware/errors";
 import { inviteRateLimit } from "../middleware/rateLimits";
 import {
+  acceptInviteSchema,
   addMemberSchema,
+  createGuestLinkSchema,
+  createInviteSchema,
+  createTrackGrantSchema,
+  guestLinkParamsSchema,
+  inviteParamsSchema,
   createProjectSchema,
   memberParamsSchema,
   projectParamsSchema,
+  trackGrantParamsSchema,
+  transferOwnershipSchema,
   updateMemberRoleSchema,
   updateProjectSchema,
 } from "../schemas/projects";
@@ -22,6 +30,13 @@ import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSche
 import { serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
 import { collaborationUserSelect } from "../serializers/collaboration";
 import { createProjectMemberNotifications } from "../services/notifications";
+import {
+  ensureVerifiedForProtectedWrite,
+  hashOpaqueToken,
+  newOpaqueToken,
+  nowUtc,
+  resolveProjectTrackAccess,
+} from "../services/stage3Access";
 
 const router = Router();
 
@@ -57,6 +72,21 @@ const projectInclude = {
 function requireCurrentUser(req: Request) {
   if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
   return req.user;
+}
+
+function requireVerifiedWriter(req: Request) {
+  const user = requireCurrentUser(req);
+  ensureVerifiedForProtectedWrite({
+    emailVerifiedAt: user.emailVerifiedAt,
+    ageAcknowledgedAt: user.ageAcknowledgedAt,
+  });
+  return user;
+}
+
+function requireCapability(req: Request, capability: keyof Express.ProjectAccess["capabilities"]) {
+  if (!req.projectAccess?.capabilities[capability]) {
+    throw new AppError(403, "FORBIDDEN", "Capability is not allowed for this scope");
+  }
 }
 
 function normalizeIdentifier(identifier: string) {
@@ -560,6 +590,291 @@ router.delete(
 );
 
 router.post(
+  "/:projectId/invites",
+  (req, _res, next) => {
+    projectParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectOwner,
+  inviteRateLimit,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId } = projectParamsSchema.parse(req.params);
+    const input = createInviteSchema.parse(req.body);
+
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    if (!project) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+    if (input.scope === "track" && !input.trackId) throw new AppError(400, "VALIDATION_ERROR", "trackId is required for track-scoped invites");
+    if (input.trackId) {
+      const track = await prisma.track.findFirst({ where: { id: input.trackId, projectId }, select: { id: true } });
+      if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+    }
+
+    const rawToken = newOpaqueToken();
+    const tokenHash = hashOpaqueToken(rawToken);
+    const invite = await prisma.projectInvite.create({
+      data: {
+        projectId,
+        createdById: user.id,
+        invitedUserId: input.userId ?? null,
+        invitedEmail: input.email?.toLowerCase() ?? null,
+        role: input.role,
+        scope: input.scope,
+        trackId: input.trackId ?? null,
+        tokenHash,
+        expiresAt: new Date(Date.now() + input.expiresInHours * 60 * 60 * 1000),
+      },
+      select: {
+        id: true,
+        projectId: true,
+        role: true,
+        scope: true,
+        trackId: true,
+        invitedEmail: true,
+        invitedUserId: true,
+        expiresAt: true,
+      },
+    });
+
+    await prisma.activityEvent.create({
+      data: {
+        projectId,
+        actorId: user.id,
+        type: "invite_created",
+        payload: { inviteId: invite.id, scope: invite.scope, role: invite.role },
+      },
+    });
+
+    res.status(201).json({ invite: { ...invite, expiresAt: invite.expiresAt.toISOString(), token: rawToken } });
+  }),
+);
+
+router.post(
+  "/:projectId/invites/accept",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId } = projectParamsSchema.parse(req.params);
+    const input = acceptInviteSchema.parse(req.body);
+    const tokenHash = hashOpaqueToken(input.token);
+    const now = nowUtc();
+
+    const invite = await prisma.projectInvite.findFirst({
+      where: { tokenHash, projectId },
+      select: {
+        id: true,
+        role: true,
+        scope: true,
+        trackId: true,
+        status: true,
+        revokedAt: true,
+        expiresAt: true,
+        invitedEmail: true,
+        invitedUserId: true,
+      },
+    });
+
+    if (!invite || invite.status !== "pending" || invite.revokedAt || invite.expiresAt <= now) {
+      throw new AppError(400, "INVITE_INVALID", "Invite is invalid or expired");
+    }
+
+    const me = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { id: true, email: true } });
+    if (invite.invitedUserId && invite.invitedUserId !== me.id) {
+      throw new AppError(403, "FORBIDDEN", "Invite is not assigned to current user");
+    }
+    if (invite.invitedEmail && invite.invitedEmail !== (me.email ?? "")) {
+      throw new AppError(403, "FORBIDDEN", "Invite email does not match current user");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.projectInvite.update({
+        where: { id: invite.id },
+        data: {
+          status: "accepted",
+          acceptedAt: now,
+          acceptedById: me.id,
+        },
+      });
+
+      if (invite.scope === "project") {
+        await tx.projectMember.upsert({
+          where: { projectId_userId: { projectId, userId: me.id } },
+          update: { role: invite.role },
+          create: { projectId, userId: me.id, role: invite.role },
+        });
+      } else if (invite.trackId) {
+        await tx.trackAccessGrant.upsert({
+          where: { trackId_userId: { trackId: invite.trackId, userId: me.id } },
+          update: { role: invite.role, revokedAt: null, expiresAt: null },
+          create: {
+            projectId,
+            trackId: invite.trackId,
+            userId: me.id,
+            role: invite.role,
+            canDownload: invite.role !== "viewer",
+          },
+        });
+      }
+
+      await tx.activityEvent.create({
+        data: {
+          projectId,
+          actorId: me.id,
+          type: "invite_accepted",
+          payload: { inviteId: invite.id, scope: invite.scope },
+        },
+      });
+    });
+
+    res.json({ success: true });
+  }),
+);
+
+router.post(
+  "/:projectId/invites/:inviteId/revoke",
+  (req, _res, next) => {
+    inviteParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectOwner,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId, inviteId } = inviteParamsSchema.parse(req.params);
+    await prisma.projectInvite.updateMany({
+      where: { id: inviteId, projectId, status: "pending", revokedAt: null },
+      data: { status: "revoked", revokedAt: nowUtc() },
+    });
+    await prisma.activityEvent.create({ data: { projectId, actorId: user.id, type: "invite_revoked", payload: { inviteId } } });
+    res.json({ success: true });
+  }),
+);
+
+router.post(
+  "/:projectId/owner/transfer",
+  (req, _res, next) => {
+    projectParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectOwner,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId } = projectParamsSchema.parse(req.params);
+    const input = transferOwnershipSchema.parse(req.body);
+
+    await prisma.$transaction(async (tx) => {
+      const target = await tx.projectMember.findUnique({ where: { projectId_userId: { projectId, userId: input.toUserId } } });
+      if (!target) throw new AppError(404, "MEMBER_NOT_FOUND", "Target owner must be a project member");
+      await tx.projectMember.update({ where: { projectId_userId: { projectId, userId: user.id } }, data: { role: "editor" } });
+      await tx.projectMember.update({ where: { projectId_userId: { projectId, userId: input.toUserId } }, data: { role: "owner" } });
+      await tx.ownershipTransferAudit.create({ data: { projectId, fromUserId: user.id, toUserId: input.toUserId, reason: input.reason } });
+      await tx.activityEvent.create({
+        data: {
+          projectId,
+          actorId: user.id,
+          type: "owner_transferred",
+          payload: { fromUserId: user.id, toUserId: input.toUserId },
+        },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    res.json({ success: true });
+  }),
+);
+
+router.post(
+  "/:projectId/tracks/:trackId/grants",
+  (req, _res, next) => {
+    trackGrantParamsSchema.parse({ ...req.params, userId: req.body?.userId });
+    next();
+  },
+  requireProjectOwner,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId, trackId } = trackParamsSchema.parse(req.params);
+    const input = createTrackGrantSchema.parse(req.body);
+    const track = await prisma.track.findFirst({ where: { id: trackId, projectId }, select: { id: true } });
+    if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+
+    const grant = await prisma.trackAccessGrant.upsert({
+      where: { trackId_userId: { trackId, userId: input.userId } },
+      update: {
+        role: input.role,
+        canDownload: input.canDownload,
+        customCapabilities: input.customCapabilities ?? {},
+        revokedAt: null,
+        expiresAt: input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 60 * 60 * 1000) : null,
+      },
+      create: {
+        projectId,
+        trackId,
+        userId: input.userId,
+        role: input.role,
+        canDownload: input.canDownload,
+        customCapabilities: input.customCapabilities ?? {},
+        expiresAt: input.expiresInHours ? new Date(Date.now() + input.expiresInHours * 60 * 60 * 1000) : null,
+      },
+    });
+
+    await prisma.activityEvent.create({ data: { projectId, actorId: user.id, type: "track_grant_upserted", payload: { trackId, userId: input.userId } } });
+    res.status(201).json({ grant });
+  }),
+);
+
+router.post(
+  "/:projectId/guest-links",
+  (req, _res, next) => {
+    projectParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectOwner,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId } = projectParamsSchema.parse(req.params);
+    const input = createGuestLinkSchema.parse(req.body);
+    if (input.trackId) {
+      const track = await prisma.track.findFirst({ where: { id: input.trackId, projectId }, select: { id: true } });
+      if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+    }
+    const token = newOpaqueToken();
+    const link = await prisma.guestLink.create({
+      data: {
+        projectId,
+        trackId: input.trackId ?? null,
+        tokenHash: hashOpaqueToken(token),
+        canDownload: input.canDownload,
+        expiresAt: new Date(Date.now() + input.expiresInHours * 60 * 60 * 1000),
+      },
+      select: {
+        id: true,
+        projectId: true,
+        trackId: true,
+        canListen: true,
+        canDownload: true,
+        expiresAt: true,
+      },
+    });
+    await prisma.activityEvent.create({ data: { projectId, actorId: user.id, type: "guest_link_created", payload: { guestLinkId: link.id } } });
+    res.status(201).json({ guestLink: { ...link, token, expiresAt: link.expiresAt.toISOString() } });
+  }),
+);
+
+router.post(
+  "/:projectId/guest-links/:guestLinkId/revoke",
+  (req, _res, next) => {
+    guestLinkParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectOwner,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId, guestLinkId } = guestLinkParamsSchema.parse(req.params);
+    await prisma.guestLink.updateMany({ where: { id: guestLinkId, projectId, revokedAt: null }, data: { revokedAt: nowUtc() } });
+    await prisma.activityEvent.create({ data: { projectId, actorId: user.id, type: "guest_link_revoked", payload: { guestLinkId } } });
+    res.json({ success: true });
+  }),
+);
+
+router.post(
   "/:projectId/leave",
   (req, _res, next) => {
     projectParamsSchema.parse(req.params);
@@ -610,7 +925,7 @@ router.post(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
     const { projectId } = projectParamsSchema.parse(req.params);
     const input = createTrackSchema.parse(req.body);
     const lyrics = input.lyrics ?? "";
@@ -666,6 +981,7 @@ router.patch(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
+    requireVerifiedWriter(req);
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
     const input = updateTrackSchema.parse(req.body);
 
@@ -700,7 +1016,7 @@ router.put(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
     const input = updateLyricsDraftSchema.parse(req.body);
 
@@ -782,7 +1098,7 @@ router.post(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
     const input = createLyricVersionSchema.parse(req.body);
     await getTrackOrThrow(projectId, trackId);
@@ -801,6 +1117,7 @@ router.patch(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
+    requireVerifiedWriter(req);
     const { projectId, trackId, versionId } = versionParamsSchema.parse(req.params);
 
     const version = await prisma.$transaction(async (tx) => {
@@ -825,7 +1142,8 @@ router.post(
   parseAudioMultipart,
   (req, res, next) => {
     void (async () => {
-      const user = requireCurrentUser(req);
+      const user = requireVerifiedWriter(req);
+      requireCapability(req, "canUploadAudio");
       const { projectId, trackId } = audioTrackParamsSchema.parse(req.params);
       let finalPath: string | undefined;
       let committed = false;
@@ -859,6 +1177,43 @@ router.post(
 
 const streamAudioHandler = asyncHandler(async (req, res, next) => {
   const { projectId, trackId, audioId } = audioStreamParamsSchema.parse(req.params);
+
+  if (req.user) {
+    const access = await resolveProjectTrackAccess({
+      prisma,
+      user: { id: req.user.id, role: req.user.role },
+      projectId,
+      trackId,
+      breakGlassProjectId: req.session.breakGlassProjectId,
+    });
+    if (!access) {
+      throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+    }
+  } else {
+    const guestToken = typeof req.query.guestToken === "string" ? req.query.guestToken : "";
+    if (!guestToken) {
+      throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
+    }
+    const tokenHash = hashOpaqueToken(guestToken);
+    const guestLink = await prisma.guestLink.findFirst({
+      where: {
+        tokenHash,
+        projectId,
+        OR: [{ trackId: null }, { trackId }],
+        revokedAt: null,
+        expiresAt: { gt: nowUtc() },
+        canListen: true,
+      },
+      select: { id: true, canDownload: true },
+    });
+    if (!guestLink) {
+      throw new AppError(404, "GUEST_LINK_NOT_FOUND", "Guest access token is invalid or expired");
+    }
+    if (req.query.download === "1" || req.query.download === "true") {
+      throw new AppError(403, "FORBIDDEN", "Guest links cannot download audio");
+    }
+  }
+
   const audio = await prisma.audioVersion.findFirst({ where: { id: audioId, trackId, track: { projectId } } });
   if (!audio) throw new AppError(404, "AUDIO_NOT_FOUND", "Audio version not found");
   if (audio.isExternal || !audio.storageKey || !audio.mimeType) throw new AppError(409, "EXTERNAL_AUDIO", "External audio is not available through the local stream endpoint");
@@ -905,14 +1260,39 @@ const streamAudioHandler = asyncHandler(async (req, res, next) => {
 router.head(
   "/:projectId/tracks/:trackId/audio/:audioId/stream",
   (req, _res, next) => { audioStreamParamsSchema.parse(req.params); next(); },
-  requireProjectMember,
   streamAudioHandler,
 );
 
 router.get(
   "/:projectId/tracks/:trackId/audio/:audioId/stream",
   (req, _res, next) => { audioStreamParamsSchema.parse(req.params); next(); },
+  streamAudioHandler,
+);
+
+router.get(
+  "/:projectId/tracks/:trackId/audio/:audioId/download",
+  (req, _res, next) => { audioStreamParamsSchema.parse(req.params); next(); },
   requireProjectMember,
+  asyncHandler(async (req, _res, next) => {
+    if (!req.user) {
+      next(new AppError(401, "UNAUTHENTICATED", "Authentication required"));
+      return;
+    }
+    const { projectId, trackId } = audioStreamParamsSchema.parse(req.params);
+    const access = await resolveProjectTrackAccess({
+      prisma,
+      user: { id: req.user.id, role: req.user.role },
+      projectId,
+      trackId,
+      breakGlassProjectId: req.session.breakGlassProjectId,
+    });
+    if (!access || !access.capabilities.canDownload) {
+      next(new AppError(403, "FORBIDDEN", "Download is not allowed for this scope"));
+      return;
+    }
+    req.query.download = "1";
+    next();
+  }),
   streamAudioHandler,
 );
 

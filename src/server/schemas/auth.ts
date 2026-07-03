@@ -25,6 +25,24 @@ export const registerSchema = z.object({
   email: z.preprocess((value) => (value === "" ? undefined : value), emailSchema.optional()),
   displayName: z.string().trim().min(1, "Display name is required").max(120, "Display name must be at most 120 characters"),
   password: passwordSchema,
+  ageAcknowledged: z.literal(true),
+});
+
+export const emailVerificationRequestSchema = z.object({
+  email: emailSchema,
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().trim().min(20).max(256),
+});
+
+export const passwordResetRequestSchema = z.object({
+  email: emailSchema,
+});
+
+export const passwordResetSchema = z.object({
+  token: z.string().trim().min(20).max(256),
+  password: passwordSchema,
 });
 
 export const loginSchema = z

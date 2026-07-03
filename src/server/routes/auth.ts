@@ -8,7 +8,15 @@ import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { AppError, sendError } from "../middleware/errors";
 import { authRateLimit } from "../middleware/rateLimits";
-import { loginSchema, registerSchema } from "../schemas/auth";
+import {
+  emailVerificationRequestSchema,
+  loginSchema,
+  passwordResetRequestSchema,
+  passwordResetSchema,
+  registerSchema,
+  verifyEmailSchema,
+} from "../schemas/auth";
+import { hashOpaqueToken, newOpaqueToken } from "../services/stage3Access";
 import { safeUserSelect, serializeUser } from "../services/users";
 import { getSessionCookieOptions } from "../session";
 
@@ -76,6 +84,32 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : undefined;
 }
 
+async function issueEmailVerificationToken(userId: string) {
+  const token = newOpaqueToken();
+  const tokenHash = hashOpaqueToken(token);
+  await prisma.emailVerificationToken.create({
+    data: {
+      userId,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    },
+  });
+  return token;
+}
+
+async function issuePasswordResetToken(userId: string) {
+  const token = newOpaqueToken();
+  const tokenHash = hashOpaqueToken(token);
+  await prisma.passwordResetToken.create({
+    data: {
+      userId,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+    },
+  });
+  return token;
+}
+
 function sanitizeUsernameSeed(value: string) {
   const normalized = value
     .normalize("NFKD")
@@ -135,15 +169,18 @@ router.post(
           displayName: input.displayName,
           passwordHash,
           role: "user",
+          ageAcknowledgedAt: input.ageAcknowledged ? new Date() : null,
         },
         select: safeUserSelect,
       });
+
+      const verificationToken = await issueEmailVerificationToken(user.id);
 
       await regenerateSession(req);
       req.session.userId = user.id;
       await saveSession(req);
 
-      res.status(201).json({ success: true, user: serializeUser(user) });
+      res.status(201).json({ success: true, user: serializeUser(user), verificationToken });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         throw new AppError(409, "ACCOUNT_EXISTS", "Username or email is already in use");
@@ -384,6 +421,7 @@ router.get(
             avatarUrl,
             passwordHash,
             role: "user",
+            emailVerifiedAt: new Date(),
           },
           select: { id: true },
         });
@@ -422,6 +460,143 @@ router.post(
       await destroySession(req);
     }
     res.clearCookie("collab.sid", getSessionCookieOptions());
+    res.json({ success: true });
+  }),
+);
+
+router.post(
+  "/verify-email/request",
+  authRateLimit,
+  asyncHandler(async (req, res) => {
+    const input = emailVerificationRequestSchema.parse(req.body);
+    const user = await prisma.user.findFirst({ where: { email: input.email }, select: { id: true } });
+    if (!user) {
+      res.json({ success: true });
+      return;
+    }
+
+    const token = await issueEmailVerificationToken(user.id);
+    res.json({ success: true, token });
+  }),
+);
+
+router.post(
+  "/verify-email/confirm",
+  authRateLimit,
+  asyncHandler(async (req, res) => {
+    const input = verifyEmailSchema.parse(req.body);
+    const tokenHash = hashOpaqueToken(input.token);
+    const now = new Date();
+
+    const token = await prisma.emailVerificationToken.findUnique({ where: { tokenHash } });
+    if (!token || token.usedAt || token.expiresAt <= now) {
+      throw new AppError(400, "INVALID_TOKEN", "Verification token is invalid or expired");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.emailVerificationToken.update({ where: { id: token.id }, data: { usedAt: now } });
+      await tx.user.update({ where: { id: token.userId }, data: { emailVerifiedAt: now } });
+    });
+
+    res.json({ success: true });
+  }),
+);
+
+router.post(
+  "/password/forgot",
+  authRateLimit,
+  asyncHandler(async (req, res) => {
+    const input = passwordResetRequestSchema.parse(req.body);
+    const user = await prisma.user.findFirst({ where: { email: input.email }, select: { id: true } });
+    if (!user) {
+      res.json({ success: true });
+      return;
+    }
+    const token = await issuePasswordResetToken(user.id);
+    res.json({ success: true, token });
+  }),
+);
+
+router.post(
+  "/password/reset",
+  authRateLimit,
+  asyncHandler(async (req, res) => {
+    const input = passwordResetSchema.parse(req.body);
+    const tokenHash = hashOpaqueToken(input.token);
+    const now = new Date();
+
+    const token = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+    if (!token || token.usedAt || token.expiresAt <= now) {
+      throw new AppError(400, "INVALID_TOKEN", "Password reset token is invalid or expired");
+    }
+
+    const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+    await prisma.$transaction(async (tx) => {
+      await tx.passwordResetToken.update({ where: { id: token.id }, data: { usedAt: now } });
+      await tx.user.update({ where: { id: token.userId }, data: { passwordHash } });
+    });
+
+    res.json({ success: true });
+  }),
+);
+
+router.post(
+  "/admin/break-glass/start",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.user || req.user.role !== "admin") {
+      throw new AppError(403, "FORBIDDEN", "Administrator access required");
+    }
+
+    const projectId = readString(req.body?.projectId);
+    const reason = readString(req.body?.reason)?.trim();
+    if (!projectId || !reason || reason.length < 8) {
+      throw new AppError(400, "VALIDATION_ERROR", "projectId and reason are required");
+    }
+
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    if (!project) {
+      throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+    }
+
+    const audit = await prisma.breakGlassAccessAudit.create({
+      data: {
+        projectId,
+        adminUserId: req.user.id,
+        reason,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 30),
+      },
+      select: { id: true, expiresAt: true },
+    });
+
+    req.session.breakGlassProjectId = projectId;
+    req.session.breakGlassAuditId = audit.id;
+    await saveSession(req);
+
+    res.json({ success: true, projectId, expiresAt: audit.expiresAt.toISOString() });
+  }),
+);
+
+router.post(
+  "/admin/break-glass/release",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.user || req.user.role !== "admin") {
+      throw new AppError(403, "FORBIDDEN", "Administrator access required");
+    }
+
+    const auditId = req.session.breakGlassAuditId;
+    if (auditId) {
+      await prisma.breakGlassAccessAudit.updateMany({
+        where: { id: auditId, status: "active" },
+        data: { status: "released", releasedAt: new Date() },
+      });
+    }
+
+    req.session.breakGlassProjectId = undefined;
+    req.session.breakGlassAuditId = undefined;
+    await saveSession(req);
+
     res.json({ success: true });
   }),
 );

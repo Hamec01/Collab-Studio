@@ -1,11 +1,39 @@
 import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../db";
 import { canEditProject, canOwnProject } from "../services/access";
+import { resolveProjectTrackAccess } from "../services/stage3Access";
 import { safeUserSelect } from "../services/users";
 import { sendError } from "./errors";
 
 function getProjectId(req: Request) {
   return req.params.projectId || req.params.id;
+}
+
+function getTrackId(req: Request) {
+  return req.params.trackId;
+}
+
+async function validateBreakGlassSession(req: Request, projectId: string) {
+  if (!req.user || req.user.role !== "admin") return;
+  const auditId = req.session.breakGlassAuditId;
+  const breakGlassProjectId = req.session.breakGlassProjectId;
+  if (!auditId || !breakGlassProjectId || breakGlassProjectId !== projectId) return;
+
+  const audit = await prisma.breakGlassAccessAudit.findFirst({
+    where: {
+      id: auditId,
+      projectId,
+      adminUserId: req.user.id,
+      status: "active",
+      expiresAt: { gt: new Date() },
+    },
+    select: { id: true },
+  });
+
+  if (!audit) {
+    req.session.breakGlassProjectId = undefined;
+    req.session.breakGlassAuditId = undefined;
+  }
 }
 
 function loadAuthenticatedUser(req: Request, res: Response, next: NextFunction, onLoaded: () => void) {
@@ -53,35 +81,29 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 export function requireProjectMember(req: Request, res: Response, next: NextFunction) {
   loadAuthenticatedUser(req, res, next, () => {
     const projectId = getProjectId(req);
+    const trackId = getTrackId(req);
     if (!projectId) {
       sendError(res, 400, "VALIDATION_ERROR", "Project id is required", req.requestId);
       return;
     }
 
-    prisma.project
-      .findUnique({
-        where: { id: projectId },
-        select: {
-          id: true,
-          members: {
-            where: { userId: req.user?.id },
-            select: { role: true },
-          },
-        },
-      })
-      .then((project) => {
-        if (!project) {
+    validateBreakGlassSession(req, projectId)
+      .then(() =>
+        resolveProjectTrackAccess({
+          prisma,
+          user: { id: req.user!.id, role: req.user!.role },
+          projectId,
+          trackId,
+          breakGlassProjectId: req.session.breakGlassProjectId,
+        }),
+      )
+      .then((access) => {
+        if (!access) {
           sendError(res, 404, "PROJECT_NOT_FOUND", "Project not found", req.requestId);
           return;
         }
 
-        const membership = project.members[0];
-        if (!membership) {
-          sendError(res, 404, "PROJECT_NOT_FOUND", "Project not found", req.requestId);
-          return;
-        }
-
-        req.projectAccess = { projectId, role: membership.role };
+        req.projectAccess = { projectId, role: access.role, capabilities: access.capabilities, source: access.source };
         next();
       })
       .catch(next);

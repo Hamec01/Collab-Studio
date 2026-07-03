@@ -22,6 +22,7 @@ import {
   serializeTask,
 } from "../serializers/collaboration";
 import { createProjectMemberNotifications } from "../services/notifications";
+import { ensureVerifiedForProtectedWrite } from "../services/stage3Access";
 
 const router = Router();
 
@@ -51,6 +52,21 @@ const annotationInclude = {
 function requireCurrentUser(req: Request) {
   if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
   return req.user;
+}
+
+function requireVerifiedWriter(req: Request) {
+  const user = requireCurrentUser(req);
+  ensureVerifiedForProtectedWrite({
+    emailVerifiedAt: user.emailVerifiedAt,
+    ageAcknowledgedAt: user.ageAcknowledgedAt,
+  });
+  return user;
+}
+
+function requireCapability(req: Request, capability: keyof Express.ProjectAccess["capabilities"]) {
+  if (!req.projectAccess?.capabilities[capability]) {
+    throw new AppError(403, "FORBIDDEN", "Capability is not allowed for this scope");
+  }
 }
 
 function validateTrackParams(req: Request, _res: Response, next: NextFunction) {
@@ -102,7 +118,8 @@ router.post(
   validateTrackParams,
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canComment");
     const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);
     const input = createCommentSchema.parse(req.body);
 
@@ -144,7 +161,8 @@ router.put(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canComment");
     const { projectId, trackId, commentId } = commentParamsSchema.parse(req.params);
     const input = resolveCommentSchema.parse(req.body ?? {});
     const comment = await prisma.$transaction(
@@ -177,7 +195,8 @@ router.post(
   validateTrackParams,
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canChat");
     const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);
     const input = createChatMessageSchema.parse(req.body);
     await requireTrack(projectId, trackId);
@@ -194,7 +213,8 @@ router.post(
   validateTrackParams,
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canCreateTask");
     const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);
     const input = createTaskSchema.parse(req.body);
     const task = await prisma.$transaction(
@@ -227,6 +247,8 @@ router.put(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
+    requireVerifiedWriter(req);
+    requireCapability(req, "canCreateTask");
     const { projectId, trackId, taskId } = taskParamsSchema.parse(req.params);
     const input = updateTaskSchema.parse(req.body);
     const task = await prisma.$transaction(
@@ -260,7 +282,8 @@ router.post(
   validateTrackParams,
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canComment");
     const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);
     const input = createAnnotationSchema.parse(req.body);
     await requireTrack(projectId, trackId);
