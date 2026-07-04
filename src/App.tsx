@@ -63,6 +63,7 @@ import { TrackLyricsWorkspace } from "./features/track-workspace/lyrics/TrackLyr
 import { buildLyricsDraftWrite, useLyricsDocumentDraft, withLyricsDraftSnapshot } from "./features/track-workspace/lyrics/useLyricsDocumentDraft";
 import { LYRICS_AUTOSAVE_DEBOUNCE_MS, LYRICS_RETRY_BASE_MS, LYRICS_RETRY_MAX_MS, type DraftSyncState } from "./features/track-workspace/lyrics/lyricsDraftRuntime";
 import { lyricsDocumentToPlainText, type LyricsDocument } from "./features/track-workspace/lyrics/lyricsDocument";
+import { createLyricSnapshot, downloadLocalLyricsDraft, exportLyricsTxt, restoreLyricSnapshot } from "./features/track-workspace/lyrics/lyricsSnapshots";
 import { featureFlags } from "./app/featureFlags";
 import { TrackContextPanel, type TrackSidebar } from "./features/track-workspace/TrackContextPanel";
 import { LyricsCommentsSheet } from "./features/track-workspace/lyrics/LyricsCommentsSheet";
@@ -749,72 +750,46 @@ export default function App() {
 
   const handleRestoreLocalDraft = async () => {
     const scope = currentDraftScope();
-    if (!scope || !activeTrack) return;
-    const localDraft = await readMergedDraft(scope);
-    if (!localDraft) {
-      setRestoreDraftSnapshot(null);
-      return;
-    }
+    const localDraft = scope && activeTrack ? await readMergedDraft(scope) : null;
+    if (!localDraft || !activeTrack) return void setRestoreDraftSnapshot(null);
     setDraftLyrics(localDraft.content);
     setLyricsSaveStatus(localDraft.syncState === "conflict" ? "conflict" : "dirty");
     if (featureFlags.lyricsStructuredEditor) lyricsDocumentDraft.loadLocal(localDraft);
     draftLyricsRef.current = localDraft.content;
-    setDraftRevision(activeTrack.lyricsRevision);
-    draftRevisionRef.current = activeTrack.lyricsRevision;
+    setDraftRevision(activeTrack.lyricsRevision); draftRevisionRef.current = activeTrack.lyricsRevision;
     setDraftServerUpdatedAt(activeTrack.updatedAt);
-    setLyricsStatusMessage("");
-    setRestoreDraftSnapshot(null);
+    setLyricsStatusMessage(""); setRestoreDraftSnapshot(null);
   };
 
   const handleUseServerDraft = async () => {
     const scope = currentDraftScope();
     if (!scope || !activeTrack) return;
-    setDraftLyrics(activeTrack.lyrics);
-    draftLyricsRef.current = activeTrack.lyrics;
+    setDraftLyrics(activeTrack.lyrics); draftLyricsRef.current = activeTrack.lyrics;
     if (featureFlags.lyricsStructuredEditor) lyricsDocumentDraft.loadTrack(activeTrack);
-    setDraftRevision(activeTrack.lyricsRevision);
-    draftRevisionRef.current = activeTrack.lyricsRevision;
+    setDraftRevision(activeTrack.lyricsRevision); draftRevisionRef.current = activeTrack.lyricsRevision;
     lastSyncedLyricsRef.current = activeTrack.lyrics;
     setDraftServerUpdatedAt(activeTrack.updatedAt);
-    setLyricsSaveStatus("saved");
-    setLyricsSavedAt(activeTrack.updatedAt);
-    setLyricsStatusMessage("");
-    setRestoreDraftSnapshot(null);
+    setLyricsSaveStatus("saved"); setLyricsSavedAt(activeTrack.updatedAt);
+    setLyricsStatusMessage(""); setRestoreDraftSnapshot(null);
     await removeLocalDraft(scope).catch(() => undefined);
   };
 
-  const handleDownloadLocalDraft = async () => {
-    const scope = currentDraftScope();
-    if (!scope) return;
-    const localDraft = await readMergedDraft(scope);
-    if (!localDraft) return;
-    const blob = new Blob([localDraft.content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `lyrics-draft-${scope.trackId}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  };
+  const handleDownloadLocalDraft = () => downloadLocalLyricsDraft({
+    trackTitle: activeTrack?.title ?? null,
+    readLocalDraft: async () => {
+      const scope = currentDraftScope();
+      return scope ? readMergedDraft(scope) : null;
+    },
+  });
 
   const handleCreateLyricVersion = async (label: string) => {
-    if (!activeProject || !activeTrack || !canEdit) return;
-    const synced = await forceSyncLyricsDraft();
-    if (!synced) {
-      setLyricsStatusMessage("Сначала синхронизируйте черновик с сервером");
-      return;
-    }
-    await withAuth(() =>
-      createLyricVersion(activeProject.id, activeTrack.id, {
-        lyrics: draftLyricsRef.current,
-        label,
-      }),
-    );
-    await refreshCurrentTrack();
+    await createLyricSnapshot({ activeProjectId: activeProject?.id ?? null, activeTrackId: activeTrack?.id ?? null, canEdit, syncDraft: forceSyncLyricsDraft, onSyncRequired: () => setLyricsStatusMessage("Сначала синхронизируйте черновик с сервером"), createVersion: (projectId, trackId, payload) => withAuth(() => createLyricVersion(projectId, trackId, payload)), structured: featureFlags.lyricsStructuredEditor, document: lyricsDocumentDraft.forPlainText(draftLyricsRef.current), plainText: draftLyricsRef.current, label, refreshTrack: refreshCurrentTrack });
     setLyricsSaveStatus("saved");
   };
+
+  const handleRestoreLyricVersion = (version: Track["lyricVersions"][number]) => restoreLyricSnapshot({ activeTrackId: activeTrack?.id ?? null, canEdit, isEditing: lyricsLease.isEditing, requestEdit: lyricsLease.requestEdit, version, structured: featureFlags.lyricsStructuredEditor, setDocument: lyricsDocumentDraft.setDocument, applyPlainText: handleDraftLyricsChange, clearSelection: () => setSelectedLineIndex(null), syncDraft: forceSyncLyricsDraft });
+
+  const handleExportLyricsTxt = (version: Track["lyricVersions"][number] | null) => exportLyricsTxt({ trackTitle: activeTrack?.title ?? null, version, structured: featureFlags.lyricsStructuredEditor, currentDocument: lyricsDocumentDraft.document, currentPlainText: draftLyricsRef.current });
 
   const handlePinVersion = async (versionId: string) => {
     if (!activeProject || !activeTrack) return;
@@ -1034,6 +1009,8 @@ export default function App() {
                   onChangeDraftLyrics={handleDraftLyricsChange}
                   onChangeDraftDocument={handleDraftDocumentChange}
                   onCreateVersion={handleCreateLyricVersion}
+                  onRestoreVersion={handleRestoreLyricVersion}
+                  onExportTxt={handleExportLyricsTxt}
                   onPinVersion={handlePinVersion}
                   onSelectLine={setSelectedLineIndex}
                   onStartEdit={lyricsLease.requestEdit}

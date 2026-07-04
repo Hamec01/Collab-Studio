@@ -25,6 +25,8 @@ type TrackLyricsWorkspaceProps = {
   onChangeDraftLyrics: (lyrics: string) => void;
   onChangeDraftDocument: (document: LyricsDocument) => void;
   onCreateVersion: (label: string) => Promise<void>;
+  onRestoreVersion: (version: LyricVersion) => Promise<boolean>;
+  onExportTxt: (version: LyricVersion | null) => void;
   onPinVersion: (versionId: string) => void;
   onSelectLine: (lineIndex: number | null) => void;
   onStartEdit: () => Promise<boolean>;
@@ -55,6 +57,8 @@ export function TrackLyricsWorkspace({
   onChangeDraftLyrics,
   onChangeDraftDocument,
   onCreateVersion,
+  onRestoreVersion,
+  onExportTxt,
   onPinVersion,
   onSelectLine,
   onStartEdit,
@@ -85,6 +89,8 @@ export function TrackLyricsWorkspace({
         draftLyrics={draftLyrics}
         onChangeDraftLyrics={onChangeDraftLyrics}
         onCreateVersion={onCreateVersion}
+        onRestoreVersion={onRestoreVersion}
+        onExportTxt={onExportTxt}
         draftDocument={draftDocument}
         structuredEditorEnabled={featureFlags.lyricsStructuredEditor}
         onChangeDraftDocument={onChangeDraftDocument}

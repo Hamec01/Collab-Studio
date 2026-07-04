@@ -78,7 +78,11 @@ export function pinLyricVersion(projectId: string, trackId: string, versionId: s
   });
 }
 
-export function createLyricVersion(projectId: string, trackId: string, payload: { lyrics: string; label: string }) {
+export function createLyricVersion(
+  projectId: string,
+  trackId: string,
+  payload: { lyrics: string; label: string } | { document: LyricsDocument; label: string },
+) {
   return apiRequest<LyricVersion>(`/api/projects/${projectId}/tracks/${trackId}/versions`, {
     method: "POST",
     body: payload,

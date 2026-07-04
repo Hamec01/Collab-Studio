@@ -6,6 +6,7 @@ import {
   lyricsDocumentToPlainText,
 } from "../features/track-workspace/lyrics/lyricsDocument";
 import {
+  parseCreateLyricVersion,
   parseUpdateLyricsDraft,
   updateLyricsDraftSchema,
 } from "../server/schemas/tracks";
@@ -72,6 +73,23 @@ describe("Stage 4B draft payload compatibility", () => {
       baseRevision: 0,
       leaseToken,
     }).success).toBe(false);
+  });
+
+  it("accepts both legacy and structured manual snapshot payloads", () => {
+    expect(parseCreateLyricVersion({
+      lyrics: "plain snapshot",
+      label: "Legacy",
+    })).toEqual({
+      lyrics: "plain snapshot",
+      label: "Legacy",
+    });
+
+    const parsed = parseCreateLyricVersion({
+      document: structured,
+      label: "Structured",
+    });
+
+    expect("document" in parsed && parsed.document.blocks[0].id).toBe("heading_001");
   });
 });
 

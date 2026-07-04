@@ -15,6 +15,8 @@ function buildProps(overrides: Partial<React.ComponentProps<typeof LyricsEditor>
     draftLyrics: "line one\nline two",
     onChangeDraftLyrics: vi.fn(),
     onCreateVersion: vi.fn(async () => {}),
+    onRestoreVersion: vi.fn(async () => true),
+    onExportTxt: vi.fn(),
     onPinVersion: vi.fn(),
     versionHistory: [],
     selectedLineIndex: 0,
@@ -73,6 +75,59 @@ describe("LyricsEditor discussion flow", () => {
     await user.click(editButtons[0]);
 
     expect(screen.queryByPlaceholderText("Вставьте или напишите текст песни...")).not.toBeInTheDocument();
+  });
+
+  it("restores a historical snapshot through the provided callback", async () => {
+    const user = userEvent.setup();
+    const onRestoreVersion = vi.fn(async () => true);
+
+    renderWithI18n(
+      <LyricsEditor
+        {...buildProps({
+          versionHistory: [{
+            id: "version-1",
+            lyrics: "snapshot text",
+            authorId: "user-1",
+            label: "Куплет 2",
+            isOriginal: false,
+            timestamp: "2026-07-04T09:00:00.000Z",
+            createdAt: "2026-07-04T09:00:00.000Z",
+          }],
+          onRestoreVersion,
+          selectedLineIndex: null,
+        })}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole("combobox"), "version-1");
+    await user.click(screen.getByRole("button", { name: "Восстановить" }));
+
+    expect(onRestoreVersion).toHaveBeenCalledWith(expect.objectContaining({ id: "version-1", label: "Куплет 2" }));
+  });
+
+  it("disables snapshot restore for read-only users", async () => {
+    const user = userEvent.setup();
+
+    renderWithI18n(
+      <LyricsEditor
+        {...buildProps({
+          canEdit: false,
+          versionHistory: [{
+            id: "version-1",
+            lyrics: "snapshot text",
+            authorId: "user-1",
+            label: "Куплет 2",
+            isOriginal: false,
+            timestamp: "2026-07-04T09:00:00.000Z",
+            createdAt: "2026-07-04T09:00:00.000Z",
+          }],
+          selectedLineIndex: null,
+        })}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole("combobox"), "version-1");
+    expect(screen.getByRole("button", { name: "Восстановить" })).toBeDisabled();
   });
 });
 

@@ -26,7 +26,7 @@ import {
   updateMemberRoleSchema,
   updateProjectSchema,
 } from "../schemas/projects";
-import { audioStreamParamsSchema, audioTrackParamsSchema, createLyricVersionSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, lyricsLeaseTokenSchema, parseUpdateLyricsDraft, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
+import { audioStreamParamsSchema, audioTrackParamsSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, lyricsLeaseTokenSchema, parseCreateLyricVersion, parseUpdateLyricsDraft, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
 import { serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
 import {
   prepareLyricsWrite,
@@ -1204,9 +1204,11 @@ router.post(
   asyncHandler(async (req, res) => {
     const user = requireVerifiedWriter(req);
     const { projectId, trackId } = trackParamsSchema.parse(req.params);
-    const input = createLyricVersionSchema.parse(req.body);
+    const input = parseCreateLyricVersion(req.body);
     await getTrackOrThrow(projectId, trackId);
-    const preparedLyrics = prepareLyricsWrite({ content: input.lyrics, baseRevision: 0, leaseToken: "" });
+    const preparedLyrics = "document" in input
+      ? prepareLyricsWrite({ document: input.document, baseRevision: 0, leaseToken: "" })
+      : prepareLyricsWrite({ content: input.lyrics, baseRevision: 0, leaseToken: "" });
     const version = await prisma.lyricVersion.create({
       data: {
         trackId,

@@ -26,6 +26,8 @@ interface LyricsEditorProps {
   onChangeDraftLyrics: (newLyrics: string) => void;
   onChangeDraftDocument?: (document: LyricsDocument) => void;
   onCreateVersion: (label: string) => Promise<void>;
+  onRestoreVersion: (version: LyricVersion) => Promise<boolean>;
+  onExportTxt: (version: LyricVersion | null) => void;
   onPinVersion?: (versionId: string) => void;
   versionHistory: LyricVersion[];
   selectedLineIndex: number | null;
@@ -53,6 +55,8 @@ export default function LyricsEditor({
   onChangeDraftLyrics,
   onChangeDraftDocument,
   onCreateVersion,
+  onRestoreVersion,
+  onExportTxt,
   onPinVersion,
   versionHistory = [],
   isEditing,
@@ -78,6 +82,7 @@ export default function LyricsEditor({
   const [showHistory, setShowHistory] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<string>("current");
+  const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isFullscreen) {
@@ -140,6 +145,17 @@ export default function LyricsEditor({
     return acquired;
   };
 
+  const handleRestoreVersion = async (version: LyricVersion) => {
+    if (!canEdit || restoringVersionId) return;
+    setRestoringVersionId(version.id);
+    try {
+      const restored = await onRestoreVersion(version);
+      if (restored) setSelectedVersionId("current");
+    } finally {
+      setRestoringVersionId(null);
+    }
+  };
+
   const lyricAuthor = (authorId: string | null) => (authorId ? authorId.slice(0, 8) : "Deleted user");
 
   const originalVersion = versionHistory.find((v) => v.isOriginal);
@@ -175,6 +191,15 @@ export default function LyricsEditor({
                 <History className="w-4 h-4" />
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => onExportTxt(activeVersion ?? null)}
+              className="px-2.5 py-2 rounded-lg text-[11px] font-semibold text-neutral-300 hover:text-white bg-neutral-900/50"
+              title="Экспорт TXT"
+            >
+              TXT
+            </button>
 
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
@@ -300,18 +325,11 @@ export default function LyricsEditor({
                 </button>
               )}
                     <button
-                      onClick={() => void (async () => {
-                        if (!canEdit) return;
-                        if (confirm("Применить эту версию к текущему черновику?")) {
-                          if (!(await handleStartEdit())) return;
-                          onChangeDraftLyrics(activeVersion.lyrics);
-                          setSelectedVersionId("current");
-                        }
-                      })()}
-                disabled={!canEdit}
+                      onClick={() => void handleRestoreVersion(activeVersion)}
+                disabled={!canEdit || restoringVersionId !== null}
                 className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg transition-all cursor-pointer shadow-md shrink-0"
               >
-                Применить
+                {restoringVersionId === activeVersion.id ? "Восстанавливаем..." : "Восстановить"}
               </button>
             </div>
           </div>
@@ -358,17 +376,11 @@ export default function LyricsEditor({
                   </div>
                   <div className="flex flex-col gap-1.5 shrink-0">
                     <button
-                      onClick={() => void (async () => {
-                        if (confirm(`Применить версию \"${ver.label}\" к текущему черновику?`)) {
-                          if (!(await handleStartEdit())) return;
-                          onChangeDraftLyrics(ver.lyrics);
-                          setSelectedVersionId("current");
-                        }
-                      })()}
-                      disabled={!canEdit}
+                      onClick={() => void handleRestoreVersion(ver)}
+                      disabled={!canEdit || restoringVersionId !== null}
                       className="text-[10px] bg-indigo-950/40 hover:bg-indigo-900/40 border border-indigo-900/30 hover:border-indigo-500 text-indigo-400 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer font-bold shrink-0 text-center"
                     >
-                      Применить
+                      {restoringVersionId === ver.id ? "Восстанавливаем..." : "Восстановить"}
                     </button>
                     {onPinVersion && (
                       <button

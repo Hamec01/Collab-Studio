@@ -23,6 +23,8 @@ function renderEditor(
         onChangeDraftLyrics={vi.fn()}
         onChangeDraftDocument={vi.fn()}
         onCreateVersion={vi.fn(async () => {})}
+        onRestoreVersion={vi.fn(async () => true)}
+        onExportTxt={vi.fn()}
         onPinVersion={vi.fn()}
         versionHistory={[]}
         selectedLineIndex={null}

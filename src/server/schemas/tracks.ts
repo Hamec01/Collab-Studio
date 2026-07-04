@@ -32,11 +32,6 @@ export const updateTrackSchema = z
   })
   .refine((value) => Object.keys(value).some((key) => key !== "versionLabel"), { message: "At least one track field is required" });
 
-export const createLyricVersionSchema = z.object({
-  lyrics: z.string().min(1).max(200000),
-  label: z.string().trim().min(1).max(160),
-});
-
 export const lyricsLeaseTokenSchema = z.object({
   leaseToken: z.string().min(32).max(256).regex(/^[a-zA-Z0-9_-]+$/),
 });
@@ -50,6 +45,32 @@ const lyricsDraftBaseSchema = {
 const structuredLyricsDocumentSchema = z
   .unknown()
   .refine(isLyricsDocument, "Invalid lyrics document");
+
+const lyricVersionLabelSchema = z.string().trim().min(1).max(160);
+
+export const createLyricVersionSchema = z.union([
+  z.object({
+    lyrics: z.string().min(1).max(200000),
+    label: lyricVersionLabelSchema,
+  }).strict(),
+  z.object({
+    document: structuredLyricsDocumentSchema,
+    label: lyricVersionLabelSchema,
+  }).strict(),
+]);
+
+export type CreateLyricVersionInput =
+  | { lyrics: string; label: string }
+  | { document: LyricsDocument; label: string };
+
+export function parseCreateLyricVersion(input: unknown): CreateLyricVersionInput {
+  const parsed = createLyricVersionSchema.parse(input);
+  if ("lyrics" in parsed) return parsed;
+  return {
+    document: normalizeLyricsDocument(parsed.document),
+    label: parsed.label,
+  };
+}
 
 export const updateLyricsDraftSchema = z.union([
   z.object(lyricsDraftBaseSchema).strict(),

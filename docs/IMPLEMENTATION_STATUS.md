@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 4B`
-- Active slice: slice 5 completed locally — limited structured editor UI за feature flag; ожидание отдельного подтверждения следующего slice
+- Active slice: slice 6 completed locally — rich lyric snapshots и TXT export за existing feature-flag split; ожидание отдельного подтверждения следующего slice
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -58,8 +58,9 @@ Stage 4B:
 1. Foundation slices 1–2 завершены в `97aca32`.
 2. Persistence slices 3–4 завершены в `fbc6ec4`: additive migration, dual-read/write, bounded resumable backfill и rollback rehearsal.
 3. Slice 5 завершён локально: Lexical adapter, paragraph/heading, bold/italic, history, sanitized paste и structured draft compatibility за default-off flag.
-4. Следующий slice не начинать без отдельного подтверждения.
-5. Comments/anchors, rich snapshots UI, audio migration и public/social scope не начаты.
+4. Slice 6 завершён локально: structured/manual lyric snapshots, restore через обычный reviewed save с existing lease+OCC semantics и TXT export from derived plain text.
+5. Следующий slice не начинать без отдельного подтверждения.
+6. Comments/anchors, audio migration и public/social scope не начаты.
 
 ## Журнал slices
 
@@ -74,6 +75,7 @@ Stage 4B:
 | 2026-07-03 | Stage 4B slices 1–2 | Зафиксированы Lexical ADR, app-owned document contract, pure codec, deterministic serialization и migration rehearsal plan | `main@97aca32` | lint/test/build/diff PASS; 68 Vitest tests | Stage 4B persistence только после отдельного подтверждения |
 | 2026-07-03 | Stage 4B slices 3–4 | Добавлены nullable structured fields, legacy/structured dual-read/write, atomic lease+OCC save и bounded resumable backfill | `main`, local commit | prisma validate; empty/existing/repeat/Stage 4A rollback rehearsal; lint/test/build/e2e/diff PASS; 77 Vitest tests; zero mismatches | Следующий Stage 4B slice только после отдельного подтверждения |
 | 2026-07-04 | Stage 4B slice 5 | Добавлен limited Lexical editor adapter: paragraph/heading, bold/italic, undo/redo, canonical paste, structured load/save и additive local draft envelope; flag default false | `main`, local commit | lint/test/build/e2e/diff PASS; 89 tests; App.tsx 1182 lines; EDITOR UI PASSED | Следующий Stage 4B slice только после отдельного подтверждения |
+| 2026-07-04 | Stage 4B slice 6 | Добавлены structured/manual lyric snapshots, restore через обычный reviewed save с existing lease+OCC semantics, legacy snapshot compatibility и TXT export from derived plain text | `main`, local commit | prisma validate; lint/test/build/e2e/diff PASS; 99 tests; App.tsx 1159 lines; SNAPSHOTS PASSED | Следующий Stage 4B slice только после отдельного подтверждения |
 
 ## Blockers
 
