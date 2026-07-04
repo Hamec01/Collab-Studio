@@ -3,6 +3,12 @@ import { Edit3, Eye, Save, History, MessageSquare, Maximize2, Minimize2, ArrowRi
 import { LyricVersion } from "../types";
 import { useI18n } from "../app/i18n/I18nProvider";
 import type { LyricsEditState } from "../features/track-workspace/lyrics/useLyricsEditLease";
+import type { LyricsDocument } from "../features/track-workspace/lyrics/lyricsDocument";
+
+const StructuredLyricsEditor = React.lazy(async () => {
+  const adapter = await import("../features/track-workspace/lyrics/StructuredLyricsEditor");
+  return { default: adapter.StructuredLyricsEditor };
+});
 
 export type LyricsSaveStatus = "idle" | "dirty" | "saving" | "saved" | "local" | "error" | "conflict";
 
@@ -15,7 +21,10 @@ export type RestoreDraftSnapshot = {
 
 interface LyricsEditorProps {
   draftLyrics: string;
+  draftDocument?: LyricsDocument;
+  structuredEditorEnabled?: boolean;
   onChangeDraftLyrics: (newLyrics: string) => void;
+  onChangeDraftDocument?: (document: LyricsDocument) => void;
   onCreateVersion: (label: string) => Promise<void>;
   onPinVersion?: (versionId: string) => void;
   versionHistory: LyricVersion[];
@@ -39,7 +48,10 @@ interface LyricsEditorProps {
 
 export default function LyricsEditor({
   draftLyrics,
+  draftDocument,
+  structuredEditorEnabled = false,
   onChangeDraftLyrics,
+  onChangeDraftDocument,
   onCreateVersion,
   onPinVersion,
   versionHistory = [],
@@ -376,17 +388,27 @@ export default function LyricsEditor({
               ))}
           </div>
         ) : isEditing ? (
-          /* TEXTAREA EDIT MODE */
           <div className="flex-1 flex flex-col gap-3">
-            <textarea
-              value={draftLyrics}
-              onChange={(e) => onChangeDraftLyrics(e.target.value)}
-              placeholder="Вставьте или напишите текст песни..."
-              readOnly={!canEdit}
-              className={`flex-1 bg-neutral-900/40 border border-neutral-800 focus:border-indigo-500 rounded-xl p-3 text-sm text-neutral-200 focus:outline-none font-serif leading-relaxed resize-none ${
-                isFullscreen ? "min-h-[400px] text-base p-5" : "min-h-[260px]"
-              }`}
-            />
+            {structuredEditorEnabled && draftDocument && onChangeDraftDocument ? (
+              <React.Suspense fallback={<div className="min-h-[260px] rounded-xl border border-neutral-800 bg-neutral-900/40" aria-label="Загрузка редактора" />}>
+                <StructuredLyricsEditor
+                  document={draftDocument}
+                  onChange={onChangeDraftDocument}
+                  readOnly={!canEdit}
+                  fullscreen={isFullscreen}
+                />
+              </React.Suspense>
+            ) : (
+              <textarea
+                value={draftLyrics}
+                onChange={(e) => onChangeDraftLyrics(e.target.value)}
+                placeholder="Вставьте или напишите текст песни..."
+                readOnly={!canEdit}
+                className={`flex-1 bg-neutral-900/40 border border-neutral-800 focus:border-indigo-500 rounded-xl p-3 text-sm text-neutral-200 focus:outline-none font-serif leading-relaxed resize-none ${
+                  isFullscreen ? "min-h-[400px] text-base p-5" : "min-h-[260px]"
+                }`}
+              />
+            )}
 
             <div className="flex flex-col gap-2 pt-1">
               <input

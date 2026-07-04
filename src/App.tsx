@@ -60,23 +60,19 @@ import {
 } from "./app/draft/draftInterface";
 import { useLyricsEditLease } from "./features/track-workspace/lyrics/useLyricsEditLease";
 import { TrackLyricsWorkspace } from "./features/track-workspace/lyrics/TrackLyricsWorkspace";
+import { buildLyricsDraftWrite, useLyricsDocumentDraft, withLyricsDraftSnapshot } from "./features/track-workspace/lyrics/useLyricsDocumentDraft";
+import { LYRICS_AUTOSAVE_DEBOUNCE_MS, LYRICS_RETRY_BASE_MS, LYRICS_RETRY_MAX_MS, type DraftSyncState } from "./features/track-workspace/lyrics/lyricsDraftRuntime";
+import { lyricsDocumentToPlainText, type LyricsDocument } from "./features/track-workspace/lyrics/lyricsDocument";
+import { featureFlags } from "./app/featureFlags";
 import { TrackContextPanel, type TrackSidebar } from "./features/track-workspace/TrackContextPanel";
 import { LyricsCommentsSheet } from "./features/track-workspace/lyrics/LyricsCommentsSheet";
 import { LyricsPlayerPlaceholder } from "./features/track-workspace/lyrics/LyricsPlayerPlaceholder";
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
-
 type MobileTab = "projects" | "editor" | "rightPanel";
 type ExternalProvider = "google" | "yandex" | "telegram" | "other";
-
 const AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
 const AUDIO_ACCEPT = ".mp3,.wav,.flac,.ogg,.aac,.m4a,.webm,audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/ogg,audio/aac,audio/mp4,audio/webm";
-const LYRICS_AUTOSAVE_DEBOUNCE_MS = 1500;
-const LYRICS_RETRY_BASE_MS = 1200;
-const LYRICS_RETRY_MAX_MS = 30000;
-
-type DraftSyncState = "local-only" | "synced" | "conflict" | "error";
-
 export default function App() {
   const { t } = useI18n();
   const {
@@ -115,6 +111,7 @@ export default function App() {
   const [draftServerUpdatedAt, setDraftServerUpdatedAt] = useState<string | null>(null);
   const [lyricsSaveStatus, setLyricsSaveStatus] = useState<LyricsSaveStatus>("idle");
   const [lyricsSavedAt, setLyricsSavedAt] = useState<string | null>(null);
+  const lyricsDocumentDraft = useLyricsDocumentDraft();
   const [lyricsStatusMessage, setLyricsStatusMessage] = useState<string>("");
   const [restoreDraftSnapshot, setRestoreDraftSnapshot] = useState<RestoreDraftSnapshot | null>(null);
 
@@ -201,6 +198,7 @@ export default function App() {
     queuedLyricsRef.current = null;
     retryAttemptRef.current = 0;
     persistFailureRef.current = false;
+    lyricsDocumentDraft.reset();
     setDraftLyrics("");
     setDraftRevision(null);
     setDraftServerUpdatedAt(null);
@@ -225,6 +223,7 @@ export default function App() {
     try {
       await writeLocalDraft(scope, {
         content,
+        document: featureFlags.lyricsStructuredEditor ? lyricsDocumentDraft.forPlainText(content) : undefined,
         baseRevision: draftRevisionRef.current ?? undefined,
         serverUpdatedAt: draftServerUpdatedAt ?? undefined,
         syncState,
@@ -242,6 +241,7 @@ export default function App() {
     saveEmergencyDraft({
       key: scope.key,
       content,
+      document: featureFlags.lyricsStructuredEditor ? lyricsDocumentDraft.forPlainText(content) : undefined,
       savedAt: new Date().toISOString(),
       baseRevision: draftRevisionRef.current ?? undefined,
       serverUpdatedAt: draftServerUpdatedAt ?? undefined,
@@ -279,13 +279,8 @@ export default function App() {
     };
   }, []);
 
-  const updateTrackDraftState = (projectId: string, trackId: string, lyrics: string, lyricsRevision: number, updatedAt: string) => {
-    updateTrackInProjects(projectId, trackId, (track) => ({
-      ...track,
-      lyrics,
-      lyricsRevision,
-      updatedAt,
-    }));
+  const updateTrackDraftState = (projectId: string, trackId: string, lyrics: string, lyricsRevision: number, updatedAt: string, lyricsDocument?: LyricsDocument) => {
+    updateTrackInProjects(projectId, trackId, (track) => withLyricsDraftSnapshot(track, lyrics, lyricsRevision, updatedAt, lyricsDocument));
   };
 
   const refreshCurrentTrack = async () => {
@@ -327,12 +322,11 @@ export default function App() {
     setLyricsStatusMessage("");
 
     try {
+      const baseRevision = draftRevisionRef.current!;
+      const leaseToken = lyricsLease.leaseToken!;
+      const payload = buildLyricsDraftWrite(featureFlags.lyricsStructuredEditor, lyricsDocumentDraft.forPlainText(content), content, baseRevision, leaseToken);
       const response = await withAuth(() =>
-        saveLyricsDraft(scope.projectId, scope.trackId, {
-          content,
-          baseRevision: draftRevisionRef.current!,
-          leaseToken: lyricsLease.leaseToken!,
-        }),
+        saveLyricsDraft(scope.projectId, scope.trackId, payload),
       );
 
       if (generation !== draftGenerationRef.current) return false;
@@ -349,7 +343,8 @@ export default function App() {
         setLyricsSavedAt(response.updatedAt);
         setLyricsStatusMessage("");
         lastSyncedLyricsRef.current = response.content;
-        updateTrackDraftState(scope.projectId, scope.trackId, response.content, response.revision, response.updatedAt);
+        if (featureFlags.lyricsStructuredEditor) lyricsDocumentDraft.setDocument(response.document);
+        updateTrackDraftState(scope.projectId, scope.trackId, response.content, response.revision, response.updatedAt, featureFlags.lyricsStructuredEditor ? response.document : undefined);
         await removeLocalDraft(scope).catch(() => undefined);
       } else {
         setLyricsSaveStatus("dirty");
@@ -374,7 +369,7 @@ export default function App() {
         await persistLocalDraft("conflict", content);
         const latest = await withAuth(() => getTrack(scope.projectId, scope.trackId)).catch(() => null);
         if (latest) {
-          updateTrackDraftState(scope.projectId, scope.trackId, latest.lyrics, latest.lyricsRevision, latest.updatedAt);
+          updateTrackDraftState(scope.projectId, scope.trackId, latest.lyrics, latest.lyricsRevision, latest.updatedAt, latest.lyricsDocument);
           setRestoreDraftSnapshot({
             localSavedAt: new Date().toISOString(),
             serverUpdatedAt: latest.updatedAt,
@@ -542,6 +537,7 @@ export default function App() {
 
     const scope = buildDraftScope(currentUser.id, activeProject.id, activeTrack.id);
     setDraftLyrics(activeTrack.lyrics);
+    if (featureFlags.lyricsStructuredEditor) lyricsDocumentDraft.loadTrack(activeTrack);
     setDraftRevision(activeTrack.lyricsRevision);
     setDraftServerUpdatedAt(activeTrack.updatedAt);
     setLyricsSaveStatus("idle");
@@ -569,6 +565,7 @@ export default function App() {
       }
 
       setDraftLyrics(localDraft.content);
+      if (featureFlags.lyricsStructuredEditor) lyricsDocumentDraft.loadLocal(localDraft);
       draftLyricsRef.current = localDraft.content;
       setRestoreDraftSnapshot({
         localSavedAt: localDraft.savedAt,
@@ -612,11 +609,7 @@ export default function App() {
           method: "PUT",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: draftLyricsRef.current,
-            baseRevision: draftRevisionRef.current,
-            leaseToken: lyricsLease.leaseToken,
-          }),
+          body: JSON.stringify(buildLyricsDraftWrite(featureFlags.lyricsStructuredEditor, lyricsDocumentDraft.forPlainText(draftLyricsRef.current), draftLyricsRef.current, draftRevisionRef.current, lyricsLease.leaseToken)),
           keepalive: true,
         }).catch(() => undefined);
       }
@@ -740,7 +733,8 @@ export default function App() {
     );
   };
 
-  const handleDraftLyricsChange = (newLyrics: string) => {
+  const handleDraftLyricsChange = (newLyrics: string, preserveDocument = false) => {
+    if (featureFlags.lyricsStructuredEditor && !preserveDocument) lyricsDocumentDraft.setPlainText(newLyrics);
     draftLyricsRef.current = newLyrics;
     setDraftLyrics(newLyrics);
     if (!canEdit) return;
@@ -750,6 +744,8 @@ export default function App() {
     void persistLocalDraft("local-only", newLyrics);
     scheduleLyricsAutosave(newLyrics);
   };
+
+  const handleDraftDocumentChange = (document: LyricsDocument) => { lyricsDocumentDraft.setDocument(document); handleDraftLyricsChange(lyricsDocumentToPlainText(document), true); };
 
   const handleRestoreLocalDraft = async () => {
     const scope = currentDraftScope();
@@ -761,6 +757,7 @@ export default function App() {
     }
     setDraftLyrics(localDraft.content);
     setLyricsSaveStatus(localDraft.syncState === "conflict" ? "conflict" : "dirty");
+    if (featureFlags.lyricsStructuredEditor) lyricsDocumentDraft.loadLocal(localDraft);
     draftLyricsRef.current = localDraft.content;
     setDraftRevision(activeTrack.lyricsRevision);
     draftRevisionRef.current = activeTrack.lyricsRevision;
@@ -774,6 +771,7 @@ export default function App() {
     if (!scope || !activeTrack) return;
     setDraftLyrics(activeTrack.lyrics);
     draftLyricsRef.current = activeTrack.lyrics;
+    if (featureFlags.lyricsStructuredEditor) lyricsDocumentDraft.loadTrack(activeTrack);
     setDraftRevision(activeTrack.lyricsRevision);
     draftRevisionRef.current = activeTrack.lyricsRevision;
     lastSyncedLyricsRef.current = activeTrack.lyrics;
@@ -1024,6 +1022,7 @@ export default function App() {
                   track={activeTrack}
                   canEdit={canEdit}
                   draftLyrics={draftLyrics}
+                  draftDocument={lyricsDocumentDraft.document}
                   isEditing={lyricsLease.isEditing}
                   editState={lyricsLease.editState}
                   saveStatus={lyricsSaveStatus}
@@ -1033,6 +1032,7 @@ export default function App() {
                   selectedLineIndex={selectedLineIndex}
                   selectedAudioVersionId={selectedAudioVersionId}
                   onChangeDraftLyrics={handleDraftLyricsChange}
+                  onChangeDraftDocument={handleDraftDocumentChange}
                   onCreateVersion={handleCreateLyricVersion}
                   onPinVersion={handlePinVersion}
                   onSelectLine={setSelectedLineIndex}

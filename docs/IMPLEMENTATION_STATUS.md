@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 3 июля 2026 года  
+Последнее обновление: 4 июля 2026 года
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 4B`
-- Active slice: slices 3–4 completed locally — structured persistence, dual-write и resumable backfill; ожидание отдельного подтверждения следующего slice
+- Active slice: slice 5 completed locally — limited structured editor UI за feature flag; ожидание отдельного подтверждения следующего slice
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -40,7 +40,7 @@
 | Stage 2 — i18n, design tokens и shell | completed | Пройден |
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
-| Stage 4B — WYSIWYG и stable anchors | pending | Foundation + persistence slices пройдены; editor/anchors не начаты |
+| Stage 4B — WYSIWYG и stable anchors | pending | Foundation, persistence и limited editor UI slices пройдены; anchors не начаты |
 | Stage 5A — TrackAsset migration | pending | Не начат |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
@@ -56,9 +56,10 @@
 Stage 4B:
 
 1. Foundation slices 1–2 завершены в `97aca32`.
-2. Persistence slices 3–4 завершены локально: additive migration, dual-read/write, bounded resumable backfill и rollback rehearsal.
-3. Следующий slice не начинать без отдельного подтверждения.
-4. Editor UI, comments/anchors, rich snapshots UI, audio migration и public/social scope не начаты.
+2. Persistence slices 3–4 завершены в `fbc6ec4`: additive migration, dual-read/write, bounded resumable backfill и rollback rehearsal.
+3. Slice 5 завершён локально: Lexical adapter, paragraph/heading, bold/italic, history, sanitized paste и structured draft compatibility за default-off flag.
+4. Следующий slice не начинать без отдельного подтверждения.
+5. Comments/anchors, rich snapshots UI, audio migration и public/social scope не начаты.
 
 ## Журнал slices
 
@@ -72,6 +73,7 @@ Stage 4B:
 | 2026-07-03 | Stage 4A final slices | Добавлены read-first plain-text workspace, explicit edit lease, monotonic lyricsRevision/OCC, safe recovery/compare UX, persistent player placeholder и mobile context comments; App.tsx не увеличен | `main@f2875d0` | schema valid; lint/test/build/e2e PASS; component tests 59 PASS; migration PASS на empty+existing DB | Stage 4B foundation только после отдельного подтверждения |
 | 2026-07-03 | Stage 4B slices 1–2 | Зафиксированы Lexical ADR, app-owned document contract, pure codec, deterministic serialization и migration rehearsal plan | `main@97aca32` | lint/test/build/diff PASS; 68 Vitest tests | Stage 4B persistence только после отдельного подтверждения |
 | 2026-07-03 | Stage 4B slices 3–4 | Добавлены nullable structured fields, legacy/structured dual-read/write, atomic lease+OCC save и bounded resumable backfill | `main`, local commit | prisma validate; empty/existing/repeat/Stage 4A rollback rehearsal; lint/test/build/e2e/diff PASS; 77 Vitest tests; zero mismatches | Следующий Stage 4B slice только после отдельного подтверждения |
+| 2026-07-04 | Stage 4B slice 5 | Добавлен limited Lexical editor adapter: paragraph/heading, bold/italic, undo/redo, canonical paste, structured load/save и additive local draft envelope; flag default false | `main`, local commit | lint/test/build/e2e/diff PASS; 89 tests; App.tsx 1182 lines; EDITOR UI PASSED | Следующий Stage 4B slice только после отдельного подтверждения |
 
 ## Blockers
 

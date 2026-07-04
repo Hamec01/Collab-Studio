@@ -4,6 +4,8 @@ import AudioPlayer from "../../../components/AudioPlayer";
 import LyricsEditor, { type LyricsSaveStatus, type RestoreDraftSnapshot } from "../../../components/LyricsEditor";
 import Button from "../../../shared/ui/Button";
 import type { Annotation, LyricVersion, Track } from "../../../types";
+import { featureFlags } from "../../../app/featureFlags";
+import type { LyricsDocument } from "./lyricsDocument";
 import type { LyricsEditState } from "./useLyricsEditLease";
 
 type TrackLyricsWorkspaceProps = {
@@ -11,6 +13,7 @@ type TrackLyricsWorkspaceProps = {
   track: Track;
   canEdit: boolean;
   draftLyrics: string;
+  draftDocument: LyricsDocument;
   isEditing: boolean;
   editState: LyricsEditState;
   saveStatus: LyricsSaveStatus;
@@ -20,6 +23,7 @@ type TrackLyricsWorkspaceProps = {
   selectedLineIndex: number | null;
   selectedAudioVersionId: string | null;
   onChangeDraftLyrics: (lyrics: string) => void;
+  onChangeDraftDocument: (document: LyricsDocument) => void;
   onCreateVersion: (label: string) => Promise<void>;
   onPinVersion: (versionId: string) => void;
   onSelectLine: (lineIndex: number | null) => void;
@@ -39,6 +43,7 @@ export function TrackLyricsWorkspace({
   track,
   canEdit,
   draftLyrics,
+  draftDocument,
   isEditing,
   editState,
   saveStatus,
@@ -48,6 +53,7 @@ export function TrackLyricsWorkspace({
   selectedLineIndex,
   selectedAudioVersionId,
   onChangeDraftLyrics,
+  onChangeDraftDocument,
   onCreateVersion,
   onPinVersion,
   onSelectLine,
@@ -79,6 +85,9 @@ export function TrackLyricsWorkspace({
         draftLyrics={draftLyrics}
         onChangeDraftLyrics={onChangeDraftLyrics}
         onCreateVersion={onCreateVersion}
+        draftDocument={draftDocument}
+        structuredEditorEnabled={featureFlags.lyricsStructuredEditor}
+        onChangeDraftDocument={onChangeDraftDocument}
         onPinVersion={onPinVersion}
         versionHistory={track.lyricVersions as LyricVersion[]}
         selectedLineIndex={selectedLineIndex}

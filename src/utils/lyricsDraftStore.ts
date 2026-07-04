@@ -1,3 +1,5 @@
+import type { LyricsDocument } from "../features/track-workspace/lyrics/lyricsDocument";
+
 export type LyricsDraftSyncState = "local-only" | "synced" | "conflict" | "error";
 
 export type StoredLyricsDraft = {
@@ -6,6 +8,7 @@ export type StoredLyricsDraft = {
   projectId: string;
   trackId: string;
   content: string;
+  document?: LyricsDocument;
   baseRevision?: number;
   savedAt: string;
   serverUpdatedAt?: string;

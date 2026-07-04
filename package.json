@@ -31,6 +31,10 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@lexical/history": "0.46.0",
+    "@lexical/react": "0.46.0",
+    "@lexical/rich-text": "0.46.0",
+    "@lexical/selection": "0.46.0",
     "@prisma/client": "^6.18.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
@@ -42,6 +46,7 @@
     "express-session": "^1.18.2",
     "google-auth-library": "^10.9.0",
     "helmet": "^8.1.0",
+    "lexical": "0.46.0",
     "lucide-react": "^0.546.0",
     "morgan": "^1.10.1",
     "motion": "^12.23.24",

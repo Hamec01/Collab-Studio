@@ -1,4 +1,5 @@
 import { buildLyricsDraftKey, deleteLyricsDraft, readLyricsDraft, writeLyricsDraft } from "../../utils/lyricsDraftStore";
+import { isLyricsDocument, type LyricsDocument } from "../../features/track-workspace/lyrics/lyricsDocument";
 import {
   type DraftScope,
   type EmergencyDraftSnapshot,
@@ -24,6 +25,8 @@ export function parseEmergencyDraft(raw: string | null): EmergencyDraftSnapshot 
     const parsed = JSON.parse(raw) as EmergencyDraftSnapshot;
     if (!parsed || typeof parsed !== "object") return null;
     if (typeof parsed.key !== "string" || typeof parsed.content !== "string" || typeof parsed.savedAt !== "string") return null;
+    if (parsed.document !== undefined && !isLyricsDocument(parsed.document)) return null;
+    if (parsed.document) parsed.document = parsed.document as LyricsDocument;
     return parsed;
   } catch {
     return null;
@@ -57,6 +60,7 @@ export async function readMergedDraft(scope: DraftScope) {
 
 export async function writeLocalDraft(scope: DraftScope, payload: {
   content: string;
+  document?: LyricsDocument;
   baseRevision?: number;
   serverUpdatedAt?: string;
   syncState: "local-only" | "synced" | "conflict" | "error";
@@ -67,6 +71,7 @@ export async function writeLocalDraft(scope: DraftScope, payload: {
     projectId: scope.projectId,
     trackId: scope.trackId,
     content: payload.content,
+    document: payload.document,
     savedAt: new Date().toISOString(),
     baseRevision: payload.baseRevision,
     serverUpdatedAt: payload.serverUpdatedAt,

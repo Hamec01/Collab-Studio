@@ -1,4 +1,5 @@
 import { LyricsDraftSyncState, StoredLyricsDraft } from "./lyricsDraftStore";
+import type { LyricsDocument } from "../features/track-workspace/lyrics/lyricsDocument";
 
 export type DraftScope = {
   key: string;
@@ -10,6 +11,7 @@ export type DraftScope = {
 export type EmergencyDraftSnapshot = {
   key: string;
   content: string;
+  document?: LyricsDocument;
   savedAt: string;
   baseRevision?: number;
   serverUpdatedAt?: string;
@@ -28,6 +30,7 @@ function fromEmergency(scope: DraftScope, emergency: EmergencyDraftSnapshot): St
     projectId: scope.projectId,
     trackId: scope.trackId,
     content: emergency.content,
+    document: emergency.document,
     baseRevision: emergency.baseRevision,
     savedAt: emergency.savedAt,
     serverUpdatedAt: emergency.serverUpdatedAt,
