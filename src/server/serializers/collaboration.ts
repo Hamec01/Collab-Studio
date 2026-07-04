@@ -33,7 +33,7 @@ export type NotificationWithRelations = Notification & {
   track: Pick<Track, "id" | "title"> | null;
 };
 
-function serializeCollaborationUser(user: CollaborationUser | null) {
+export function serializeCollaborationUser(user: CollaborationUser | null) {
   if (!user) return null;
   return {
     id: user.id,

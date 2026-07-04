@@ -1,15 +1,20 @@
 import { Prisma } from "@prisma/client";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { prisma } from "../db";
-import { requireProjectEditor, requireProjectMember } from "../middleware/auth";
+import { requireProjectEditor } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
 import {
   commentParamsSchema,
   createAnnotationSchema,
   createChatMessageSchema,
   createCommentSchema,
+  createLyricsDiscussionMessageSchema,
+  createLyricsDiscussionThreadSchema,
   createTaskSchema,
+  discussionThreadParamsSchema,
+  reanchorLyricsDiscussionThreadSchema,
   resolveCommentSchema,
+  resolveLyricsDiscussionThreadSchema,
   taskParamsSchema,
   trackEntityParamsSchema,
   updateTaskSchema,
@@ -21,8 +26,10 @@ import {
   serializeComment,
   serializeTask,
 } from "../serializers/collaboration";
+import { discussionThreadInclude, serializeLyricsDiscussionThread } from "../serializers/discussions";
 import { createProjectMemberNotifications } from "../services/notifications";
 import { ensureVerifiedForProtectedWrite } from "../services/stage3Access";
+import { readTrackLyrics } from "../services/structuredLyrics";
 
 const router = Router();
 
@@ -191,6 +198,178 @@ router.put(
 );
 
 router.post(
+  "/:projectId/tracks/:trackId/discussions/threads",
+  validateTrackParams,
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canComment");
+    const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);
+    const input = createLyricsDiscussionThreadSchema.parse(req.body);
+
+    const thread = await prisma.$transaction(async (tx) => {
+      const track = await tx.track.findFirst({
+        where: { id: trackId, projectId },
+        select: { id: true, lyrics: true, lyricsDocument: true, lyricsPlainText: true, lyricsRevision: true },
+      });
+      if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+
+      if (input.anchor) {
+        const document = readTrackLyrics(track).document;
+        if (!document.blocks.some((block) => block.id === input.anchor.blockId)) {
+          throw new AppError(400, "INVALID_ANCHOR_BLOCK", "Anchor block does not exist in the current lyrics document");
+        }
+      }
+
+      return tx.discussionThread.create({
+        data: {
+          projectId,
+          trackId,
+          createdById: user.id,
+          sourceLyricsRevision: track.lyricsRevision,
+          anchorBlockId: input.anchor?.blockId ?? null,
+          anchorStartOffsetHint: input.anchor?.startOffsetHint ?? null,
+          anchorEndOffsetHint: input.anchor?.endOffsetHint ?? null,
+          anchorQuote: input.anchor?.quote ?? null,
+          anchorPrefix: input.anchor?.prefix ?? null,
+          anchorSuffix: input.anchor?.suffix ?? null,
+          messages: {
+            create: {
+              authorId: user.id,
+              body: input.body,
+            },
+          },
+        },
+        include: discussionThreadInclude,
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    res.status(201).json(serializeLyricsDiscussionThread(thread, readTrackLyrics(await prisma.track.findUniqueOrThrow({ where: { id: thread.trackId } })).document));
+  }),
+);
+
+router.post(
+  "/:projectId/tracks/:trackId/discussions/threads/:threadId/messages",
+  (req, _res, next) => {
+    discussionThreadParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canComment");
+    const { projectId, trackId, threadId } = discussionThreadParamsSchema.parse(req.params);
+    const input = createLyricsDiscussionMessageSchema.parse(req.body);
+
+    const thread = await prisma.$transaction(async (tx) => {
+      const existing = await tx.discussionThread.findFirst({
+        where: { id: threadId, projectId, trackId },
+        select: { id: true },
+      });
+      if (!existing) throw new AppError(404, "DISCUSSION_THREAD_NOT_FOUND", "Discussion thread not found");
+
+      await tx.discussionMessage.create({
+        data: {
+          threadId,
+          authorId: user.id,
+          body: input.body,
+        },
+      });
+
+      return tx.discussionThread.findUniqueOrThrow({
+        where: { id: threadId },
+        include: discussionThreadInclude,
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    res.status(201).json(serializeLyricsDiscussionThread(thread, readTrackLyrics(await prisma.track.findUniqueOrThrow({ where: { id: trackId } })).document));
+  }),
+);
+
+router.put(
+  "/:projectId/tracks/:trackId/discussions/threads/:threadId/resolve",
+  (req, _res, next) => {
+    discussionThreadParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canComment");
+    const { projectId, trackId, threadId } = discussionThreadParamsSchema.parse(req.params);
+    const input = resolveLyricsDiscussionThreadSchema.parse(req.body ?? {});
+
+    const thread = await prisma.$transaction(async (tx) => {
+      const existing = await tx.discussionThread.findFirst({
+        where: { id: threadId, projectId, trackId },
+        select: { id: true, resolvedAt: true },
+      });
+      if (!existing) throw new AppError(404, "DISCUSSION_THREAD_NOT_FOUND", "Discussion thread not found");
+      const resolved = input.resolved ?? !existing.resolvedAt;
+      return tx.discussionThread.update({
+        where: { id: threadId },
+        data: {
+          resolvedAt: resolved ? new Date() : null,
+          resolvedById: resolved ? user.id : null,
+        },
+        include: discussionThreadInclude,
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    res.json(serializeLyricsDiscussionThread(thread, readTrackLyrics(await prisma.track.findUniqueOrThrow({ where: { id: trackId } })).document));
+  }),
+);
+
+router.put(
+  "/:projectId/tracks/:trackId/discussions/threads/:threadId/reanchor",
+  (req, _res, next) => {
+    discussionThreadParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canComment");
+    const { projectId, trackId, threadId } = discussionThreadParamsSchema.parse(req.params);
+    const input = reanchorLyricsDiscussionThreadSchema.parse(req.body);
+
+    const thread = await prisma.$transaction(async (tx) => {
+      const track = await tx.track.findFirst({
+        where: { id: trackId, projectId },
+        select: { id: true, lyrics: true, lyricsDocument: true, lyricsPlainText: true, lyricsRevision: true },
+      });
+      if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+      const existing = await tx.discussionThread.findFirst({
+        where: { id: threadId, projectId, trackId },
+        select: { id: true },
+      });
+      if (!existing) throw new AppError(404, "DISCUSSION_THREAD_NOT_FOUND", "Discussion thread not found");
+      const document = readTrackLyrics(track).document;
+      if (!document.blocks.some((block) => block.id === input.blockId)) {
+        throw new AppError(400, "INVALID_ANCHOR_BLOCK", "Anchor block does not exist in the current lyrics document");
+      }
+      return tx.discussionThread.update({
+        where: { id: threadId },
+        data: {
+          anchorBlockId: input.blockId,
+          anchorQuote: input.quote ?? null,
+          anchorPrefix: input.prefix ?? null,
+          anchorSuffix: input.suffix ?? null,
+          anchorStartOffsetHint: input.startOffsetHint ?? null,
+          anchorEndOffsetHint: input.endOffsetHint ?? null,
+          sourceLyricsRevision: track.lyricsRevision,
+          resolvedAt: null,
+          resolvedById: null,
+        },
+        include: discussionThreadInclude,
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    res.json(serializeLyricsDiscussionThread(thread, readTrackLyrics(await prisma.track.findUniqueOrThrow({ where: { id: trackId } })).document));
+  }),
+);
+
+router.post(
   "/:projectId/tracks/:trackId/chat",
   validateTrackParams,
   requireProjectEditor,
@@ -263,9 +442,9 @@ router.put(
         return tx.task.update({
           where: { id: taskId },
           data: {
-            ...(input.title !== undefined ? { title: input.title } : {}),
-            ...(input.description !== undefined ? { description: input.description } : {}),
-            ...(input.status !== undefined ? { status: input.status } : {}),
+            title: input.title,
+            description: input.description,
+            status: input.status,
             ...(assignedToId !== undefined ? { assignedToId } : {}),
           },
           include: taskInclude,
@@ -288,12 +467,7 @@ router.post(
     const input = createAnnotationSchema.parse(req.body);
     await requireTrack(projectId, trackId);
     const annotation = await prisma.annotation.create({
-      data: {
-        trackId,
-        authorId: user.id,
-        timestampSeconds: Math.round(input.timestampSeconds),
-        text: input.text,
-      },
+      data: { trackId, authorId: user.id, timestampSeconds: Math.floor(input.timestampSeconds), text: input.text },
       include: annotationInclude,
     });
     res.status(201).json(serializeAnnotation(annotation));

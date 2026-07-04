@@ -1,3 +1,4 @@
+import type { LyricsAnchorState } from "./features/track-workspace/lyrics/lyricsDiscussions";
 import type { LyricsDocument } from "./features/track-workspace/lyrics/lyricsDocument";
 
 export interface AuthUser {
@@ -84,6 +85,57 @@ export interface Comment {
   updatedAt: string;
 }
 
+export interface LyricsDiscussionMessage {
+  id: string;
+  threadId: string;
+  authorId: string | null;
+  author: string;
+  authorUser: CollaborationUser | null;
+  body: string;
+  editedAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  timestamp: string;
+  legacy: boolean;
+}
+
+export interface LyricsDiscussionAnchor {
+  blockId: string | null;
+  matchedBlockId: string | null;
+  state: LyricsAnchorState | null;
+  quote: string | null;
+  matchedText: string | null;
+  prefix: string | null;
+  suffix: string | null;
+  startOffsetHint: number | null;
+  endOffsetHint: number | null;
+  blockPreview: string | null;
+  isGeneral: boolean;
+  legacyLineIndex?: number;
+}
+
+export interface LyricsDiscussionThread {
+  id: string;
+  kind: "discussion" | "legacy_comment";
+  projectId: string;
+  trackId: string;
+  targetType: "lyrics";
+  createdById: string | null;
+  createdBy: CollaborationUser | null;
+  resolved: boolean;
+  resolvedById: string | null;
+  resolvedBy: CollaborationUser | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  timestamp: string;
+  anchor: LyricsDiscussionAnchor;
+  messages: LyricsDiscussionMessage[];
+  canReply: boolean;
+  legacyCommentId: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   authorId: string | null;
@@ -131,6 +183,7 @@ export interface Track {
   lyricVersions: LyricVersion[];
   audioVersions: AudioVersion[];
   comments: Comment[];
+  lyricsDiscussions?: LyricsDiscussionThread[];
   chat: ChatMessage[];
   tasks: Task[];
   annotations: Annotation[];

@@ -6,6 +6,7 @@ import {
   serializeComment,
   serializeTask,
 } from "./collaboration";
+import { serializeLegacyCommentAsDiscussion, serializeLyricsDiscussionThread, discussionThreadInclude } from "./discussions";
 import { httpsExternalAudioUrl } from "../schemas/tracks";
 import { readTrackLyrics, resolveLyricVersion } from "../services/structuredLyrics";
 
@@ -22,6 +23,10 @@ export const trackRelationsInclude = {
       author: { select: collaborationUserSelect },
       resolvedBy: { select: collaborationUserSelect },
     },
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+  },
+  discussionThreads: {
+    include: discussionThreadInclude,
     orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
   },
   chatMessages: {
@@ -106,6 +111,14 @@ export function serializeAudioVersion(audio: TrackWithRelations["audioVersions"]
 
 export function serializeTrack(track: TrackWithRelations) {
   const lyrics = readTrackLyrics(track);
+  const lyricsDiscussions = [
+    ...track.discussionThreads.map((thread) => serializeLyricsDiscussionThread(thread, lyrics.document)),
+    ...track.comments.map((comment) => ({
+      ...serializeLegacyCommentAsDiscussion(comment, lyrics.document),
+      projectId: track.projectId,
+    })),
+  ].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+
   return {
     id: track.id,
     title: track.title,
@@ -118,6 +131,7 @@ export function serializeTrack(track: TrackWithRelations) {
     lyricVersions: track.lyricVersions.map(serializeLyricVersion),
     audioVersions: track.audioVersions.map((audio) => serializeAudioVersion(audio, track.projectId)),
     comments: track.comments.map(serializeComment),
+    lyricsDiscussions,
     chat: track.chatMessages.map(serializeChatMessage),
     tasks: track.tasks.map(serializeTask),
     annotations: track.annotations.map(serializeAnnotation),

@@ -5,6 +5,8 @@ import LyricsEditor, { type LyricsSaveStatus, type RestoreDraftSnapshot } from "
 import Button from "../../../shared/ui/Button";
 import type { Annotation, LyricVersion, Track } from "../../../types";
 import { featureFlags } from "../../../app/featureFlags";
+import type { LyricsDiscussionSelection } from "./lyricsDiscussions";
+import { buildLyricsLineAnchors } from "./lyricsDiscussions";
 import type { LyricsDocument } from "./lyricsDocument";
 import type { LyricsEditState } from "./useLyricsEditLease";
 
@@ -24,6 +26,7 @@ type TrackLyricsWorkspaceProps = {
   selectedAudioVersionId: string | null;
   onChangeDraftLyrics: (lyrics: string) => void;
   onChangeDraftDocument: (document: LyricsDocument) => void;
+  onChangeDiscussionSelection: (selection: LyricsDiscussionSelection | null) => void;
   onCreateVersion: (label: string) => Promise<void>;
   onRestoreVersion: (version: LyricVersion) => Promise<boolean>;
   onExportTxt: (version: LyricVersion | null) => void;
@@ -56,6 +59,7 @@ export function TrackLyricsWorkspace({
   selectedAudioVersionId,
   onChangeDraftLyrics,
   onChangeDraftDocument,
+  onChangeDiscussionSelection,
   onCreateVersion,
   onRestoreVersion,
   onExportTxt,
@@ -71,7 +75,21 @@ export function TrackLyricsWorkspace({
   onAddAnnotation,
   onSelectAudioVersion,
 }: TrackLyricsWorkspaceProps) {
-  const commentsCount = (lineIndex: number) => track.comments.filter((comment) => comment.lineIndex === lineIndex && !comment.resolved).length;
+  const lyricsLineAnchors = buildLyricsLineAnchors(draftDocument);
+  const commentsCount = (lineIndex: number) => {
+    if (!featureFlags.lyricsStructuredEditor) {
+      return track.comments.filter((comment) => comment.lineIndex === lineIndex && !comment.resolved).length;
+    }
+    const line = lyricsLineAnchors.find((entry) => entry.lineIndex === lineIndex);
+    if (!line) return 0;
+    return (track.lyricsDiscussions ?? []).filter((thread) => {
+      if (thread.resolved) return false;
+      if (thread.anchor.legacyLineIndex === lineIndex) return true;
+      const blockId = thread.anchor.matchedBlockId ?? thread.anchor.blockId;
+      return Boolean(blockId && line.blockId && blockId === line.blockId);
+    }).length;
+  };
+
   return (
     <>
       <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:flex-row sm:items-center">
@@ -98,6 +116,8 @@ export function TrackLyricsWorkspace({
         versionHistory={track.lyricVersions as LyricVersion[]}
         selectedLineIndex={selectedLineIndex}
         onSelectLine={onSelectLine}
+        lineAnchors={lyricsLineAnchors}
+        onChangeDiscussionSelection={onChangeDiscussionSelection}
         trackCommentsCount={commentsCount}
         canEdit={canEdit}
         isEditing={isEditing}

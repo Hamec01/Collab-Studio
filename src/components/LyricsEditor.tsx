@@ -3,6 +3,8 @@ import { Edit3, Eye, Save, History, MessageSquare, Maximize2, Minimize2, ArrowRi
 import { LyricVersion } from "../types";
 import { useI18n } from "../app/i18n/I18nProvider";
 import type { LyricsEditState } from "../features/track-workspace/lyrics/useLyricsEditLease";
+import type { LyricsDiscussionSelection, LyricsLineAnchor } from "../features/track-workspace/lyrics/lyricsDiscussions";
+import { selectionFromLineAnchor, selectionFromRange } from "../features/track-workspace/lyrics/lyricsDiscussions";
 import type { LyricsDocument } from "../features/track-workspace/lyrics/lyricsDocument";
 
 const StructuredLyricsEditor = React.lazy(async () => {
@@ -32,6 +34,8 @@ interface LyricsEditorProps {
   versionHistory: LyricVersion[];
   selectedLineIndex: number | null;
   onSelectLine: (index: number | null) => void;
+  lineAnchors?: LyricsLineAnchor[];
+  onChangeDiscussionSelection?: (selection: LyricsDiscussionSelection | null) => void;
   trackCommentsCount: (lineIdx: number) => number;
   canEdit: boolean;
   isEditing: boolean;
@@ -65,6 +69,8 @@ export default function LyricsEditor({
   onStopEdit,
   selectedLineIndex,
   onSelectLine,
+  lineAnchors,
+  onChangeDiscussionSelection,
   trackCommentsCount,
   canEdit,
   saveStatus,
@@ -98,6 +104,17 @@ export default function LyricsEditor({
   const activeVersion = versionHistory.find((v) => v.id === selectedVersionId);
   const displayedLyrics = activeVersion ? activeVersion.lyrics : draftLyrics;
   const lines = displayedLyrics.split("\n");
+  const renderedLines: LyricsLineAnchor[] = structuredEditorEnabled && lineAnchors?.length
+    ? lineAnchors
+    : lines.map((lineText, lineIndex) => ({
+        lineIndex,
+        blockId: null,
+        blockText: null,
+        lineText,
+        lineStartOffset: null,
+        lineEndOffset: null,
+        separator: false,
+      }));
 
   const saveStatusLabel = useMemo(() => {
     if (!canEdit) return "Только чтение";
@@ -157,6 +174,22 @@ export default function LyricsEditor({
   };
 
   const lyricAuthor = (authorId: string | null) => (authorId ? authorId.slice(0, 8) : "Deleted user");
+
+  const handleDiscussionSelection = (entry: LyricsLineAnchor, target: HTMLElement) => {
+    if (!onChangeDiscussionSelection) return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.anchorNode || !selection.focusNode) {
+      onChangeDiscussionSelection(selectionFromLineAnchor(entry));
+      return;
+    }
+    if (!target.contains(selection.anchorNode) || !target.contains(selection.focusNode)) {
+      onChangeDiscussionSelection(selectionFromLineAnchor(entry));
+      return;
+    }
+    const start = Math.min(selection.anchorOffset, selection.focusOffset);
+    const end = Math.max(selection.anchorOffset, selection.focusOffset);
+    onChangeDiscussionSelection(selectionFromRange(entry, start, end) ?? selectionFromLineAnchor(entry));
+  };
 
   const originalVersion = versionHistory.find((v) => v.isOriginal);
 
@@ -447,17 +480,30 @@ export default function LyricsEditor({
             <div className={`flex-1 overflow-y-auto pr-1 pb-16 text-left space-y-1 ${
               isFullscreen ? "max-h-[calc(100vh-220px)] p-2" : "max-h-[460px]"
             }`}>
-              {lines.map((line, idx) => {
+              {renderedLines.map((entry) => {
+                const line = entry.lineText;
+                const idx = entry.lineIndex;
                 const isSelected = selectedLineIndex === idx;
                 const commentsCount = trackCommentsCount(idx);
                 const isSectionHeader = line.startsWith("[") && line.endsWith("]");
 
                 return (
-                  <button
-                    type="button"
+                  <div
                     key={idx}
-                    onClick={() => onSelectLine(isSelected ? null : idx)}
-                    className={`group flex w-full items-center justify-between gap-3 p-1.5 px-3 rounded-lg transition-all cursor-pointer select-none border text-left ${
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onSelectLine(isSelected ? null : idx);
+                        if (onChangeDiscussionSelection) onChangeDiscussionSelection(isSelected ? null : selectionFromLineAnchor(entry));
+                      }
+                    }}
+                    onClick={() => {
+                      onSelectLine(isSelected ? null : idx);
+                      if (onChangeDiscussionSelection) onChangeDiscussionSelection(isSelected ? null : selectionFromLineAnchor(entry));
+                    }}
+                    className={`group flex w-full items-center justify-between gap-3 p-1.5 px-3 rounded-lg transition-all cursor-pointer border text-left ${
                       isSectionHeader
                         ? "border-transparent bg-transparent mt-2 first:mt-0"
                         : isSelected
@@ -472,9 +518,13 @@ export default function LyricsEditor({
                             {line}
                           </span>
                         ) : (
-                          <p className={`leading-relaxed font-serif ${
-                            line.trim() === "" ? "h-3" : "text-neutral-200"
-                          } text-xs sm:text-sm`}>
+                          <p
+                            className={`leading-relaxed font-serif ${
+                              line.trim() === "" ? "h-3" : "text-neutral-200"
+                            } text-xs sm:text-sm whitespace-pre-wrap`}
+                            onMouseUp={(event) => handleDiscussionSelection(entry, event.currentTarget)}
+                            onTouchEnd={(event) => handleDiscussionSelection(entry, event.currentTarget)}
+                          >
                             {line}
                           </p>
                         )}
@@ -493,13 +543,13 @@ export default function LyricsEditor({
                     {isSelected && !isSectionHeader && (
                       <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
 
             {/* CONTEXTUAL DISCUSSION OVERLAY FOR SELECTED LINE (Mobile & Desktop optimized) */}
-            {selectedLineIndex !== null && !lines[selectedLineIndex].startsWith("[") && (
+            {selectedLineIndex !== null && renderedLines[selectedLineIndex] && !renderedLines[selectedLineIndex].separator && !renderedLines[selectedLineIndex].lineText.startsWith("[") && (
               <div className="absolute bottom-1 left-0 right-0 z-30 animate-slide-up px-1">
                 <div className="bg-indigo-950 border border-indigo-900/80 shadow-2xl rounded-xl p-3 flex items-center justify-between gap-3 backdrop-blur-md">
                   <div className="flex-1 min-w-0 text-left">
@@ -507,12 +557,15 @@ export default function LyricsEditor({
                       Выбрана строка {selectedLineIndex + 1}
                     </span>
                     <p className="text-white text-xs truncate font-serif mt-0.5 italic">
-                      "{lines[selectedLineIndex]}"
+                      "{renderedLines[selectedLineIndex].lineText}"
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
-                      onClick={() => onSelectLine(null)}
+                      onClick={() => {
+                        onSelectLine(null);
+                        onChangeDiscussionSelection?.(null);
+                      }}
                       className="text-[11px] font-semibold text-neutral-400 hover:text-white px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
                     >
                       Сбросить

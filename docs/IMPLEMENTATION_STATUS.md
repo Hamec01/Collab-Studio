@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 4B`
-- Active slice: slice 6 completed locally — rich lyric snapshots и TXT export за existing feature-flag split; ожидание отдельного подтверждения следующего slice
+- Active slice: slice 7 completed locally — lyrics-only discussions, stable anchors, legacy compatibility adapter и mobile discussion panel за existing feature-flag split
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -40,7 +40,7 @@
 | Stage 2 — i18n, design tokens и shell | completed | Пройден |
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
-| Stage 4B — WYSIWYG и stable anchors | pending | Foundation, persistence и limited editor UI slices пройдены; anchors не начаты |
+| Stage 4B — WYSIWYG и stable anchors | pending | Foundation, persistence, editor UI, snapshots, discussions и anchors slices локально пройдены; финальный production deploy intentionally deferred |
 | Stage 5A — TrackAsset migration | pending | Не начат |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
@@ -59,8 +59,9 @@ Stage 4B:
 2. Persistence slices 3–4 завершены в `fbc6ec4`: additive migration, dual-read/write, bounded resumable backfill и rollback rehearsal.
 3. Slice 5 завершён локально: Lexical adapter, paragraph/heading, bold/italic, history, sanitized paste и structured draft compatibility за default-off flag.
 4. Slice 6 завершён локально: structured/manual lyric snapshots, restore через обычный reviewed save с existing lease+OCC semantics и TXT export from derived plain text.
-5. Следующий slice не начинать без отдельного подтверждения.
-6. Comments/anchors, audio migration и public/social scope не начаты.
+5. Slice 7 завершён локально: lyrics-only `DiscussionThread`/`DiscussionMessage`, stable block-ID anchors, explicit exact/relocated/ambiguous/orphaned states, legacy `Comment.lineIndex` compatibility bridge и mobile discussion panel; flag default false сохранён.
+6. Future legacy `Comment` backfill/retirement documented separately in `docs/STAGE4B_LEGACY_COMMENT_RETIREMENT_NOTE.md`.
+7. Следующий шаг — только финальный Stage 4B production deploy window; production `prisma migrate deploy` по-прежнему не запускался.
 
 ## Журнал slices
 
@@ -77,6 +78,7 @@ Stage 4B:
 | 2026-07-04 | Stage 4B slice 5 | Добавлен limited Lexical editor adapter: paragraph/heading, bold/italic, undo/redo, canonical paste, structured load/save и additive local draft envelope; flag default false | `main`, local commit | lint/test/build/e2e/diff PASS; 89 tests; App.tsx 1182 lines; EDITOR UI PASSED | Следующий Stage 4B slice только после отдельного подтверждения |
 | 2026-07-04 | Stage 4B slice 6 | Добавлены structured/manual lyric snapshots, restore через обычный reviewed save с existing lease+OCC semantics, legacy snapshot compatibility и TXT export from derived plain text | `main`, local commit | prisma validate; lint/test/build/e2e/diff PASS; 99 tests; App.tsx 1159 lines; SNAPSHOTS PASSED | Следующий Stage 4B slice только после отдельного подтверждения |
 | 2026-07-04 | Bugfix — project/track creation regression | Исправлены atomic single project+track creation, unified verified-writer rule for project/track writes и awaited ProjectList submit UX с error/loading states | `main`, local commit | lint/test/build/e2e/diff PASS; 108 tests; manual local HTTP reproduction PASS; App.tsx 1159 lines; TRACK CREATION REGRESSION FIXED | Возврат к roadmap только после отдельного подтверждения |
+| 2026-07-04 | Stage 4B slice 7 | Добавлены lyrics-only discussions, stable block-ID anchors, exact/relocated/ambiguous/orphaned resolution, legacy `Comment.lineIndex` compatibility adapter, manual re-anchor, mobile discussion sheet и extracted discussion hook; flag default false сохранён | `main`, local commit | prisma validate; lint/test/build/e2e/diff PASS; 121 tests; App.tsx 1211 lines; DISCUSSIONS AND ANCHORS PASSED | Следующий шаг — финальный Stage 4B deploy window без автоматического legacy Comment backfill |
 
 ## Blockers
 

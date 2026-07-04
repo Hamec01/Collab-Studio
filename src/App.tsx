@@ -67,6 +67,8 @@ import { createLyricSnapshot, downloadLocalLyricsDraft, exportLyricsTxt, restore
 import { featureFlags } from "./app/featureFlags";
 import { TrackContextPanel, type TrackSidebar } from "./features/track-workspace/TrackContextPanel";
 import { LyricsCommentsSheet } from "./features/track-workspace/lyrics/LyricsCommentsSheet";
+import { LyricsDiscussionsSheet } from "./features/track-workspace/lyrics/LyricsDiscussionsSheet";
+import { useLyricsDiscussions } from "./features/track-workspace/lyrics/useLyricsDiscussions";
 import { LyricsPlayerPlaceholder } from "./features/track-workspace/lyrics/LyricsPlayerPlaceholder";
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
@@ -98,7 +100,6 @@ export default function App() {
   } = usePlayer();
   const [globalError, setGlobalError] = useState<string>("");
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
-  const [showLyricsComments, setShowLyricsComments] = useState(false);
   const [activeSidebar, setActiveSidebar] = useState<TrackSidebar>("comments");
   const [mobileTab, setMobileTab] = useState<MobileTab>("projects");
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -180,6 +181,7 @@ export default function App() {
 
   const canResolve = canEdit;
   const canSend = !!currentUser && !!activeProject && !!activeTrack;
+  const lyricsDiscussionsEnabled = featureFlags.lyricsStructuredEditor;
 
   const clearDraftTimers = () => {
     if (autosaveTimerRef.current !== null) {
@@ -254,7 +256,9 @@ export default function App() {
     resetWorkspaceQuery();
     setSelectedAudioVersionId(null);
     setSelectedLineIndex(null);
+    clearDiscussionState();
     setShowLyricsComments(false);
+    clearDiscussionState();
     setShowUploadModal(false);
     setUploadError("");
     setIsUploading(false);
@@ -288,6 +292,26 @@ export default function App() {
     if (!activeProjectId || !activeTrackId) return;
     await refreshActiveTrack(activeProjectId, activeTrackId);
   };
+
+  const {
+    showLyricsComments,
+    setShowLyricsComments,
+    discussionSelection,
+    setDiscussionSelection,
+    discussionAnchors,
+    clearDiscussionState,
+    handleCreateDiscussionThread,
+    handleReplyDiscussionThread,
+    handleResolveDiscussionThread,
+    handleReanchorDiscussionThread,
+  } = useLyricsDiscussions({
+    activeProject,
+    activeTrack,
+    draftDocument: lyricsDocumentDraft.document,
+    withAuth,
+    refreshCurrentTrack,
+    refreshNotifications,
+  });
 
   const scheduleRetryAutosave = () => {
     if (retryTimerRef.current !== null) return;
@@ -526,6 +550,7 @@ export default function App() {
   useEffect(() => {
     if (!activeTrack || !activeProject || !currentUser) {
       setMobileTab("projects");
+      clearDiscussionState();
       resetDraftRuntime();
       return;
     }
@@ -758,7 +783,7 @@ export default function App() {
     draftLyricsRef.current = localDraft.content;
     setDraftRevision(activeTrack.lyricsRevision); draftRevisionRef.current = activeTrack.lyricsRevision;
     setDraftServerUpdatedAt(activeTrack.updatedAt);
-    setLyricsStatusMessage(""); setRestoreDraftSnapshot(null);
+    setLyricsStatusMessage(""); setRestoreDraftSnapshot(null); clearDiscussionState();
   };
 
   const handleUseServerDraft = async () => {
@@ -770,7 +795,7 @@ export default function App() {
     lastSyncedLyricsRef.current = activeTrack.lyrics;
     setDraftServerUpdatedAt(activeTrack.updatedAt);
     setLyricsSaveStatus("saved"); setLyricsSavedAt(activeTrack.updatedAt);
-    setLyricsStatusMessage(""); setRestoreDraftSnapshot(null);
+    setLyricsStatusMessage(""); setRestoreDraftSnapshot(null); clearDiscussionState();
     await removeLocalDraft(scope).catch(() => undefined);
   };
 
@@ -1008,6 +1033,7 @@ export default function App() {
                   selectedAudioVersionId={selectedAudioVersionId}
                   onChangeDraftLyrics={handleDraftLyricsChange}
                   onChangeDraftDocument={handleDraftDocumentChange}
+                  onChangeDiscussionSelection={setDiscussionSelection}
                   onCreateVersion={handleCreateLyricVersion}
                   onRestoreVersion={handleRestoreLyricVersion}
                   onExportTxt={handleExportLyricsTxt}
@@ -1043,10 +1069,19 @@ export default function App() {
                   canSend={canSend}
                   draftLyrics={draftLyrics}
                   selectedLineIndex={selectedLineIndex}
+                  discussionSelection={discussionSelection}
+                  discussionAnchors={discussionAnchors}
+                  discussionThreads={activeTrack.lyricsDiscussions ?? []}
+                  useLyricsDiscussions={lyricsDiscussionsEnabled}
                   onSelectSidebar={setActiveSidebar}
-                  onClearSelectedLine={() => setSelectedLineIndex(null)}
+                  onClearSelectedLine={() => { setSelectedLineIndex(null); setDiscussionSelection(null); }}
+                  onClearDiscussionSelection={() => { setSelectedLineIndex(null); setDiscussionSelection(null); }}
                   onAddComment={handleAddComment}
                   onResolveComment={handleResolveComment}
+                  onCreateDiscussionThread={handleCreateDiscussionThread}
+                  onReplyDiscussionThread={handleReplyDiscussionThread}
+                  onResolveDiscussionThread={handleResolveDiscussionThread}
+                  onReanchorDiscussionThread={handleReanchorDiscussionThread}
                   onSendMessage={handleSendMessage}
                   onAddTask={handleAddTask}
                   onUpdateTaskStatus={handleUpdateTaskStatus}
@@ -1073,7 +1108,7 @@ export default function App() {
         <LyricsPlayerPlaceholder track={activeTrack} selectedAudioVersionId={selectedAudioVersionId} />
       )}
 
-      {activeTrack && (
+      {activeTrack && !lyricsDiscussionsEnabled && (
         <LyricsCommentsSheet
           open={showLyricsComments}
           comments={activeTrack.comments}
@@ -1081,9 +1116,26 @@ export default function App() {
           lyricsLines={draftLyrics.split("\n")}
           canResolve={canResolve}
           onClose={() => setShowLyricsComments(false)}
-          onClearSelectedLine={() => setSelectedLineIndex(null)}
+          onClearSelectedLine={() => { setSelectedLineIndex(null); setDiscussionSelection(null); }}
           onAddComment={handleAddComment}
           onResolveComment={handleResolveComment}
+        />
+      )}
+
+      {activeTrack && lyricsDiscussionsEnabled && (
+        <LyricsDiscussionsSheet
+          open={showLyricsComments}
+          threads={activeTrack.lyricsDiscussions ?? []}
+          selection={discussionSelection}
+          availableAnchors={discussionAnchors}
+          canWrite={canEdit}
+          canResolve={canResolve}
+          onClose={() => setShowLyricsComments(false)}
+          onClearSelection={() => { setSelectedLineIndex(null); setDiscussionSelection(null); }}
+          onCreateThread={handleCreateDiscussionThread}
+          onReply={handleReplyDiscussionThread}
+          onResolveThread={handleResolveDiscussionThread}
+          onReanchorThread={handleReanchorDiscussionThread}
         />
       )}
 

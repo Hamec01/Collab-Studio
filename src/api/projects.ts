@@ -5,11 +5,13 @@ import type {
   ChatMessage,
   Comment,
   LyricVersion,
+  LyricsDiscussionThread,
   ProjectMember,
   Project,
   Task,
   Track,
 } from "../types";
+import type { LyricsDiscussionSelection } from "../features/track-workspace/lyrics/lyricsDiscussions";
 import type { LyricsDocument } from "../features/track-workspace/lyrics/lyricsDocument";
 
 export function listProjects(signal?: AbortSignal) {
@@ -151,6 +153,45 @@ export function resolveComment(projectId: string, trackId: string, commentId: st
   return apiRequest<Comment>(`/api/projects/${projectId}/tracks/${trackId}/comments/${commentId}/resolve`, {
     method: "PUT",
     body: payload,
+  });
+}
+
+function selectionToAnchor(selection: LyricsDiscussionSelection) {
+  return {
+    blockId: selection.blockId,
+    quote: selection.quote,
+    prefix: selection.prefix,
+    suffix: selection.suffix,
+    startOffsetHint: selection.startOffsetHint,
+    endOffsetHint: selection.endOffsetHint,
+  };
+}
+
+export function createLyricsDiscussionThread(projectId: string, trackId: string, payload: { body: string; selection?: LyricsDiscussionSelection | null }) {
+  return apiRequest<LyricsDiscussionThread>(`/api/projects/${projectId}/tracks/${trackId}/discussions/threads`, {
+    method: "POST",
+    body: payload.selection ? { body: payload.body, anchor: selectionToAnchor(payload.selection) } : { body: payload.body },
+  });
+}
+
+export function createLyricsDiscussionMessage(projectId: string, trackId: string, threadId: string, payload: { body: string }) {
+  return apiRequest<LyricsDiscussionThread>(`/api/projects/${projectId}/tracks/${trackId}/discussions/threads/${threadId}/messages`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function resolveLyricsDiscussionThread(projectId: string, trackId: string, threadId: string, payload?: { resolved?: boolean }) {
+  return apiRequest<LyricsDiscussionThread>(`/api/projects/${projectId}/tracks/${trackId}/discussions/threads/${threadId}/resolve`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export function reanchorLyricsDiscussionThread(projectId: string, trackId: string, threadId: string, selection: LyricsDiscussionSelection) {
+  return apiRequest<LyricsDiscussionThread>(`/api/projects/${projectId}/tracks/${trackId}/discussions/threads/${threadId}/reanchor`, {
+    method: "PUT",
+    body: selectionToAnchor(selection),
   });
 }
 

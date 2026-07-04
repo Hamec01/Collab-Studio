@@ -3,7 +3,9 @@ import ChatRoom from "../../components/ChatRoom";
 import CommentsPanel from "../../components/CommentsPanel";
 import RhymeFinder from "../../components/RhymeFinder";
 import TaskBoard from "../../components/TaskBoard";
-import type { AuthUser, Project, Task, Track } from "../../types";
+import type { AuthUser, LyricsDiscussionThread, Project, Task, Track } from "../../types";
+import type { LyricsDiscussionSelection } from "./lyrics/lyricsDiscussions";
+import { LyricsDiscussionsPanel } from "./lyrics/LyricsDiscussionsPanel";
 
 export type TrackSidebar = "comments" | "chat" | "tasks" | "rhymes";
 
@@ -17,10 +19,19 @@ type TrackContextPanelProps = {
   canSend: boolean;
   draftLyrics: string;
   selectedLineIndex: number | null;
+  discussionSelection: LyricsDiscussionSelection | null;
+  discussionAnchors: LyricsDiscussionSelection[];
+  discussionThreads: LyricsDiscussionThread[];
+  useLyricsDiscussions: boolean;
   onSelectSidebar: React.Dispatch<React.SetStateAction<TrackSidebar>>;
   onClearSelectedLine: () => void;
+  onClearDiscussionSelection: () => void;
   onAddComment: (text: string, lineIndex?: number) => void;
   onResolveComment: (commentId: string) => void;
+  onCreateDiscussionThread: (body: string, selection: LyricsDiscussionSelection | null) => void;
+  onReplyDiscussionThread: (threadId: string, body: string) => void;
+  onResolveDiscussionThread: (threadId: string, resolved: boolean) => void;
+  onReanchorDiscussionThread: (threadId: string, selection: LyricsDiscussionSelection) => void;
   onSendMessage: (text: string) => void;
   onAddTask: (title: string, assignedToId?: string) => void;
   onUpdateTaskStatus: (taskId: string, status: Task["status"]) => void;
@@ -44,10 +55,19 @@ export function TrackContextPanel({
   canSend,
   draftLyrics,
   selectedLineIndex,
+  discussionSelection,
+  discussionAnchors,
+  discussionThreads,
+  useLyricsDiscussions,
   onSelectSidebar,
   onClearSelectedLine,
+  onClearDiscussionSelection,
   onAddComment,
   onResolveComment,
+  onCreateDiscussionThread,
+  onReplyDiscussionThread,
+  onResolveDiscussionThread,
+  onReanchorDiscussionThread,
   onSendMessage,
   onAddTask,
   onUpdateTaskStatus,
@@ -69,7 +89,20 @@ export function TrackContextPanel({
       </div>
 
       <div className="min-h-[360px] flex-1">
-        {activeSidebar === "comments" && (
+        {activeSidebar === "comments" && (useLyricsDiscussions ? (
+          <LyricsDiscussionsPanel
+            threads={discussionThreads}
+            selection={discussionSelection}
+            availableAnchors={discussionAnchors}
+            canWrite={canEdit}
+            canResolve={canResolve}
+            onCreateThread={onCreateDiscussionThread}
+            onReply={onReplyDiscussionThread}
+            onResolveThread={onResolveDiscussionThread}
+            onReanchorThread={onReanchorDiscussionThread}
+            onClearSelection={onClearDiscussionSelection}
+          />
+        ) : (
           <CommentsPanel
             comments={track.comments}
             onAddComment={onAddComment}
@@ -79,7 +112,7 @@ export function TrackContextPanel({
             onClearSelectedLine={onClearSelectedLine}
             lyricsLines={draftLyrics.split("\n")}
           />
-        )}
+        ))}
         {activeSidebar === "chat" && (
           <ChatRoom chat={track.chat} onSendMessage={onSendMessage} currentUser={currentUser} canSend={canSend} />
         )}
