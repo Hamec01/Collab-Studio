@@ -20,7 +20,7 @@ export function getProject(projectId: string, signal?: AbortSignal) {
   return apiRequest<Project>(`/api/projects/${projectId}`, { signal });
 }
 
-export function createProject(payload: { title: string; type: "single" | "album"; tags?: string[]; coverUrl?: string }) {
+export function createProject(payload: { title: string; type: "single" | "album"; initialTrackTitle?: string; tags?: string[]; coverUrl?: string }) {
   return apiRequest<Project>("/api/projects", {
     method: "POST",
     body: payload,

@@ -11,12 +11,12 @@ interface ProjectListProps {
   activeTrack: Track | null;
   onSelectProject: (p: Project) => void;
   onSelectTrack: (t: Track) => void;
-  onCreateProject: (title: string, type: 'single' | 'album', tags: string[], coverUrl?: string) => void;
-  onAddTrack: (projectId: string, title: string) => void;
+  onCreateProject: (title: string, type: 'single' | 'album', initialTrackTitle: string | undefined, tags: string[], coverUrl?: string) => Promise<void>;
+  onAddTrack: (projectId: string, title: string) => Promise<void>;
   onAddMember: (projectId: string, payload: { login: string; role: "viewer" | "editor" }) => Promise<void>;
   onUpdateMemberRole: (projectId: string, userId: string, role: "viewer" | "editor") => Promise<void>;
   onRemoveMember: (projectId: string, userId: string) => Promise<void>;
-  onDeleteProject: (projectId: string) => void;
+  onDeleteProject: (projectId: string) => Promise<void>;
   currentUser: AuthUser | null;
 }
 
@@ -37,11 +37,16 @@ export default function ProjectList({
   const [showAddProject, setShowAddProject] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState<'single' | 'album'>("single");
+  const [newInitialTrackTitle, setNewInitialTrackTitle] = useState("");
   const [newTags, setNewTags] = useState("");
   const [newCover, setNewCover] = useState("");
+  const [projectSubmitLoading, setProjectSubmitLoading] = useState(false);
+  const [projectSubmitError, setProjectSubmitError] = useState("");
 
   const [showAddTrack, setShowAddTrack] = useState(false);
   const [newTrackTitle, setNewTrackTitle] = useState("");
+  const [trackSubmitLoading, setTrackSubmitLoading] = useState(false);
+  const [trackSubmitError, setTrackSubmitError] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteLogin, setInviteLogin] = useState("");
   const [inviteRole, setInviteRole] = useState<"viewer" | "editor">("viewer");
@@ -88,6 +93,14 @@ export default function ProjectList({
     }
   }, [showInviteModal]);
 
+  useEffect(() => {
+    if (newType !== "single") {
+      setNewInitialTrackTitle("");
+      return;
+    }
+    setNewInitialTrackTitle((current) => (current.trim() ? current : newTitle));
+  }, [newType, newTitle]);
+
   const mapInviteError = (error: unknown) => {
     if (!(error instanceof ApiError)) return "Сервер недоступен.";
     if (error.status === 400) return "Проверьте введённые данные.";
@@ -107,6 +120,18 @@ export default function ProjectList({
     if (error.status === 429) return "Слишком много попыток. Повторите позже.";
     if (error.status === 0) return "Сервер недоступен.";
     return "Не удалось изменить участника.";
+  };
+
+  const mapProjectWriteError = (error: unknown) => {
+    if (!(error instanceof ApiError)) return "Сервер недоступен.";
+    if (error.code === "EMAIL_VERIFICATION_REQUIRED") return "Подтвердите email, чтобы создавать проекты и треки.";
+    if (error.code === "AGE_ACKNOWLEDGEMENT_REQUIRED") return "Подтвердите 18+, чтобы создавать проекты и треки.";
+    if (error.status === 400) return "Проверьте заполнение формы.";
+    if (error.status === 403) return "У вас нет прав на это действие.";
+    if (error.status === 409) return "Операция конфликтует с текущим состоянием. Повторите попытку.";
+    if (error.status === 429) return "Слишком много попыток. Повторите позже.";
+    if (error.status === 0) return "Сервер недоступен.";
+    return "Не удалось сохранить изменения.";
   };
 
   const handleInviteSubmit = async (event: React.FormEvent) => {
@@ -153,23 +178,46 @@ export default function ProjectList({
     }
   };
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || projectSubmitLoading) return;
     const tagsArr = newTags.split(",").map((t) => t.trim()).filter(Boolean);
-    onCreateProject(newTitle.trim(), newType, tagsArr, newCover.trim() || undefined);
-    setNewTitle("");
-    setNewTags("");
-    setNewCover("");
-    setShowAddProject(false);
+    setProjectSubmitError("");
+    setProjectSubmitLoading(true);
+    try {
+      await onCreateProject(
+        newTitle.trim(),
+        newType,
+        newType === "single" ? (newInitialTrackTitle.trim() || newTitle.trim()) : undefined,
+        tagsArr,
+        newCover.trim() || undefined,
+      );
+      setNewTitle("");
+      setNewInitialTrackTitle("");
+      setNewTags("");
+      setNewCover("");
+      setShowAddProject(false);
+    } catch (error) {
+      setProjectSubmitError(mapProjectWriteError(error));
+    } finally {
+      setProjectSubmitLoading(false);
+    }
   };
 
-  const handleCreateTrack = (e: React.FormEvent) => {
+  const handleCreateTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTrackTitle.trim() || !activeProject) return;
-    onAddTrack(activeProject.id, newTrackTitle.trim());
-    setNewTrackTitle("");
-    setShowAddTrack(false);
+    if (!newTrackTitle.trim() || !activeProject || trackSubmitLoading) return;
+    setTrackSubmitError("");
+    setTrackSubmitLoading(true);
+    try {
+      await onAddTrack(activeProject.id, newTrackTitle.trim());
+      setNewTrackTitle("");
+      setShowAddTrack(false);
+    } catch (error) {
+      setTrackSubmitError(mapProjectWriteError(error));
+    } finally {
+      setTrackSubmitLoading(false);
+    }
   };
 
   const roleLabel = (role: "owner" | "editor" | "viewer") => {
@@ -243,7 +291,7 @@ export default function ProjectList({
               onClick={(e) => {
                 e.stopPropagation();
                 if (confirm(`Вы уверены, что хотите удалить проект "${proj.title}"?`)) {
-                  onDeleteProject(proj.id);
+                  void onDeleteProject(proj.id);
                 }
               }}
               className="absolute right-2 top-2 p-1 text-neutral-500 hover:text-red-400 hover:bg-neutral-800/40 rounded transition-all cursor-pointer opacity-0 group-hover:opacity-100 sm:opacity-100"
@@ -260,7 +308,10 @@ export default function ProjectList({
               <span>ТРЕКИ В ПРОЕКТЕ:</span>
               {canEditProject ? (
                 <button
-                  onClick={() => setShowAddTrack(!showAddTrack)}
+                  onClick={() => {
+                    setTrackSubmitError("");
+                    setShowAddTrack(!showAddTrack);
+                  }}
                   className="text-indigo-400 hover:text-indigo-300 flex items-center gap-0.5 cursor-pointer"
                 >
                   <Plus className="w-2.5 h-2.5" />
@@ -272,21 +323,27 @@ export default function ProjectList({
             </div>
 
             {showAddTrack && canEditProject && (
-              <form onSubmit={handleCreateTrack} className="flex gap-1.5 p-1">
-                <input
-                  type="text"
-                  required
-                  value={newTrackTitle}
-                  onChange={(e) => setNewTrackTitle(e.target.value)}
-                  placeholder="Название трека..."
-                  className="flex-1 bg-neutral-900 border border-neutral-800 rounded p-1 text-[10px] text-white focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white p-1 px-2 rounded text-[10px] font-medium"
-                >
-                  ОК
-                </button>
+              <form onSubmit={handleCreateTrack} className="space-y-1.5 p-1">
+                <div className="flex gap-1.5">
+                  <input
+                    aria-label="НАЗВАНИЕ ТРЕКА"
+                    type="text"
+                    required
+                    value={newTrackTitle}
+                    onChange={(e) => setNewTrackTitle(e.target.value)}
+                    placeholder="Название трека..."
+                    disabled={trackSubmitLoading}
+                    className="flex-1 bg-neutral-900 border border-neutral-800 rounded p-1 text-[10px] text-white focus:outline-none disabled:opacity-60"
+                  />
+                  <button
+                    type="submit"
+                    disabled={trackSubmitLoading}
+                    className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white p-1 px-2 rounded text-[10px] font-medium"
+                  >
+                    {trackSubmitLoading ? "..." : "ОК"}
+                  </button>
+                </div>
+                {trackSubmitError ? <div className="text-[10px] text-red-400 text-left">{trackSubmitError}</div> : null}
               </form>
             )}
 
@@ -327,7 +384,10 @@ export default function ProjectList({
           <p className="text-[10px] text-neutral-500 mt-0.5">Выберите папку проекта или трек для работы</p>
         </div>
         <button
-          onClick={() => setShowAddProject(!showAddProject)}
+          onClick={() => {
+            setProjectSubmitError("");
+            setShowAddProject(!showAddProject);
+          }}
           className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <FolderPlus className="w-3.5 h-3.5" />
@@ -341,19 +401,38 @@ export default function ProjectList({
           <div className="text-left">
             <label className="block text-[10px] font-mono text-neutral-400 mb-1">НАЗВАНИЕ ПРОЕКТА</label>
             <input
+              aria-label="НАЗВАНИЕ ПРОЕКТА"
               type="text"
               required
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               placeholder="Например: Ночной Экспресс"
-              className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+              disabled={projectSubmitLoading}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500 disabled:opacity-60"
             />
           </div>
+
+          {newType === "single" && (
+            <div className="text-left">
+              <label className="block text-[10px] font-mono text-neutral-400 mb-1">НАЗВАНИЕ ОСНОВНОГО ТРЕКА</label>
+              <input
+                aria-label="НАЗВАНИЕ ОСНОВНОГО ТРЕКА"
+                type="text"
+                required
+                value={newInitialTrackTitle}
+                onChange={(e) => setNewInitialTrackTitle(e.target.value)}
+                placeholder="По умолчанию совпадает с названием проекта"
+                disabled={projectSubmitLoading}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div className="text-left">
               <label className="block text-[10px] font-mono text-neutral-400 mb-1">ФОРМАТ</label>
               <select
+                aria-label="ФОРМАТ"
                 value={newType}
                 onChange={(e) => setNewType(e.target.value as "single" | "album")}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none cursor-pointer"
@@ -365,39 +444,47 @@ export default function ProjectList({
             <div className="text-left">
               <label className="block text-[10px] font-mono text-neutral-400 mb-1">ТЕГИ (через запятую)</label>
               <input
+                aria-label="ТЕГИ"
                 type="text"
                 value={newTags}
                 onChange={(e) => setNewTags(e.target.value)}
                 placeholder="Поп, Акустика, 2026"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none"
+                disabled={projectSubmitLoading}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none disabled:opacity-60"
               />
             </div>
           </div>
 
           <div className="text-left">
             <label className="block text-[10px] font-mono text-neutral-400 mb-1">ОБЛОЖКА (Ссылка на картинку, необязательно)</label>
-            <input
-              type="text"
-              value={newCover}
-              onChange={(e) => setNewCover(e.target.value)}
-              placeholder="https://..."
-              className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none"
-            />
-          </div>
+              <input
+                aria-label="ОБЛОЖКА"
+                type="text"
+                value={newCover}
+                onChange={(e) => setNewCover(e.target.value)}
+                placeholder="https://..."
+                disabled={projectSubmitLoading}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none disabled:opacity-60"
+              />
+            </div>
+
+          {projectSubmitError ? <div className="text-[10px] text-red-400 text-left">{projectSubmitError}</div> : null}
 
           <div className="flex gap-2 justify-end pt-1">
             <button
               type="button"
               onClick={() => setShowAddProject(false)}
-              className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded"
+              disabled={projectSubmitLoading}
+              className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 disabled:bg-neutral-800 text-neutral-300 rounded"
             >
               Отмена
             </button>
             <button
               type="submit"
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-medium"
+              disabled={projectSubmitLoading}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white rounded font-medium"
             >
-              Создать проект
+              {projectSubmitLoading ? "Создаём..." : "Создать проект"}
             </button>
           </div>
         </form>

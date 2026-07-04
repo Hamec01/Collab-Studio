@@ -19,9 +19,21 @@ describe("stage3 access helpers", () => {
       ensureVerifiedForProtectedWrite({ emailVerifiedAt: null, ageAcknowledgedAt: new Date() }),
     ).toThrow(/Email verification is required/);
 
+    try {
+      ensureVerifiedForProtectedWrite({ emailVerifiedAt: null, ageAcknowledgedAt: new Date() });
+    } catch (error: any) {
+      expect(error.code).toBe("EMAIL_VERIFICATION_REQUIRED");
+    }
+
     expect(() =>
       ensureVerifiedForProtectedWrite({ emailVerifiedAt: new Date(), ageAcknowledgedAt: null }),
     ).toThrow(/18\+ acknowledgement is required/);
+
+    try {
+      ensureVerifiedForProtectedWrite({ emailVerifiedAt: new Date(), ageAcknowledgedAt: null });
+    } catch (error: any) {
+      expect(error.code).toBe("AGE_ACKNOWLEDGEMENT_REQUIRED");
+    }
 
     expect(() =>
       ensureVerifiedForProtectedWrite({ emailVerifiedAt: new Date(), ageAcknowledgedAt: new Date() }),

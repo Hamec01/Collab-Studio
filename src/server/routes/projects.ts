@@ -34,6 +34,7 @@ import {
   structuredTrackWriteData,
   structuredVersionWriteData,
 } from "../services/structuredLyrics";
+import { createProjectWorkspace } from "../services/projectCreation";
 import { collaborationUserSelect } from "../serializers/collaboration";
 import { createProjectMemberNotifications } from "../services/notifications";
 import {
@@ -427,26 +428,16 @@ router.post(
   "/",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const user = requireCurrentUser(req);
+    const user = requireVerifiedWriter(req);
     const input = createProjectSchema.parse(req.body);
 
-    const project = await prisma.$transaction(async (tx) => {
-      return tx.project.create({
-        data: {
-          title: input.title,
-          type: input.type,
-          coverUrl: input.coverUrl || null,
-          tags: input.tags ?? [],
-          members: {
-            create: {
-              userId: user.id,
-              role: "owner",
-            },
-          },
-        },
-        include: projectInclude,
-      });
-    });
+    const project = await createProjectWorkspace(prisma, {
+      title: input.title,
+      type: input.type,
+      initialTrackTitle: input.initialTrackTitle,
+      coverUrl: input.coverUrl || null,
+      tags: input.tags ?? [],
+    }, user, projectInclude);
 
     res.status(201).json(serializeProject(project, user.id));
   }),

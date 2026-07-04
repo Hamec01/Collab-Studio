@@ -3,6 +3,7 @@ import {
   acceptInviteSchema,
   createGuestLinkSchema,
   createInviteSchema,
+  createProjectSchema,
   createTrackGrantSchema,
 } from "../server/schemas/projects";
 
@@ -43,5 +44,24 @@ describe("stage3 project schemas", () => {
     const parsed = createGuestLinkSchema.parse({});
     expect(parsed.canDownload).toBe(false);
     expect(parsed.expiresInHours).toBe(48);
+  });
+
+  it("createProjectSchema requires initialTrackTitle only for singles", () => {
+    expect(() => createProjectSchema.parse({
+      title: "Single",
+      type: "single",
+    })).toThrow(/initial track title/i);
+
+    expect(() => createProjectSchema.parse({
+      title: "Album",
+      type: "album",
+      initialTrackTitle: "Should fail",
+    })).toThrow(/must not set/i);
+
+    expect(createProjectSchema.parse({
+      title: "Single",
+      type: "single",
+      initialTrackTitle: "Main Track",
+    }).initialTrackTitle).toBe("Main Track");
   });
 });

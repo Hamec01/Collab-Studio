@@ -644,8 +644,8 @@ export default function App() {
     };
   }, [canEdit, lyricsLease.leaseToken, lyricsSaveStatus]);
 
-  const handleCreateProject = async (title: string, type: "single" | "album", tags: string[], coverUrl?: string) => {
-    const project = await withAuth(() => createProject({ title, type, tags, coverUrl }));
+  const handleCreateProject = async (title: string, type: "single" | "album", initialTrackTitle: string | undefined, tags: string[], coverUrl?: string) => {
+    const project = await withAuth(() => createProject({ title, type, initialTrackTitle, tags, coverUrl }));
     setProjects((prev) => [project, ...prev]);
     navigate(
       buildPrivatePath({

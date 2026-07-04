@@ -88,10 +88,10 @@ export function mergeCustomCapabilities(base: CapabilityMatrix, customRaw: unkno
 
 export function ensureVerifiedForProtectedWrite(user: Pick<User, "emailVerifiedAt" | "ageAcknowledgedAt">) {
   if (!user.emailVerifiedAt) {
-    throw new AppError(403, "EMAIL_NOT_VERIFIED", "Email verification is required for this action");
+    throw new AppError(403, "EMAIL_VERIFICATION_REQUIRED", "Email verification is required for this action");
   }
   if (!user.ageAcknowledgedAt) {
-    throw new AppError(403, "AGE_ACK_REQUIRED", "18+ acknowledgement is required for this action");
+    throw new AppError(403, "AGE_ACKNOWLEDGEMENT_REQUIRED", "18+ acknowledgement is required for this action");
   }
 }
 

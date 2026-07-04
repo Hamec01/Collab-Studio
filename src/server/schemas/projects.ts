@@ -14,8 +14,24 @@ export const memberParamsSchema = z.object({
 export const createProjectSchema = z.object({
   title: z.string().trim().min(1).max(160),
   type: z.enum(["single", "album"]),
+  initialTrackTitle: z.string().trim().min(1).max(160).optional(),
   coverUrl: z.string().trim().url().max(2048).optional().or(z.literal("")),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+}).superRefine((value, context) => {
+  if (value.type === "single" && !value.initialTrackTitle) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["initialTrackTitle"],
+      message: "Single projects require an initial track title",
+    });
+  }
+  if (value.type === "album" && value.initialTrackTitle) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["initialTrackTitle"],
+      message: "Album projects must not set an initial track title",
+    });
+  }
 });
 
 export const updateProjectSchema = z
