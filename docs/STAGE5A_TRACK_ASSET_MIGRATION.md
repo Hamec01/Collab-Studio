@@ -44,6 +44,22 @@ Slice 3 adds dual-write for new uploads only:
 - legacy API responses stay unchanged;
 - backfill remains deferred.
 
+Slice 4 adds resumable backfill tooling and rehearsal only:
+
+- standalone CLI for `AudioVersion -> TrackAsset`
+- dry-run and execute modes
+- stable compound cursor
+- idempotent reruns
+- missing/conflict reporting
+- isolated execute rehearsal
+- restored-backup dry-run rehearsal
+
+Slice 4 still does not:
+
+- run backfill on production
+- cut over frontend/player/routes to `TrackAsset`
+- retire legacy `AudioVersion`
+
 ## Legacy inventory
 
 Current production-relevant audio/file metadata lives in `AudioVersion`:
@@ -386,6 +402,180 @@ Slice 3 keeps that decision unchanged:
 - application-level protection is currently: verified access checks, serializable transaction, existing `AudioVersion(trackId, versionNumber)` uniqueness, and read-path mismatch filtering
 - composite consistency and stronger primary constraints remain a future write-path hardening slice
 
+## Backfill CLI
+
+CLI entrypoint:
+
+- `npm run backfill:track-assets -- --dry-run --batch-size=100`
+
+Supported arguments:
+
+- `--dry-run`
+- `--execute`
+- `--batch-size=<n>`
+- `--cursor=<base64url-json>`
+- `--max-rows=<n>`
+- `--json`
+- `--strict-missing-files`
+- `--fail-on-conflict`
+
+Safety contract:
+
+- exactly one of `--dry-run` / `--execute` is required
+- dry-run never writes
+- execute writes only `TrackAsset`
+- `AudioVersion`, `Project`, `Track`, `User` and physical files are never modified by the backfill
+
+Production guard:
+
+- execute mode requires `TRACK_ASSET_BACKFILL_CONFIRM=YES`
+- no startup, migration, or deploy path runs this backfill automatically
+
+### Cursor format
+
+Cursor is base64url-encoded JSON:
+
+```json
+{
+  "createdAt": "2026-07-06T10:00:00.000Z",
+  "id": "uuid"
+}
+```
+
+Ordering:
+
+1. `createdAt ASC`
+2. `id ASC`
+
+Resume semantics:
+
+- cursor points to the last processed `AudioVersion`
+- next batch reads strictly after `(createdAt, id)`
+- no offset pagination is used
+
+### Mapping behavior
+
+For each eligible `AudioVersion`, backfill creates:
+
+- `trackId = AudioVersion.trackId`
+- `projectId = AudioVersion.track.projectId`
+- `uploadedByUserId = AudioVersion.uploadedById`
+- `kind = AUDIO_VERSION`
+- `status = READY`
+- `originalFilename = AudioVersion.originalFilename`
+- `storageKey = AudioVersion.storageKey`
+- `storageProvider = external | local`
+- `externalUrl` / `externalProvider` copied
+- `mimeType` copied
+- `sizeBytes` copied
+- `durationMs = round(durationSeconds * 1000)`
+- `legacyAudioVersionId = AudioVersion.id`
+- `versionNumber = AudioVersion.versionNumber`
+- `createdAt = AudioVersion.createdAt`
+- `metadata = { source: "AudioVersion", backfilled: true, ... }`
+
+`updatedAt` is left to Prisma/DB current write time.
+
+### Missing-file behavior
+
+Local file classes:
+
+- `present`
+- `missing`
+- `conflict`
+
+Default policy for `missing` local files:
+
+- create `TrackAsset` anyway for compatibility
+- keep `status = READY`
+- add `metadata.fileMissing = true`
+- report the row in `missingItems`
+
+Reason:
+
+- legacy API still exposes the `AudioVersion`
+- stream failures already exist at legacy level for missing files
+- metadata backfill should not silently suppress those historical rows
+
+With `--strict-missing-files`:
+
+- missing rows are reported
+- execute exits non-zero
+- no special repair or deletion is attempted
+
+### Conflict behavior
+
+If `TrackAsset(legacyAudioVersionId = AudioVersion.id)` already exists:
+
+- compatible mapping => `skipped`
+- mismatched mapping => `conflict`
+- nothing is updated for conflict cases
+
+Conflict checks include:
+
+- `trackId`
+- `projectId`
+- `versionNumber`
+- `originalFilename`
+- local/external mode
+- deleted state
+
+With `--fail-on-conflict`:
+
+- process still reports rows
+- exit code becomes non-zero after the report
+
+### Primary logic
+
+Backfill tries to preserve the current legacy playable choice:
+
+1. if the track already has one non-deleted primary asset, no new primary is assigned;
+2. if the track has multiple primary assets, backfill reports conflict and does not repair it;
+3. otherwise the primary target is the current top legacy `AudioVersion` under existing app ordering:
+   - `versionNumber DESC`
+   - `id ASC`
+
+If that top legacy row is already mapped to a non-primary `TrackAsset`, slice 4 promotes that existing mapped asset to primary. This is the only intentional existing-row update in the backfill path.
+
+### Race handling
+
+Write unit is per row in a serializable transaction.
+
+If concurrent dual-write creates the mapping first:
+
+- backfill insert may hit `P2002`
+- backfill re-reads `TrackAsset` by `legacyAudioVersionId`
+- compatible row => counted as `raced`
+- incompatible row => counted as `conflict`
+
+### Reporting
+
+JSON result includes:
+
+- `mode`
+- `startedAt`
+- `finishedAt`
+- `scanned`
+- `eligible`
+- `created`
+- `wouldCreate`
+- `skipped`
+- `raced`
+- `external`
+- `localPresent`
+- `missing`
+- `conflicts`
+- `failed`
+- `batches`
+- `lastCursor`
+- `nextCursor`
+- `durationMs`
+
+Detailed arrays:
+
+- `missingItems`
+- `conflictItems`
+
 ## Integration test matrix
 
 Isolated PostgreSQL integration coverage added for:
@@ -416,6 +606,23 @@ Slice 3 isolated PostgreSQL + temporary uploads coverage adds:
 - viewer/outsider/cross-project denial
 - concurrent uploads allocate distinct version numbers and one primary
 - legacy delete soft-deletes linked `TrackAsset` and removes the local file
+
+Slice 4 isolated CLI coverage adds:
+
+- dry-run without writes
+- execute creates mapped assets
+- rerun idempotency
+- batch/resume with stable cursor
+- partial existing mappings
+- external rows
+- present local files
+- missing local files with compatibility metadata
+- invalid storage key conflict
+- conflicting existing mapping conflict
+- primary assignment
+- promotion of existing mapped top legacy asset to primary
+- no changes to `Project` / `Track` / `User` / `AudioVersion`
+- production-guard refusal without `TRACK_ASSET_BACKFILL_CONFIRM=YES`
 
 ## Validation SQL
 
