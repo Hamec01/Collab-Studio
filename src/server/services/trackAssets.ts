@@ -29,14 +29,12 @@ export type TrackAssetDto = {
   status: TrackAssetStatus;
   title: string | null;
   originalFilename: string;
-  storageKey: string | null;
   storageProvider: string;
   externalUrl: string | null;
   externalProvider: ExternalProvider | null;
   mimeType: string | null;
   sizeBytes: number | null;
   durationMs: number | null;
-  checksum: string | null;
   waveformData: unknown | null;
   metadata: unknown;
   sourceAssetId: string | null;
@@ -140,8 +138,11 @@ function decodePathSegmentRepeatedly(segment: string) {
 
 function ensureSinglePrimaryAsset<T extends { isPrimary: boolean }>(assets: T[]) {
   if (assets.length === 0) return assets;
-  if (assets.some((asset) => asset.isPrimary)) return assets;
-  return assets.map((asset, index) => (index === 0 ? { ...asset, isPrimary: true } : asset));
+  const explicitPrimaryIndex = assets.findIndex((asset) => asset.isPrimary);
+  if (explicitPrimaryIndex >= 0) {
+    return assets.map((asset, index) => ({ ...asset, isPrimary: index === explicitPrimaryIndex }));
+  }
+  return assets.map((asset, index) => ({ ...asset, isPrimary: index === 0 }));
 }
 
 export function serializeTrackAssetSizeBytes(sizeBytes: number | null | undefined) {
@@ -212,6 +213,51 @@ export function canDeleteTrackAsset(access: AssetAccessLike | null | undefined) 
   return Boolean(access && access.role !== "viewer");
 }
 
+function trackAssetKindPriority(kind: TrackAssetKind) {
+  switch (kind) {
+    case "MASTER":
+      return 0;
+    case "AUDIO_VERSION":
+      return 1;
+    case "DEMO":
+      return 2;
+    case "REFERENCE":
+      return 3;
+    case "INSTRUMENTAL":
+      return 4;
+    case "ACAPELLA":
+      return 5;
+    case "STEM":
+      return 6;
+    case "OTHER":
+    default:
+      return 7;
+  }
+}
+
+function compareTrackAssetLike(left: TrackAssetLike, right: TrackAssetLike) {
+  if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
+
+  const kindDelta = trackAssetKindPriority(left.kind) - trackAssetKindPriority(right.kind);
+  if (kindDelta !== 0) return kindDelta;
+
+  const leftVersion = left.versionNumber ?? Number.MIN_SAFE_INTEGER;
+  const rightVersion = right.versionNumber ?? Number.MIN_SAFE_INTEGER;
+  if (leftVersion !== rightVersion) return rightVersion - leftVersion;
+
+  const createdAtDelta = right.createdAt.getTime() - left.createdAt.getTime();
+  if (createdAtDelta !== 0) return createdAtDelta;
+
+  return left.id.localeCompare(right.id);
+}
+
+function isVisibleTrackAsset(asset: TrackAssetLike, expected: { projectId: string; trackId: string }) {
+  if (asset.projectId !== expected.projectId || asset.trackId !== expected.trackId) return false;
+  if (asset.deletedAt) return false;
+  if (asset.status === "DELETED") return false;
+  return true;
+}
+
 export function mapLegacyAudioVersionToTrackAssetDto(
   audio: LegacyAudioVersionLike,
   projectId: string,
@@ -228,7 +274,6 @@ export function mapLegacyAudioVersionToTrackAssetDto(
     status: "READY",
     title: null,
     originalFilename: audio.originalFilename,
-    storageKey: audio.storageKey,
     storageProvider: "local",
     externalUrl: audio.externalUrl,
     externalProvider: audio.externalProvider,
@@ -237,7 +282,6 @@ export function mapLegacyAudioVersionToTrackAssetDto(
     durationMs: audio.durationSeconds !== null && audio.durationSeconds !== undefined
       ? Math.max(Math.round(audio.durationSeconds * 1000), 0)
       : null,
-    checksum: null,
     waveformData: null,
     metadata: { legacyAudioVersionId: audio.id, source: "AudioVersion" },
     sourceAssetId: null,
@@ -306,10 +350,16 @@ export function selectTrackAssetsWithFallback(input: {
   trackAssets: TrackAssetLike[];
   legacyAudioVersions: LegacyAudioVersionLike[];
   projectId: string;
+  trackId: string;
 }) {
-  if (input.trackAssets.length > 0) {
+  const visibleTrackAssets = input.trackAssets.filter((asset) => isVisibleTrackAsset(asset, {
+    projectId: input.projectId,
+    trackId: input.trackId,
+  }));
+
+  if (visibleTrackAssets.length > 0) {
     const mappedLegacyIds = new Set(
-      input.trackAssets
+      visibleTrackAssets
         .map((asset) => asset.legacyAudioVersionId)
         .filter((value): value is string => typeof value === "string" && value.length > 0),
     );
@@ -319,16 +369,29 @@ export function selectTrackAssetsWithFallback(input: {
       .map((audio) => mapLegacyAudioVersionToTrackAssetLike(audio, input.projectId, false));
 
     if (fallbackLegacy.length === 0) {
-      return { source: "trackAsset" as const, assets: ensureSinglePrimaryAsset([...input.trackAssets]) };
+      return {
+        source: "trackAsset" as const,
+        assets: ensureSinglePrimaryAsset([...visibleTrackAssets].sort(compareTrackAssetLike)),
+      };
     }
 
-    const assets = ensureSinglePrimaryAsset([...input.trackAssets, ...fallbackLegacy]);
+    const assets = ensureSinglePrimaryAsset([...visibleTrackAssets, ...fallbackLegacy].sort(compareTrackAssetLike));
     return { source: "merged" as const, assets };
   }
   return {
     source: "audioVersion" as const,
     assets: ensureSinglePrimaryAsset(
-      input.legacyAudioVersions.map((audio) => mapLegacyAudioVersionToTrackAssetDto(audio, input.projectId, false)),
+      input.legacyAudioVersions
+        .map((audio) => mapLegacyAudioVersionToTrackAssetDto(audio, input.projectId, false))
+        .sort((left, right) => {
+          if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
+          const leftVersion = left.versionNumber ?? Number.MIN_SAFE_INTEGER;
+          const rightVersion = right.versionNumber ?? Number.MIN_SAFE_INTEGER;
+          if (leftVersion !== rightVersion) return rightVersion - leftVersion;
+          const createdAtDelta = new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+          if (createdAtDelta !== 0) return createdAtDelta;
+          return left.id.localeCompare(right.id);
+        }),
     ),
   };
 }

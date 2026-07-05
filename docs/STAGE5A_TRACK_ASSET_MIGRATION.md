@@ -20,6 +20,22 @@ This slice does not:
 - change uploads mount or filesystem layout;
 - deploy to production.
 
+Slice 2 extends the foundation with server-side dual-read integration only:
+
+- stable `Track.assets` contract on full track responses;
+- deterministic merge of native `TrackAsset` and legacy `AudioVersion`;
+- partial-backfill-safe deduplication;
+- public DTO hardening;
+- isolated PostgreSQL integration coverage.
+
+Slice 2 still does not:
+
+- introduce upload dual-write;
+- add asset stream/download routes;
+- backfill production data;
+- switch frontend playback to `assets`;
+- deploy or migrate production.
+
 ## Legacy inventory
 
 Current production-relevant audio/file metadata lives in `AudioVersion`:
@@ -49,6 +65,23 @@ Current frontend dependencies:
 - upload modal inside `src/App.tsx`
 - `src/api/projects.ts`
 - `src/types.ts`
+
+Current full-track API responses that now expose additive `assets`:
+
+- `GET /api/projects`
+- `GET /api/projects/:projectId`
+- `GET /api/projects/:projectId/tracks`
+- `GET /api/projects/:projectId/tracks/:trackId`
+- `POST /api/projects`
+- `POST /api/projects/:projectId/tracks`
+- `PATCH /api/projects/:projectId/tracks/:trackId`
+
+Legacy-only endpoints for now:
+
+- audio upload routes
+- legacy audio stream/download routes
+- delete/cleanup paths
+- frontend player/upload flows
 
 ## Target schema
 
@@ -120,13 +153,50 @@ Default mapping choices:
 
 ### Dual-read
 
-Slice 1 introduces additive `Track.assets` serialization:
+Slice 2 finalizes the read-path contract:
 
-- serialize native `TrackAsset` rows into `assets`;
-- merge any still-unmapped legacy `AudioVersion` rows into `assets`;
-- exclude legacy rows only when their `AudioVersion.id` is already represented by `TrackAsset.legacyAudioVersionId`;
-- if there are no `TrackAsset` rows yet, derive all `assets` from legacy `audioVersions`;
-- existing `audioVersions` remains unchanged.
+- `audioVersions` remains unchanged for all existing clients;
+- `assets` is always present on full track responses as an array;
+- native `TrackAsset` rows are read first;
+- legacy `AudioVersion` rows are converted into compatibility assets only when their `id` is not already referenced by `TrackAsset.legacyAudioVersionId`;
+- partial backfill is therefore safe: migrated rows appear once, unmigrated rows still appear through legacy fallback;
+- `TrackAsset` rows with `deletedAt != null` or `status = DELETED` are excluded from normal client responses;
+- rows whose `projectId` / `trackId` do not match the owning track are excluded in the read path;
+- if native rows are absent, all `assets` are derived from legacy `audioVersions`.
+
+### Ordering and primary normalization
+
+Serialized `assets` use deterministic ordering:
+
+1. `isPrimary = true`
+2. kind priority: `MASTER`, `AUDIO_VERSION`, `DEMO`, `REFERENCE`, `INSTRUMENTAL`, `ACAPELLA`, `STEM`, `OTHER`
+3. `versionNumber` descending
+4. `createdAt` descending
+5. `id` ascending as final tie-breaker
+
+Primary normalization rules:
+
+- at most one serialized asset is returned with `isPrimary = true`;
+- if one or more rows are explicitly primary, the first row in deterministic order keeps primary and the rest are normalized to `false` in the DTO only;
+- if no row is explicitly primary, the first serialized asset becomes primary in the DTO only;
+- read normalization never mutates database rows.
+
+### Status and playability rules
+
+- `READY` + mapped legacy audio + non-external asset => legacy stream/download URLs are returned;
+- `UPLOADING`, `FAILED`, `DELETED`, or `deletedAt != null` => no playable URLs;
+- native assets without legacy mapping currently return `streamUrl = null` and `downloadUrl = null` until asset routes exist;
+- external legacy/native assets preserve `externalUrl` and `externalProvider`, and do not expose local legacy URLs.
+
+### Public vs internal DTO
+
+Public `TrackAssetDto` intentionally does not expose:
+
+- raw `storageKey`
+- filesystem paths
+- `checksum`
+
+Those fields remain server-internal. This keeps the additive contract no broader than required for the current client.
 
 This preserves old clients while exposing the future contract.
 
@@ -165,6 +235,12 @@ Suggested order:
 4. create `TrackAsset` metadata only;
 5. emit resumable cursor at batch boundary.
 
+Partial-backfill read rule during transition:
+
+- if `TrackAsset(legacyAudioVersionId = X)` exists, legacy `AudioVersion(X)` is suppressed from fallback;
+- if `AudioVersion(Y)` has no mapped `TrackAsset`, it still appears in `assets`;
+- no all-or-nothing switch is allowed before backfill completion.
+
 ## Rollback strategy
 
 Slice 1 rollback is intentionally simple:
@@ -175,6 +251,12 @@ Slice 1 rollback is intentionally simple:
 
 No destructive down migration is required for slice 1.
 
+Slice 2 rollback remains application-only:
+
+1. redeploy the last commit that serialized only `audioVersions`;
+2. leave additive `TrackAsset` schema in place;
+3. no data rewrite is required because slice 2 is read-only with respect to assets.
+
 ## Deployment order for later slices
 
 1. deploy additive `TrackAsset` schema
@@ -184,6 +266,36 @@ No destructive down migration is required for slice 1.
 5. verify stream/download/read parity
 6. switch read path to prefer `TrackAsset`
 7. retire legacy writes only after parity + cleanup criteria pass
+
+## DB consistency decision
+
+`TrackAsset` currently stores both `trackId` and `projectId` for efficient authorization and batching, but slice 2 does not add a composite foreign key yet.
+
+Reason:
+
+- current slice is read-only for assets;
+- the safe immediate guard is serializer/service filtering of cross-project mismatches;
+- DB-level composite consistency and partial unique-primary constraints are better introduced alongside write-path work in the dual-write slice, after isolated rehearsal of the exact constraint shape.
+
+This is a required follow-up for Stage 5A write-path hardening.
+
+## Integration test matrix
+
+Isolated PostgreSQL integration coverage added for:
+
+- empty track
+- legacy-only track
+- fully mapped track
+- partial backfill merge
+- native non-legacy asset
+- status filtering and playability
+- multiple explicit primary flags
+- cross-project mismatch filtering
+- external legacy audio
+- owner/editor/viewer read access
+- outsider `404`
+- anonymous `401`
+- project creation and add-track responses carrying additive `assets`
 
 ## Validation SQL
 

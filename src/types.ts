@@ -71,14 +71,12 @@ export interface TrackAsset {
   status: "UPLOADING" | "READY" | "FAILED" | "DELETED";
   title: string | null;
   originalFilename: string;
-  storageKey: string | null;
   storageProvider: string;
   externalUrl: string | null;
   externalProvider: "google" | "yandex" | "telegram" | "other" | null;
   mimeType: string | null;
   sizeBytes: number | null;
   durationMs: number | null;
-  checksum: string | null;
   waveformData: unknown | null;
   metadata: unknown;
   sourceAssetId: string | null;

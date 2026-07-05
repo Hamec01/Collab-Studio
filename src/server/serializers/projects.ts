@@ -121,6 +121,7 @@ export function serializeTrack(track: TrackWithRelations) {
     trackAssets: track.trackAssets,
     legacyAudioVersions: track.audioVersions,
     projectId: track.projectId,
+    trackId: track.id,
   });
   const lyricsDiscussions = [
     ...track.discussionThreads.map((thread) => serializeLyricsDiscussionThread(thread, lyrics.document)),

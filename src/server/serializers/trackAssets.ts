@@ -13,10 +13,11 @@ export type TrackAssetWithUploader = TrackAssetLike & {
 };
 
 export function serializeTrackAsset(asset: TrackAssetWithUploader): TrackAssetDto {
-  const streamUrl = asset.deletedAt || !asset.legacyAudioVersionId
+  const isPlayableLegacyAsset = asset.status === "READY" && !asset.deletedAt && !asset.externalUrl && Boolean(asset.legacyAudioVersionId);
+  const streamUrl = !isPlayableLegacyAsset
     ? null
     : `/api/projects/${asset.projectId}/tracks/${asset.trackId}/audio/${asset.legacyAudioVersionId}/stream`;
-  const downloadUrl = asset.deletedAt || !asset.legacyAudioVersionId
+  const downloadUrl = !isPlayableLegacyAsset
     ? null
     : `/api/projects/${asset.projectId}/tracks/${asset.trackId}/audio/${asset.legacyAudioVersionId}/download`;
 
@@ -29,14 +30,12 @@ export function serializeTrackAsset(asset: TrackAssetWithUploader): TrackAssetDt
     status: asset.status,
     title: asset.title,
     originalFilename: asset.originalFilename,
-    storageKey: asset.storageKey,
     storageProvider: asset.storageProvider,
     externalUrl: asset.externalUrl,
     externalProvider: asset.externalProvider,
     mimeType: asset.mimeType,
     sizeBytes: serializeTrackAssetSizeBytes(asset.sizeBytes),
     durationMs: asset.durationMs,
-    checksum: asset.checksum,
     waveformData: asset.waveformData,
     metadata: asset.metadata,
     sourceAssetId: asset.sourceAssetId,

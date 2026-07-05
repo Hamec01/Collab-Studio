@@ -65,6 +65,8 @@ describe("trackAssets", () => {
     expect(dto.sizeBytes).toBe(1024);
     expect(dto.streamUrl).toBe("/api/projects/project-1/tracks/track-1/audio/audio-legacy-1/stream");
     expect(dto.downloadUrl).toBe("/api/projects/project-1/tracks/track-1/audio/audio-legacy-1/download");
+    expect("storageKey" in dto).toBe(false);
+    expect("checksum" in dto).toBe(false);
   });
 
   it("returns null URLs for native TrackAsset rows without legacy audio compatibility id", () => {
@@ -164,6 +166,7 @@ describe("trackAssets", () => {
     const fallback = selectTrackAssetsWithFallback({
       trackAssets: [],
       projectId: "project-1",
+      trackId: "track-1",
       legacyAudioVersions: [
         {
           id: "audio-1",
@@ -192,6 +195,7 @@ describe("trackAssets", () => {
   it("prefers TrackAsset rows over legacy fallback", () => {
     const selected = selectTrackAssetsWithFallback({
       projectId: "project-1",
+      trackId: "track-1",
       legacyAudioVersions: [],
       trackAssets: [
         {
@@ -232,6 +236,7 @@ describe("trackAssets", () => {
   it("merges partial backfill without duplicating mapped legacy audio", () => {
     const selected = selectTrackAssetsWithFallback({
       projectId: "project-1",
+      trackId: "track-1",
       legacyAudioVersions: [
         {
           id: "audio-a",
@@ -301,6 +306,179 @@ describe("trackAssets", () => {
     expect(selected.assets.filter((asset) => asset.legacyAudioVersionId === "audio-a")).toHaveLength(1);
     expect(selected.assets.some((asset) => asset.legacyAudioVersionId === "audio-b")).toBe(true);
     expect(selected.assets.filter((asset) => asset.isPrimary)).toHaveLength(1);
+  });
+
+  it("filters deleted and mismatched assets from the normal response", () => {
+    const selected = selectTrackAssetsWithFallback({
+      projectId: "project-1",
+      trackId: "track-1",
+      legacyAudioVersions: [],
+      trackAssets: [
+        {
+          id: "asset-mismatch",
+          trackId: "track-1",
+          projectId: "project-2",
+          uploadedByUserId: null,
+          kind: "REFERENCE",
+          status: "READY",
+          title: null,
+          originalFilename: "wrong.mp3",
+          storageKey: null,
+          storageProvider: "local",
+          externalUrl: "https://example.com/wrong.mp3",
+          externalProvider: "other",
+          mimeType: "audio/mpeg",
+          sizeBytes: 10,
+          durationMs: 5000,
+          checksum: null,
+          waveformData: null,
+          metadata: {},
+          sourceAssetId: null,
+          legacyAudioVersionId: null,
+          versionNumber: null,
+          isPrimary: false,
+          createdAt: new Date("2026-07-05T10:00:00.000Z"),
+          updatedAt: new Date("2026-07-05T10:00:00.000Z"),
+          deletedAt: null,
+          uploadedBy: null,
+        },
+        {
+          id: "asset-deleted",
+          trackId: "track-1",
+          projectId: "project-1",
+          uploadedByUserId: null,
+          kind: "REFERENCE",
+          status: "DELETED",
+          title: null,
+          originalFilename: "deleted.mp3",
+          storageKey: null,
+          storageProvider: "local",
+          externalUrl: "https://example.com/deleted.mp3",
+          externalProvider: "other",
+          mimeType: "audio/mpeg",
+          sizeBytes: 10,
+          durationMs: 5000,
+          checksum: null,
+          waveformData: null,
+          metadata: {},
+          sourceAssetId: null,
+          legacyAudioVersionId: null,
+          versionNumber: null,
+          isPrimary: false,
+          createdAt: new Date("2026-07-05T10:01:00.000Z"),
+          updatedAt: new Date("2026-07-05T10:01:00.000Z"),
+          deletedAt: null,
+          uploadedBy: null,
+        },
+      ],
+    });
+
+    expect(selected.assets).toHaveLength(0);
+  });
+
+  it("normalizes multiple explicit primaries deterministically", () => {
+    const selected = selectTrackAssetsWithFallback({
+      projectId: "project-1",
+      trackId: "track-1",
+      legacyAudioVersions: [],
+      trackAssets: [
+        {
+          id: "asset-older",
+          trackId: "track-1",
+          projectId: "project-1",
+          uploadedByUserId: null,
+          kind: "MASTER",
+          status: "READY",
+          title: null,
+          originalFilename: "older.wav",
+          storageKey: null,
+          storageProvider: "local",
+          externalUrl: null,
+          externalProvider: null,
+          mimeType: "audio/wav",
+          sizeBytes: 100,
+          durationMs: 1000,
+          checksum: null,
+          waveformData: null,
+          metadata: {},
+          sourceAssetId: null,
+          legacyAudioVersionId: "audio-1",
+          versionNumber: 1,
+          isPrimary: true,
+          createdAt: new Date("2026-07-05T10:00:00.000Z"),
+          updatedAt: new Date("2026-07-05T10:00:00.000Z"),
+          deletedAt: null,
+          uploadedBy: null,
+        },
+        {
+          id: "asset-newer",
+          trackId: "track-1",
+          projectId: "project-1",
+          uploadedByUserId: null,
+          kind: "MASTER",
+          status: "READY",
+          title: null,
+          originalFilename: "newer.wav",
+          storageKey: null,
+          storageProvider: "local",
+          externalUrl: null,
+          externalProvider: null,
+          mimeType: "audio/wav",
+          sizeBytes: 200,
+          durationMs: 2000,
+          checksum: null,
+          waveformData: null,
+          metadata: {},
+          sourceAssetId: null,
+          legacyAudioVersionId: "audio-2",
+          versionNumber: 2,
+          isPrimary: true,
+          createdAt: new Date("2026-07-05T10:01:00.000Z"),
+          updatedAt: new Date("2026-07-05T10:01:00.000Z"),
+          deletedAt: null,
+          uploadedBy: null,
+        },
+      ],
+    });
+
+    expect(selected.assets.filter((asset) => asset.isPrimary)).toHaveLength(1);
+    expect(selected.assets[0].id).toBe("asset-newer");
+    expect(selected.assets[0].isPrimary).toBe(true);
+    expect(selected.assets[1].isPrimary).toBe(false);
+  });
+
+  it("keeps non-ready assets non-playable", () => {
+    const dto = serializeTrackAsset({
+      id: "asset-uploading",
+      trackId: "track-1",
+      projectId: "project-1",
+      uploadedByUserId: null,
+      kind: "AUDIO_VERSION",
+      status: "UPLOADING",
+      title: null,
+      originalFilename: "uploading.wav",
+      storageKey: "project-1/track-1/uploading.wav",
+      storageProvider: "local",
+      externalUrl: null,
+      externalProvider: null,
+      mimeType: "audio/wav",
+      sizeBytes: 99,
+      durationMs: 999,
+      checksum: null,
+      waveformData: null,
+      metadata: {},
+      sourceAssetId: null,
+      legacyAudioVersionId: "audio-up",
+      versionNumber: 1,
+      isPrimary: false,
+      createdAt: new Date("2026-07-05T10:00:00.000Z"),
+      updatedAt: new Date("2026-07-05T10:00:00.000Z"),
+      deletedAt: null,
+      uploadedBy: null,
+    });
+
+    expect(dto.streamUrl).toBeNull();
+    expect(dto.downloadUrl).toBeNull();
   });
 
   it("prevents duplicate backfill for the same legacy audio version", () => {
