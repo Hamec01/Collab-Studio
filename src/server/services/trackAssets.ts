@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ExternalProvider, TrackAssetKind, TrackAssetStatus } from "@prisma/client";
+import type { ExternalProvider, Prisma, TrackAssetKind, TrackAssetStatus } from "@prisma/client";
 import { AppError } from "../middleware/errors";
 
 export const trackAssetKinds = [
@@ -119,6 +119,10 @@ export type AssetBackfillPlanInput = {
   projectId: string;
   audioVersion: LegacyAudioVersionLike;
   existingLegacyAudioVersionIds: ReadonlySet<string>;
+};
+
+export type AudioVersionForTrackAsset = LegacyAudioVersionLike & {
+  uploadedById: string | null;
 };
 
 function decodePathSegmentRepeatedly(segment: string) {
@@ -407,28 +411,45 @@ export function buildTrackAssetBackfillPlan(input: AssetBackfillPlanInput) {
 
   return {
     action: "create" as const,
-    data: {
-      trackId: input.audioVersion.trackId,
+    data: buildTrackAssetCreateDataFromAudioVersion({
       projectId: input.projectId,
-      uploadedByUserId: input.audioVersion.uploadedById ?? null,
-      kind: "AUDIO_VERSION" as const,
-      status: "READY" as const,
-      title: null,
-      originalFilename: input.audioVersion.originalFilename,
-      storageKey: input.audioVersion.storageKey,
-      storageProvider: "local",
-      externalUrl: input.audioVersion.externalUrl,
-      externalProvider: input.audioVersion.externalProvider,
-      mimeType: input.audioVersion.mimeType,
-      sizeBytes: input.audioVersion.sizeBytes,
-      durationMs: input.audioVersion.durationSeconds !== null && input.audioVersion.durationSeconds !== undefined
-        ? Math.max(Math.round(input.audioVersion.durationSeconds * 1000), 0)
-        : null,
-      metadata: { source: "AudioVersion" },
-      legacyAudioVersionId: input.audioVersion.id,
-      versionNumber: input.audioVersion.versionNumber,
+      audioVersion: {
+        ...input.audioVersion,
+        uploadedById: input.audioVersion.uploadedById ?? null,
+      },
       isPrimary: false,
-      createdAt: input.audioVersion.createdAt,
-    },
+      storageProvider: input.audioVersion.isExternal ? "external" : "local",
+    }),
+  };
+}
+
+export function buildTrackAssetCreateDataFromAudioVersion(input: {
+  projectId: string;
+  audioVersion: AudioVersionForTrackAsset;
+  isPrimary: boolean;
+  storageProvider?: string;
+}): Prisma.TrackAssetUncheckedCreateInput {
+  return {
+    trackId: input.audioVersion.trackId,
+    projectId: input.projectId,
+    uploadedByUserId: input.audioVersion.uploadedById ?? null,
+    kind: "AUDIO_VERSION",
+    status: "READY",
+    title: null,
+    originalFilename: input.audioVersion.originalFilename,
+    storageKey: input.audioVersion.storageKey,
+    storageProvider: input.storageProvider ?? (input.audioVersion.isExternal ? "external" : "local"),
+    externalUrl: input.audioVersion.externalUrl,
+    externalProvider: input.audioVersion.externalProvider,
+    mimeType: input.audioVersion.mimeType,
+    sizeBytes: input.audioVersion.sizeBytes,
+    durationMs: input.audioVersion.durationSeconds !== null && input.audioVersion.durationSeconds !== undefined
+      ? Math.max(Math.round(input.audioVersion.durationSeconds * 1000), 0)
+      : null,
+    metadata: { source: "AudioVersion" },
+    legacyAudioVersionId: input.audioVersion.id,
+    versionNumber: input.audioVersion.versionNumber,
+    isPrimary: input.isPrimary,
+    createdAt: input.audioVersion.createdAt,
   };
 }

@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 5A`
-- Active slice: Stage 5A slice 2 completed locally — TrackAsset dual-read API foundation, partial-backfill merge contract and isolated integration PASS; production deploy intentionally not performed
+- Active slice: Stage 5A slice 3 completed locally — TrackAsset dual-write upload foundation, linked AudioVersion+TrackAsset writes and isolated upload/delete integration PASS; production deploy intentionally not performed
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -41,7 +41,7 @@
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
-| Stage 5A — TrackAsset migration | in_progress | Slice 2 completed locally; dual-read API contract and isolated integration PASS; production migration/deploy intentionally not performed |
+| Stage 5A — TrackAsset migration | in_progress | Slice 3 completed locally; dual-write for new uploads and isolated upload/delete integration PASS; production migration/deploy intentionally not performed |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
@@ -70,8 +70,9 @@ Stage 5A:
 6. Slice 1 завершён локально: TrackAsset audit, additive schema/migration, compatibility helpers, additive `Track.assets`, isolated rehearsal and rollback plan.
 7. Production migration не применялась; production deploy не выполнялся.
 8. Slice 2 завершён локально: stable additive `Track.assets`, partial-backfill-safe merge, public DTO hardening и isolated PostgreSQL API integration coverage.
-9. Production migration не применялась; production deploy не выполнялся.
-10. Следующий шаг — только Stage 5A slice 3 (dual-write upload foundation) после отдельного подтверждения; Stage 4C+/5B не начинать.
+9. Slice 3 завершён локально: все новые local/external audio uploads теперь dual-write в `AudioVersion` + linked `TrackAsset`; legacy delete compatibility soft-deletes linked asset metadata.
+10. Production migration не применялась; production deploy не выполнялся; backfill не запускался.
+11. Следующий шаг — только Stage 5A slice 4 (backfill preparation / migration continuation по roadmap) после отдельного подтверждения; Stage 4C+/5B не начинать.
 
 ## Журнал slices
 
@@ -92,6 +93,7 @@ Stage 5A:
 | 2026-07-05 | Stage 4B production completion | Production app выровнен с уже применёнными Stage 4B migrations; mobile lyrics interaction fix deployed; API smoke PASS; owner-confirmed authenticated mobile smoke PASS; backup path сохранён; `ERR_ERL_KEY_GEN_IPV6` вынесен в follow-up warning | `main@ca6b93e` | Production health PASS; app/postgres healthy; no Prisma/missing-column errors | Следующий шаг — Stage 5A только после отдельного подтверждения |
 | 2026-07-05 | Stage 5A slice 1 | Выполнены TrackAsset audit, additive Prisma schema/migration, compatibility helpers, additive `Track.assets` serialization, storage/path safety tests и isolated rehearsal на empty + restored-backup DB; partial-backfill dual-read merge сохранён | `main`, local diff | prisma format/validate/generate PASS; empty + restored-backup migrate rehearse PASS; production untouched | Следующий шаг — Stage 5A slice 2 только после отдельного подтверждения |
 | 2026-07-05 | Stage 5A slice 2 | Доведён dual-read API contract: deterministic `Track.assets`, partial-backfill-safe merge, DTO hardening без raw storage paths, status/deleted filtering и isolated PostgreSQL integration coverage для full track responses и access rules | `main`, local diff | focused isolated integration PASS; production untouched | Следующий шаг — Stage 5A slice 3 только после отдельного подтверждения |
+| 2026-07-05 | Stage 5A slice 3 | Введён central dual-write service для новых local/external audio uploads: атомарный `AudioVersion` + linked `TrackAsset`, cleanup after DB failure, legacy delete compatibility с soft-delete linked asset metadata и isolated PostgreSQL+uploads integration coverage | `main`, local diff | focused isolated upload/delete integration PASS; production untouched | Следующий шаг — Stage 5A slice 4 только после отдельного подтверждения |
 
 ## Blockers
 

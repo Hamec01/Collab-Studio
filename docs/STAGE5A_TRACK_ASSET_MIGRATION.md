@@ -36,6 +36,14 @@ Slice 2 still does not:
 - switch frontend playback to `assets`;
 - deploy or migrate production.
 
+Slice 3 adds dual-write for new uploads only:
+
+- every new local audio upload creates both `AudioVersion` and linked `TrackAsset`;
+- every new external audio link creates both `AudioVersion` and linked `TrackAsset`;
+- `TrackAsset.legacyAudioVersionId` is written immediately for new rows;
+- legacy API responses stay unchanged;
+- backfill remains deferred.
+
 ## Legacy inventory
 
 Current production-relevant audio/file metadata lives in `AudioVersion`:
@@ -149,6 +157,11 @@ Default mapping choices:
 - `storageProvider = local`
 - `metadata.source = "AudioVersion"`
 
+Slice 3 runtime write choice for new rows:
+
+- local upload => `storageProvider = "local"`
+- external link => `storageProvider = "external"`
+
 ## Dual-read / dual-write compatibility
 
 ### Dual-read
@@ -202,11 +215,94 @@ This preserves old clients while exposing the future contract.
 
 ### Dual-write
 
-Planned for later Stage 5A slices:
+Slice 3 introduces a centralized write service:
 
-- new upload/link logic creates `TrackAsset`;
-- legacy `AudioVersion` remains written until stream/download/frontend cutover is complete;
-- no route will stop returning `audioVersions` during Stage 5A.
+- `createAudioVersionWithTrackAsset()`
+- trusted input only
+- `projectId` is verified against the target `Track` inside the transaction
+- serializable transaction
+- one `versionNumber` allocation per successful upload
+- legacy `AudioVersion` create
+- linked `TrackAsset` create
+- `TrackAsset.legacyAudioVersionId = AudioVersion.id`
+- `TrackAsset.versionNumber = AudioVersion.versionNumber`
+- `TrackAsset.uploadedByUserId = AudioVersion.uploadedById`
+- `TrackAsset.metadata.source = "AudioVersion"`
+- `TrackAsset.createdAt = AudioVersion.createdAt`
+
+Legacy compatibility remains unchanged:
+
+- upload route response still returns legacy `AudioVersion`
+- existing frontend still uses `audioVersions`
+- additive `assets` appears after normal GET/refetch through the slice 2 read contract
+
+### Local upload flow
+
+Current endpoint remains:
+
+- `POST /api/projects/:projectId/tracks/:trackId/audio`
+
+Local upload order:
+
+1. parse multipart into temp file
+2. validate filename, MIME and signature
+3. generate normalized `storageKey`
+4. move temp file into final uploads location
+5. run `createAudioVersionWithTrackAsset()` transaction
+6. on transaction failure, remove the just-written final file
+7. on success, return legacy `AudioVersion` JSON
+
+Failure rules:
+
+- invalid MIME/signature => no DB rows, temp file cleaned
+- `AudioVersion` insert failure after file move => rollback + final file cleanup
+- `TrackAsset` insert failure after file move => rollback + final file cleanup
+
+### External link flow
+
+External links reuse the same endpoint and the same dual-write service:
+
+- no physical file is created
+- `AudioVersion.isExternal = true`
+- `TrackAsset.storageKey = null`
+- `TrackAsset.externalUrl` and `externalProvider` mirror legacy fields
+- `TrackAsset.status = READY`
+- local stream/download URLs stay `null`
+
+### Delete compatibility
+
+Slice 3 does not add a public `DELETE /assets` route.
+
+Existing legacy audio deletion is extended internally:
+
+- deleting an `AudioVersion` now soft-deletes the linked `TrackAsset`
+- soft delete sets:
+  - `status = DELETED`
+  - `deletedAt = now()`
+  - `isPrimary = false`
+- legacy `AudioVersion` row is still deleted
+- local file deletion still uses the existing single-reference safety check
+- deleted assets are excluded from normal `Track.assets`
+
+### Version and primary decision
+
+`AudioVersion` already enforces:
+
+- `@@unique([trackId, versionNumber])`
+
+Slice 3 keeps application-side version allocation:
+
+- `max(versionNumber) + 1` inside a serializable transaction
+- retry on `P2002` and `P2034`
+
+This remains sufficient for current upload scope and passed isolated concurrent-upload coverage.
+
+Primary rule for new dual-written assets:
+
+- if the track had zero existing `AudioVersion` rows before insert, new `TrackAsset.isPrimary = true`
+- otherwise `false`
+- existing rows are not rewritten in slice 3
+- slice 2 read normalization remains the safety net for historical corruption
 
 ## Backfill plan
 
@@ -257,6 +353,13 @@ Slice 2 rollback remains application-only:
 2. leave additive `TrackAsset` schema in place;
 3. no data rewrite is required because slice 2 is read-only with respect to assets.
 
+Slice 3 rollback remains non-destructive:
+
+1. redeploy the last app commit before dual-write
+2. leave additive schema in place
+3. leave newly written `TrackAsset` rows in place
+4. use DB backup restore only if a full historical rollback is required later
+
 ## Deployment order for later slices
 
 1. deploy additive `TrackAsset` schema
@@ -277,7 +380,11 @@ Reason:
 - the safe immediate guard is serializer/service filtering of cross-project mismatches;
 - DB-level composite consistency and partial unique-primary constraints are better introduced alongside write-path work in the dual-write slice, after isolated rehearsal of the exact constraint shape.
 
-This is a required follow-up for Stage 5A write-path hardening.
+Slice 3 keeps that decision unchanged:
+
+- no new schema constraint or migration was added
+- application-level protection is currently: verified access checks, serializable transaction, existing `AudioVersion(trackId, versionNumber)` uniqueness, and read-path mismatch filtering
+- composite consistency and stronger primary constraints remain a future write-path hardening slice
 
 ## Integration test matrix
 
@@ -296,6 +403,19 @@ Isolated PostgreSQL integration coverage added for:
 - outsider `404`
 - anonymous `401`
 - project creation and add-track responses carrying additive `assets`
+
+Slice 3 isolated PostgreSQL + temporary uploads coverage adds:
+
+- local upload success: one file, one `AudioVersion`, one linked `TrackAsset`
+- external link success: dual-write without filesystem write
+- forced `AudioVersion` insert failure after file move: rollback + cleanup
+- forced `TrackAsset` insert failure after file move: rollback + cleanup
+- first upload primary assignment
+- second upload non-primary assignment
+- partial legacy + new dual-written upload merge
+- viewer/outsider/cross-project denial
+- concurrent uploads allocate distinct version numbers and one primary
+- legacy delete soft-deletes linked `TrackAsset` and removes the local file
 
 ## Validation SQL
 

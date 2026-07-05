@@ -36,7 +36,6 @@ import {
 } from "../services/structuredLyrics";
 import { createProjectWorkspace } from "../services/projectCreation";
 import { collaborationUserSelect } from "../serializers/collaboration";
-import { createProjectMemberNotifications } from "../services/notifications";
 import {
   canAcquireLyricsLease,
   nextLyricsLeaseExpiry,
@@ -48,6 +47,7 @@ import {
   nowUtc,
   resolveProjectTrackAccess,
 } from "../services/stage3Access";
+import { createAudioVersionWithTrackAsset, deleteAudioVersionWithTrackAsset } from "../services/audioVersions";
 
 const router = Router();
 
@@ -326,35 +326,6 @@ async function cleanupAudioFile(filePath: string | undefined, audioId: string) {
   }
 }
 
-const audioInclude = { uploadedBy: { select: collaborationUserSelect } } as const;
-
-type AudioCreateInput = {
-  projectId: string; trackId: string; uploadedById: string; actorName: string; originalFilename: string; storedFilename?: string; storageKey?: string; mimeType?: string; sizeBytes?: number; isExternal: boolean; externalUrl?: string; externalProvider?: "google" | "yandex" | "telegram" | "other";
-};
-
-async function createAudioMetadata(input: AudioCreateInput) {
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      return await prisma.$transaction(async (tx) => {
-        const track = await tx.track.findFirst({ where: { id: input.trackId, projectId: input.projectId }, select: { id: true } });
-        if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
-        const aggregate = await tx.audioVersion.aggregate({ where: { trackId: input.trackId }, _max: { versionNumber: true } });
-        const versionNumber = (aggregate._max.versionNumber ?? 0) + 1;
-        const audio = await tx.audioVersion.create({
-          data: { trackId: input.trackId, uploadedById: input.uploadedById, originalFilename: input.originalFilename, storedFilename: input.storedFilename ?? null, storageKey: input.storageKey ?? null, mimeType: input.mimeType ?? null, sizeBytes: input.sizeBytes ?? null, isExternal: input.isExternal, externalUrl: input.externalUrl ?? null, externalProvider: input.externalProvider ?? null, versionNumber },
-          include: audioInclude,
-        });
-        await createProjectMemberNotifications(tx, { projectId: input.projectId, trackId: input.trackId, actorId: input.uploadedById, actorName: input.actorName, type: "audio_uploaded", message: `uploaded audio version #${versionNumber} "${input.originalFilename.slice(0, 100)}"` });
-        return audio;
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    } catch (error) {
-      const retryable = error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2002" || error.code === "P2034");
-      if (!retryable || attempt === 3) throw error;
-    }
-  }
-  throw new AppError(409, "AUDIO_VERSION_CONFLICT", "Could not allocate an audio version number");
-}
-
 function parseByteRange(rangeHeader: string | undefined, size: number) {
   if (!rangeHeader) return null;
   const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
@@ -384,25 +355,7 @@ function contentDispositionFilename(originalFilename: string) {
 }
 
 export async function deleteStoredAudioVersion(audioId: string) {
-  const audio = await prisma.audioVersion.findUnique({ where: { id: audioId } });
-  if (!audio) throw new AppError(404, "AUDIO_NOT_FOUND", "Audio version not found");
-  if (audio.isExternal || !audio.storageKey) { await prisma.$transaction((tx) => tx.audioVersion.delete({ where: { id: audioId } })); return; }
-  const references = await prisma.audioVersion.count({ where: { storageKey: audio.storageKey } });
-  if (references !== 1) throw new AppError(409, "AUDIO_REFERENCE_CONFLICT", "Audio file has multiple references");
-  const storedPath = await resolveExistingStoragePath(audio.storageKey);
-  const quarantinePath = `${storedPath}.deleting-${randomUUID()}`;
-  try { await fsp.rename(storedPath, quarantinePath); } catch { throw new AppError(500, "AUDIO_DELETE_FAILED", "Audio file could not be prepared for deletion"); }
-  try {
-    await prisma.$transaction(async (tx) => {
-      const current = await tx.audioVersion.findUnique({ where: { id: audioId }, select: { storageKey: true } });
-      if (current?.storageKey !== audio.storageKey) throw new AppError(409, "AUDIO_REFERENCE_CONFLICT", "Audio metadata changed during deletion");
-      await tx.audioVersion.delete({ where: { id: audioId } });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-  } catch (error) {
-    try { await fsp.rename(quarantinePath, storedPath); } catch { console.error("Audio deletion rollback failed", { audioId }); }
-    throw error;
-  }
-  try { await fsp.unlink(quarantinePath); } catch { console.error("Audio quarantine cleanup failed", { audioId }); throw new AppError(500, "AUDIO_DELETE_FAILED", "Audio file cleanup failed"); }
+  await deleteAudioVersionWithTrackAsset(prisma, { audioId, uploadsRoot: UPLOADS_ROOT });
 }
 
 router.get(
@@ -1259,14 +1212,14 @@ router.post(
           finalPath = path.join(storageDirectory, storage.storedFilename);
           if (finalPath !== resolveStoragePath(storage.storageKey)) throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
           await fsp.rename(req.file.path, finalPath);
-          const audio = await createAudioMetadata({ projectId, trackId, uploadedById: user.id, actorName: user.displayName, originalFilename: validated.originalFilename, storedFilename: storage.storedFilename, storageKey: storage.storageKey, mimeType: validated.mimeType, sizeBytes: validated.sizeBytes, isExternal: false });
+          const audio = await createAudioVersionWithTrackAsset(prisma, { projectId, trackId, uploadedById: user.id, actorName: user.displayName, originalFilename: validated.originalFilename, storedFilename: storage.storedFilename, storageKey: storage.storageKey, mimeType: validated.mimeType, sizeBytes: validated.sizeBytes, isExternal: false });
           committed = true;
           res.status(201).json(serializeAudioVersion(audio, projectId));
           return;
         }
 
         const external = externalAudioFormSchema.parse(req.body);
-        const audio = await createAudioMetadata({ projectId, trackId, uploadedById: user.id, actorName: user.displayName, originalFilename: external.label, isExternal: true, externalUrl: external.externalUrl, externalProvider: external.externalProvider });
+        const audio = await createAudioVersionWithTrackAsset(prisma, { projectId, trackId, uploadedById: user.id, actorName: user.displayName, originalFilename: external.label, isExternal: true, externalUrl: external.externalUrl, externalProvider: external.externalProvider });
         committed = true;
         res.status(201).json(serializeAudioVersion(audio, projectId));
       } catch (error) {
