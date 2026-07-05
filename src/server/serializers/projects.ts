@@ -7,8 +7,10 @@ import {
   serializeTask,
 } from "./collaboration";
 import { serializeLegacyCommentAsDiscussion, serializeLyricsDiscussionThread, discussionThreadInclude } from "./discussions";
+import { serializeTrackAsset } from "./trackAssets";
 import { httpsExternalAudioUrl } from "../schemas/tracks";
 import { readTrackLyrics, resolveLyricVersion } from "../services/structuredLyrics";
+import { selectTrackAssetsWithFallback } from "../services/trackAssets";
 
 export const trackRelationsInclude = {
   lyricVersions: {
@@ -17,6 +19,10 @@ export const trackRelationsInclude = {
   audioVersions: {
     include: { uploadedBy: { select: collaborationUserSelect } },
     orderBy: [{ versionNumber: "desc" as const }, { id: "asc" as const }],
+  },
+  trackAssets: {
+    include: { uploadedBy: { select: collaborationUserSelect } },
+    orderBy: [{ createdAt: "desc" as const }, { id: "asc" as const }],
   },
   comments: {
     include: {
@@ -111,6 +117,11 @@ export function serializeAudioVersion(audio: TrackWithRelations["audioVersions"]
 
 export function serializeTrack(track: TrackWithRelations) {
   const lyrics = readTrackLyrics(track);
+  const selectedAssets = selectTrackAssetsWithFallback({
+    trackAssets: track.trackAssets,
+    legacyAudioVersions: track.audioVersions,
+    projectId: track.projectId,
+  });
   const lyricsDiscussions = [
     ...track.discussionThreads.map((thread) => serializeLyricsDiscussionThread(thread, lyrics.document)),
     ...track.comments.map((comment) => ({
@@ -130,6 +141,9 @@ export function serializeTrack(track: TrackWithRelations) {
     versionHistory: track.lyricVersions.map(serializeLyricVersion),
     lyricVersions: track.lyricVersions.map(serializeLyricVersion),
     audioVersions: track.audioVersions.map((audio) => serializeAudioVersion(audio, track.projectId)),
+    assets: selectedAssets.source !== "audioVersion"
+      ? selectedAssets.assets.map((asset) => serializeTrackAsset(asset))
+      : selectedAssets.assets,
     comments: track.comments.map(serializeComment),
     lyricsDiscussions,
     chat: track.chatMessages.map(serializeChatMessage),

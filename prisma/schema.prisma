@@ -66,6 +66,24 @@ enum ExternalProvider {
   other
 }
 
+enum TrackAssetKind {
+  MASTER
+  AUDIO_VERSION
+  INSTRUMENTAL
+  ACAPELLA
+  STEM
+  DEMO
+  REFERENCE
+  OTHER
+}
+
+enum TrackAssetStatus {
+  UPLOADING
+  READY
+  FAILED
+  DELETED
+}
+
 model User {
   id                String    @id @default(uuid()) @db.Uuid
   username          String    @unique
@@ -102,9 +120,10 @@ model User {
   breakGlassInitiated         BreakGlassAccessAudit[]  @relation("BreakGlassInitiator")
   activityEvents              ActivityEvent[]
   lyricsEditLeases            LyricsEditLease[]
-  discussionThreads           DiscussionThread[]        @relation("DiscussionThreadCreator")
-  resolvedDiscussionThreads   DiscussionThread[]        @relation("DiscussionThreadResolver")
+  discussionThreads           DiscussionThread[]       @relation("DiscussionThreadCreator")
+  resolvedDiscussionThreads   DiscussionThread[]       @relation("DiscussionThreadResolver")
   discussionMessages          DiscussionMessage[]
+  uploadedTrackAssets         TrackAsset[]             @relation("TrackAssetUploader")
 
   @@index([role])
   @@index([createdAt])
@@ -183,6 +202,7 @@ model Project {
   tracks             Track[]
   notifications      Notification[]
   discussionThreads  DiscussionThread[]
+  trackAssets        TrackAsset[]
 
   @@index([updatedAt])
   @@index([createdAt])
@@ -344,19 +364,20 @@ model Track {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lyricVersions   LyricVersion[]
-  audioVersions   AudioVersion[]
-  comments        Comment[]
-  chatMessages    ChatMessage[]
-  tasks           Task[]
-  annotations     Annotation[]
-  notifications   Notification[]
-  invites         ProjectInvite[]
-  accessGrants    TrackAccessGrant[]
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lyricVersions     LyricVersion[]
+  audioVersions     AudioVersion[]
+  comments          Comment[]
+  chatMessages      ChatMessage[]
+  tasks             Task[]
+  annotations       Annotation[]
+  notifications     Notification[]
+  invites           ProjectInvite[]
+  accessGrants      TrackAccessGrant[]
   guestLinks        GuestLink[]
   lyricsEditLease   LyricsEditLease?
   discussionThreads DiscussionThread[]
+  trackAssets       TrackAsset[]
 
   @@index([projectId])
   @@index([projectId, updatedAt])
@@ -390,8 +411,8 @@ model LyricVersion {
   isOriginal    Boolean  @default(false)
   createdAt     DateTime @default(now())
 
-  track              Track               @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  author             User?               @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  track                   Track              @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  author                  User?              @relation(fields: [authorId], references: [id], onDelete: SetNull)
   sourceDiscussionThreads DiscussionThread[]
 
   @@index([trackId])
@@ -417,13 +438,58 @@ model AudioVersion {
   versionNumber    Int
   createdAt        DateTime          @default(now())
 
-  track      Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  track      Track       @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  uploadedBy User?       @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  trackAsset TrackAsset? @relation("TrackAssetLegacyAudioVersion")
 
   @@unique([trackId, versionNumber])
   @@index([trackId])
   @@index([uploadedById])
   @@index([trackId, createdAt])
+}
+
+model TrackAsset {
+  id                   String            @id @default(uuid()) @db.Uuid
+  trackId              String            @db.Uuid
+  projectId            String            @db.Uuid
+  uploadedByUserId     String?           @db.Uuid
+  kind                 TrackAssetKind
+  status               TrackAssetStatus  @default(READY)
+  title                String?
+  originalFilename     String
+  storageKey           String?
+  storageProvider      String            @default("local")
+  externalUrl          String?
+  externalProvider     ExternalProvider?
+  mimeType             String?
+  sizeBytes            Int?
+  durationMs           Int?
+  checksum             String?
+  waveformData         Json?
+  metadata             Json              @default("{}")
+  sourceAssetId        String?           @db.Uuid
+  legacyAudioVersionId String?           @db.Uuid
+  versionNumber        Int?
+  isPrimary            Boolean           @default(false)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  deletedAt            DateTime?
+
+  track              Track         @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy         User?         @relation("TrackAssetUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  sourceAsset        TrackAsset?   @relation("TrackAssetDerivation", fields: [sourceAssetId], references: [id], onDelete: SetNull)
+  derivedAssets      TrackAsset[]  @relation("TrackAssetDerivation")
+  legacyAudioVersion AudioVersion? @relation("TrackAssetLegacyAudioVersion", fields: [legacyAudioVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([legacyAudioVersionId])
+  @@index([trackId, kind, createdAt])
+  @@index([trackId, isPrimary])
+  @@index([trackId, kind, versionNumber])
+  @@index([projectId])
+  @@index([uploadedByUserId])
+  @@index([sourceAssetId])
+  @@index([status])
 }
 
 model Comment {
@@ -449,25 +515,24 @@ model Comment {
   @@index([trackId, createdAt])
 }
 
-
 model DiscussionThread {
-  id                   String               @id @default(uuid()) @db.Uuid
-  projectId            String               @db.Uuid
-  trackId              String               @db.Uuid
-  targetType           DiscussionTargetType @default(lyrics)
-  createdById          String?              @db.Uuid
-  resolvedById         String?              @db.Uuid
-  sourceLyricVersionId String?              @db.Uuid
-  sourceLyricsRevision Int?
-  anchorBlockId        String?
+  id                    String               @id @default(uuid()) @db.Uuid
+  projectId             String               @db.Uuid
+  trackId               String               @db.Uuid
+  targetType            DiscussionTargetType @default(lyrics)
+  createdById           String?              @db.Uuid
+  resolvedById          String?              @db.Uuid
+  sourceLyricVersionId  String?              @db.Uuid
+  sourceLyricsRevision  Int?
+  anchorBlockId         String?
   anchorStartOffsetHint Int?
-  anchorEndOffsetHint  Int?
-  anchorQuote          String?
-  anchorPrefix         String?
-  anchorSuffix         String?
-  resolvedAt           DateTime?
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  anchorEndOffsetHint   Int?
+  anchorQuote           String?
+  anchorPrefix          String?
+  anchorSuffix          String?
+  resolvedAt            DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   track              Track               @relation(fields: [trackId], references: [id], onDelete: Cascade)
@@ -486,14 +551,14 @@ model DiscussionThread {
 }
 
 model DiscussionMessage {
-  id        String   @id @default(uuid()) @db.Uuid
-  threadId   String   @db.Uuid
-  authorId   String?  @db.Uuid
-  body       String
-  editedAt   DateTime?
-  deletedAt  DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String    @id @default(uuid()) @db.Uuid
+  threadId  String    @db.Uuid
+  authorId  String?   @db.Uuid
+  body      String
+  editedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   thread DiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   author User?            @relation(fields: [authorId], references: [id], onDelete: SetNull)

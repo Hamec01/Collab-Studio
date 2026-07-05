@@ -62,6 +62,41 @@ export interface AudioVersion {
   externalProvider: "google" | "yandex" | "telegram" | "other" | null;
 }
 
+export interface TrackAsset {
+  id: string;
+  trackId: string;
+  projectId: string;
+  uploadedByUserId: string | null;
+  kind: "MASTER" | "AUDIO_VERSION" | "INSTRUMENTAL" | "ACAPELLA" | "STEM" | "DEMO" | "REFERENCE" | "OTHER";
+  status: "UPLOADING" | "READY" | "FAILED" | "DELETED";
+  title: string | null;
+  originalFilename: string;
+  storageKey: string | null;
+  storageProvider: string;
+  externalUrl: string | null;
+  externalProvider: "google" | "yandex" | "telegram" | "other" | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  durationMs: number | null;
+  checksum: string | null;
+  waveformData: unknown | null;
+  metadata: unknown;
+  sourceAssetId: string | null;
+  legacyAudioVersionId: string | null;
+  versionNumber: number | null;
+  isPrimary: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  streamUrl: string | null;
+  downloadUrl: string | null;
+  uploadedBy: {
+    id: string | null;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
+}
+
 export interface CollaborationUser {
   id: string;
   username: string;
@@ -182,6 +217,7 @@ export interface Track {
   versionHistory: LyricVersion[];
   lyricVersions: LyricVersion[];
   audioVersions: AudioVersion[];
+  assets?: TrackAsset[];
   comments: Comment[];
   lyricsDiscussions?: LyricsDiscussionThread[];
   chat: ChatMessage[];

@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 5A`
-- Active slice: Stage 4B completed in production; следующий разрешённый шаг — Stage 5A
+- Active slice: Stage 5A slice 1 completed locally — TrackAsset audit, additive schema/migration, compatibility helpers and rehearsal PASS; production deploy intentionally not performed
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -41,7 +41,7 @@
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
-| Stage 5A — TrackAsset migration | pending | Не начат |
+| Stage 5A — TrackAsset migration | in_progress | Slice 1 completed locally; additive migration rehearsed on empty + restored backup DB; production migration/deploy intentionally not performed |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
@@ -67,7 +67,9 @@ Stage 5A:
    - owner-confirmed authenticated mobile smoke PASS
 5. Follow-up warning:
    - `ERR_ERL_KEY_GEN_IPV6` остаётся отдельным hardening bug и не блокирует Stage 4B completion.
-6. Следующий шаг — только Stage 5A по roadmap; Stage 4C+ отдельно не начинать.
+6. Slice 1 завершён локально: TrackAsset audit, additive schema/migration, compatibility helpers, additive `Track.assets`, isolated rehearsal and rollback plan.
+7. Production migration не применялась; production deploy не выполнялся.
+8. Следующий шаг — только Stage 5A slice 2 после отдельного подтверждения; Stage 4C+/5B не начинать.
 
 ## Журнал slices
 
@@ -86,6 +88,7 @@ Stage 5A:
 | 2026-07-04 | Bugfix — project/track creation regression | Исправлены atomic single project+track creation, unified verified-writer rule for project/track writes и awaited ProjectList submit UX с error/loading states | `main`, local commit | lint/test/build/e2e/diff PASS; 108 tests; manual local HTTP reproduction PASS; App.tsx 1159 lines; TRACK CREATION REGRESSION FIXED | Возврат к roadmap только после отдельного подтверждения |
 | 2026-07-04 | Stage 4B slice 7 | Добавлены lyrics-only discussions, stable block-ID anchors, exact/relocated/ambiguous/orphaned resolution, legacy `Comment.lineIndex` compatibility adapter, manual re-anchor, mobile discussion sheet и extracted discussion hook; flag default false сохранён | `main`, local commit | prisma validate; lint/test/build/e2e/diff PASS; 121 tests; App.tsx 1211 lines; DISCUSSIONS AND ANCHORS PASSED | Следующий шаг — финальный Stage 4B deploy window без автоматического legacy Comment backfill |
 | 2026-07-05 | Stage 4B production completion | Production app выровнен с уже применёнными Stage 4B migrations; mobile lyrics interaction fix deployed; API smoke PASS; owner-confirmed authenticated mobile smoke PASS; backup path сохранён; `ERR_ERL_KEY_GEN_IPV6` вынесен в follow-up warning | `main@ca6b93e` | Production health PASS; app/postgres healthy; no Prisma/missing-column errors | Следующий шаг — Stage 5A только после отдельного подтверждения |
+| 2026-07-05 | Stage 5A slice 1 | Выполнены TrackAsset audit, additive Prisma schema/migration, compatibility helpers, additive `Track.assets` serialization, storage/path safety tests и isolated rehearsal на empty + restored-backup DB; partial-backfill dual-read merge сохранён | `main`, local diff | prisma format/validate/generate PASS; empty + restored-backup migrate rehearse PASS; production untouched | Следующий шаг — Stage 5A slice 2 только после отдельного подтверждения |
 
 ## Blockers
 
