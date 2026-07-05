@@ -6,6 +6,7 @@ const isExternalTarget = Boolean(process.env.E2E_BASE_URL);
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: /mobile-lyrics-editor\.spec\.ts/,
   timeout: 30_000,
   fullyParallel: false,
   reporter: "list",

@@ -474,15 +474,15 @@ export default function App() {
   }, [location.pathname, navigate, parsedRoute]);
 
   useEffect(() => {
-    if (authPhase !== "authenticated") return;
+    if (workspaceReady && location.pathname !== resolvedRouteSelection.canonicalPath) return;
     setMobileTab(parsedRoute.trackId ? mobileStateFromTab(parsedRoute.tab) : "projects");
     if (parsedRoute.tab === "team") {
       setActiveSidebar("comments");
     }
-  }, [authPhase, parsedRoute]);
+  }, [workspaceReady, location.pathname, resolvedRouteSelection.canonicalPath, parsedRoute]);
 
   useEffect(() => {
-    if (authPhase !== "authenticated") return;
+    if (authPhase !== "authenticated" || !workspaceReady) return;
 
     const nextTab =
       mobileTab === "rightPanel"
@@ -502,6 +502,7 @@ export default function App() {
     }
   }, [
     authPhase,
+    workspaceReady,
     activeProjectId,
     activeTrackId,
     mobileTab,
@@ -549,7 +550,6 @@ export default function App() {
 
   useEffect(() => {
     if (!activeTrack || !activeProject || !currentUser) {
-      setMobileTab("projects");
       clearDiscussionState();
       resetDraftRuntime();
       return;
