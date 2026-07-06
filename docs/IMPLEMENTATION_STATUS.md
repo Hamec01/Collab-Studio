@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 5A`
-- Active slice: Stage 5A slice 7 production cutover completed — frontend asset-first live in production at commit 85be76c, image 5f9fc4e65d3b, owner upload smoke PASS, legacy fallback preserved, DB counts at baseline
+- Active slice: Stage 5A slice 7 production cutover deployed — frontend asset-first live at commit 85be76c, image 5f9fc4e65d3b; non-auth smoke PASS; owner-authenticated smoke methodology invalid (DB-created session, real track used); forensic audit confirmed baseline restored; official owner smoke pending
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -41,7 +41,7 @@
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
-| Stage 5A — TrackAsset migration | in_progress | Slice 7 production cutover PASS: frontend asset-first live at app commit `85be76c`, image `5f9fc4e65d3b`; owner upload/asset/cleanup smoke PASS; legacy fallback preserved; DB counts at baseline; backfill execute NOT run |
+| Stage 5A — TrackAsset migration | in_progress | Slice 7 production cutover deployed: frontend asset-first live at app commit `85be76c`, image `5f9fc4e65d3b`; non-auth smoke PASS; owner smoke methodology invalid (DB-created session, real track used); forensic audit confirmed baseline restored; official owner smoke pending; legacy fallback preserved; backfill execute NOT run |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
