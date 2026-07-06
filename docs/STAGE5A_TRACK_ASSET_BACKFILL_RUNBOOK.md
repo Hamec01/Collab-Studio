@@ -1,6 +1,6 @@
 # Stage 5A TrackAsset backfill runbook
 
-Статус: локально отрепетировано, production execution не выполнялся.
+Статус: production foundation deployed at app commit `b353b20`; production dry-run PASS twice; production execution не выполнялся.
 
 ## Prerequisites
 
@@ -16,6 +16,12 @@ Dry-run:
 ```bash
 npm run backfill:track-assets -- --dry-run --batch-size=100 --json
 ```
+
+Production packaging note:
+
+- runtime image contains `dist/scripts/backfill-track-assets.js`
+- runtime `npm run backfill:track-assets` uses the bundled artifact, not `tsx`
+- runtime image sets `NPM_CONFIG_LOGLEVEL=silent`, so `--json` output stays machine-readable
 
 Execute:
 
@@ -119,6 +125,35 @@ WHERE ta."id" IS NULL;
    - `conflictItems`
    - `nextCursor`
 4. If dry-run is clean enough, approve execute separately.
+
+### Production slice 5 result
+
+- backup reused for rollout:
+  - `/home/deploy/backups/collabstudio/stage5a/prod-pre-stage5a-20260705T230032Z.dump`
+  - sha256: `d5e9878d121efe79d6b5ed329d3d53d679a0221ff9d180a6a674803fbd4fe619`
+- deployed app commit: `b353b20`
+- additive migration already applied before this packaging recovery:
+  - `20260705150000_stage5a_track_asset_foundation`
+- production dry-run reports:
+  - `/home/deploy/backups/collabstudio/stage5a/prod-stage5a-backfill-dry-run-20260706T075928Z.json`
+  - `/home/deploy/backups/collabstudio/stage5a/prod-stage5a-backfill-dry-run-20260706T075936Z.json`
+- both production dry-runs returned:
+  - `mode=dry-run`
+  - `scanned=0`
+  - `eligible=0`
+  - `created=0`
+  - `wouldCreate=0`
+  - `skipped=0`
+  - `raced=0`
+  - `missing=0`
+  - `conflicts=0`
+  - `failed=0`
+- pre/post dry-run counts remained:
+  - `AudioVersion=0`
+  - `TrackAsset=0`
+- `TRACK_ASSET_BACKFILL_CONFIRM=YES` was not set
+- `--execute` was not run on production
+- owner-authenticated manual smoke remains a separate follow-up if interactive session is needed
 
 ## Execute process
 
