@@ -1,6 +1,11 @@
 import type { TrackAsset } from "@prisma/client";
 import type { TrackAssetDto, TrackAssetLike } from "../services/trackAssets";
-import { serializeTrackAssetSizeBytes } from "../services/trackAssets";
+import {
+  buildTrackAssetDownloadUrl,
+  buildTrackAssetStreamUrl,
+  canExposeTrackAssetDeliveryUrls,
+  serializeTrackAssetSizeBytes,
+} from "../services/trackAssets";
 
 type UploadedByLike = {
   id: string | null;
@@ -13,13 +18,12 @@ export type TrackAssetWithUploader = TrackAssetLike & {
 };
 
 export function serializeTrackAsset(asset: TrackAssetWithUploader): TrackAssetDto {
-  const isPlayableLegacyAsset = asset.status === "READY" && !asset.deletedAt && !asset.externalUrl && Boolean(asset.legacyAudioVersionId);
-  const streamUrl = !isPlayableLegacyAsset
+  const streamUrl = !canExposeTrackAssetDeliveryUrls(asset)
     ? null
-    : `/api/projects/${asset.projectId}/tracks/${asset.trackId}/audio/${asset.legacyAudioVersionId}/stream`;
-  const downloadUrl = !isPlayableLegacyAsset
+    : buildTrackAssetStreamUrl(asset.projectId, asset.trackId, asset.id);
+  const downloadUrl = !canExposeTrackAssetDeliveryUrls(asset)
     ? null
-    : `/api/projects/${asset.projectId}/tracks/${asset.trackId}/audio/${asset.legacyAudioVersionId}/download`;
+    : buildTrackAssetDownloadUrl(asset.projectId, asset.trackId, asset.id);
 
   return {
     id: asset.id,

@@ -114,6 +114,7 @@ export const httpsExternalAudioUrl = z.string().trim().url().max(2048).refine((v
 
 export const audioTrackParamsSchema = trackParamsSchema;
 export const audioStreamParamsSchema = trackParamsSchema.extend({ audioId: uuidParam });
+export const assetStreamParamsSchema = trackParamsSchema.extend({ assetId: uuidParam });
 export const localAudioFormSchema = z.object({}).strict();
 export const externalAudioFormSchema = z.object({
   label: z.string().trim().min(1).max(255).regex(/^[^\u0000-\u001F\u007F]+$/),

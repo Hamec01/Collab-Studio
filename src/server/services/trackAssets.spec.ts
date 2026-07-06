@@ -63,8 +63,8 @@ describe("trackAssets", () => {
     });
 
     expect(dto.sizeBytes).toBe(1024);
-    expect(dto.streamUrl).toBe("/api/projects/project-1/tracks/track-1/audio/audio-legacy-1/stream");
-    expect(dto.downloadUrl).toBe("/api/projects/project-1/tracks/track-1/audio/audio-legacy-1/download");
+    expect(dto.streamUrl).toBe("/api/projects/project-1/tracks/track-1/assets/asset-1/stream");
+    expect(dto.downloadUrl).toBe("/api/projects/project-1/tracks/track-1/assets/asset-1/download");
     expect("storageKey" in dto).toBe(false);
     expect("checksum" in dto).toBe(false);
   });
@@ -101,6 +101,40 @@ describe("trackAssets", () => {
 
     expect(dto.streamUrl).toBeNull();
     expect(dto.downloadUrl).toBeNull();
+  });
+
+  it("returns native asset URLs for ready local audio assets without legacy link", () => {
+    const dto = serializeTrackAsset({
+      id: "asset-3",
+      trackId: "track-1",
+      projectId: "project-1",
+      uploadedByUserId: null,
+      kind: "REFERENCE",
+      status: "READY",
+      title: null,
+      originalFilename: "ref.wav",
+      storageKey: "project-1/track-1/ref.wav",
+      storageProvider: "local",
+      externalUrl: null,
+      externalProvider: null,
+      mimeType: "audio/wav",
+      sizeBytes: 32,
+      durationMs: 1000,
+      checksum: null,
+      waveformData: null,
+      metadata: {},
+      sourceAssetId: null,
+      legacyAudioVersionId: null,
+      versionNumber: null,
+      isPrimary: false,
+      createdAt: new Date("2026-07-05T10:00:00.000Z"),
+      updatedAt: new Date("2026-07-05T10:01:00.000Z"),
+      deletedAt: null,
+      uploadedBy: null,
+    });
+
+    expect(dto.streamUrl).toBe("/api/projects/project-1/tracks/track-1/assets/asset-3/stream");
+    expect(dto.downloadUrl).toBe("/api/projects/project-1/tracks/track-1/assets/asset-3/download");
   });
 
   it("validates track asset enums", () => {

@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 5A`
-- Active slice: Stage 5A slice 5 production foundation deployed — additive TrackAsset migration уже применена, app commit `b353b20` deployed, production backfill dry-run PASS; execute intentionally not run
+- Active slice: Stage 5A slice 6 completed locally — TrackAsset-native stream/download routes, shared delivery service and isolated delivery integration PASS; frontend cutover and production deploy intentionally not performed
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -41,7 +41,7 @@
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
-| Stage 5A — TrackAsset migration | in_progress | Slice 5 production foundation deployed at app commit `b353b20`; migration applied, backfill dry-run PASS, execute intentionally not run |
+| Stage 5A — TrackAsset migration | in_progress | Slice 6 completed locally; native delivery routes implemented, frontend not cut over, production deploy intentionally not performed |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
@@ -82,7 +82,16 @@ Stage 5A:
     - dry-run counters: `scanned=0 eligible=0 created=0 wouldCreate=0 skipped=0 raced=0 missing=0 conflicts=0 failed=0`
     - production backfill execute NOT run
 12. Owner-authenticated smoke from this shell was not attempted without a verified reusable session; owner manual smoke remains required and is not treated as a packaging failure.
-13. Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения; Stage 4C+/5B не начинать.
+13. Slice 6 завершён локально:
+    - добавлены native routes:
+      - `GET|HEAD /api/projects/:projectId/tracks/:trackId/assets/:assetId/stream`
+      - `GET /api/projects/:projectId/tracks/:trackId/assets/:assetId/download`
+    - shared local delivery service теперь используется и legacy `AudioVersion`, и native `TrackAsset` routes
+    - legacy session-auth stream/download hardening added without changing guest-token stream support
+    - frontend/player still reads `audioVersions`
+    - production deploy intentionally not performed
+    - owner production smoke pending
+14. Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения; Stage 4C+/5B не начинать.
 
 ## Журнал slices
 
@@ -106,6 +115,7 @@ Stage 5A:
 | 2026-07-05 | Stage 5A slice 3 | Введён central dual-write service для новых local/external audio uploads: атомарный `AudioVersion` + linked `TrackAsset`, cleanup after DB failure, legacy delete compatibility с soft-delete linked asset metadata и isolated PostgreSQL+uploads integration coverage | `main`, local diff | focused isolated upload/delete integration PASS; production untouched | Следующий шаг — Stage 5A slice 4 только после отдельного подтверждения |
 | 2026-07-06 | Stage 5A slice 4 | Добавлен resumable backfill CLI для `AudioVersion -> TrackAsset`: dry-run/execute, stable compound cursor, missing/conflict reporting, primary preservation, production execute guard; isolated seeded execute rehearsal PASS и restored-backup dry-run PASS | `main`, local diff | focused CLI integration PASS; restored-backup dry-run PASS; production untouched | Следующий шаг — следующий Stage 5A slice только после отдельного подтверждения |
 | 2026-07-06 | Stage 5A slice 5 | Исправлен runtime packaging для backfill CLI, production app обновлён до `b353b20`, exact production dry-run выполнен дважды и вернул clean JSON без DB writes; additive migration уже была applied, execute intentionally not run | `main@b353b20` | production app/postgres healthy; dry-run #1 PASS; dry-run #2/idempotency PASS; counts unchanged (`AudioVersion=0`, `TrackAsset=0`) | Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения |
+| 2026-07-06 | Stage 5A slice 6 | Добавлены TrackAsset-native stream/download routes, shared audio delivery service, additive DTO URL rules и legacy stream auth hydration fix; isolated PostgreSQL + temp uploads delivery suite PASS | `main`, local diff | focused unit PASS; isolated delivery integration PASS; frontend not cut over; production untouched | Следующий шаг — controlled production deploy only after explicit approval |
 
 ## Blockers
 

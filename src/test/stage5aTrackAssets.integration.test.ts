@@ -594,7 +594,7 @@ test("Stage 5A slice 2 API contract and permissions", async () => {
   const readyAsset = statusTrackResponse.body.assets.find((asset: any) => asset.status === "READY");
   const uploadingAsset = statusTrackResponse.body.assets.find((asset: any) => asset.status === "UPLOADING");
   const failedAsset = statusTrackResponse.body.assets.find((asset: any) => asset.status === "FAILED");
-  assert.ok(readyAsset.streamUrl);
+  assert.equal(readyAsset.streamUrl, null);
   assert.equal(uploadingAsset.streamUrl, null);
   assert.equal(failedAsset.streamUrl, null);
 

@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { ExternalProvider, Prisma, TrackAssetKind, TrackAssetStatus } from "@prisma/client";
 import { AppError } from "../middleware/errors";
+import { isTrackAssetKindDeliverable, isTrackAssetStatusDeliverable } from "./audioDelivery";
 
 export const trackAssetKinds = [
   "MASTER",
@@ -52,6 +53,14 @@ export type TrackAssetDto = {
     avatarUrl: string | null;
   } | null;
 };
+
+export function buildTrackAssetStreamUrl(projectId: string, trackId: string, assetId: string) {
+  return `/api/projects/${projectId}/tracks/${trackId}/assets/${assetId}/stream`;
+}
+
+export function buildTrackAssetDownloadUrl(projectId: string, trackId: string, assetId: string) {
+  return `/api/projects/${projectId}/tracks/${trackId}/assets/${assetId}/download`;
+}
 
 export type LegacyAudioVersionLike = {
   id: string;
@@ -203,6 +212,16 @@ export function assertTrackAssetBelongsToTrackProject(
   if (asset.projectId !== expected.projectId || asset.trackId !== expected.trackId) {
     throw new AppError(404, "ASSET_NOT_FOUND", "Track asset not found");
   }
+}
+
+export function canExposeTrackAssetDeliveryUrls(asset: Pick<TrackAssetLike, "id" | "projectId" | "trackId" | "kind" | "status" | "deletedAt" | "storageProvider" | "storageKey" | "mimeType" | "externalUrl">) {
+  if (asset.deletedAt) return false;
+  if (!isTrackAssetStatusDeliverable(asset.status)) return false;
+  if (!isTrackAssetKindDeliverable(asset.kind)) return false;
+  if (asset.storageProvider !== "local") return false;
+  if (asset.externalUrl) return false;
+  if (!asset.storageKey || !asset.mimeType || !asset.mimeType.startsWith("audio/")) return false;
+  return true;
 }
 
 export function canReadTrackAsset(access: AssetAccessLike | null | undefined) {

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
 import { promises as fsp } from "node:fs";
 import path from "node:path";
 import multer from "multer";
@@ -7,7 +6,7 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { Prisma, type ProjectRole } from "@prisma/client";
 import { getConfig } from "../config";
 import { prisma } from "../db";
-import { requireAuth, requireProjectEditor, requireProjectMember, requireProjectOwner } from "../middleware/auth";
+import { optionalAuth, requireAuth, requireProjectEditor, requireProjectMember, requireProjectOwner } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
 import { inviteRateLimit } from "../middleware/rateLimits";
 import {
@@ -26,7 +25,7 @@ import {
   updateMemberRoleSchema,
   updateProjectSchema,
 } from "../schemas/projects";
-import { audioStreamParamsSchema, audioTrackParamsSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, lyricsLeaseTokenSchema, parseCreateLyricVersion, parseUpdateLyricsDraft, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
+import { assetStreamParamsSchema, audioStreamParamsSchema, audioTrackParamsSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, lyricsLeaseTokenSchema, parseCreateLyricVersion, parseUpdateLyricsDraft, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
 import { serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
 import {
   prepareLyricsWrite,
@@ -48,6 +47,12 @@ import {
   resolveProjectTrackAccess,
 } from "../services/stage3Access";
 import { createAudioVersionWithTrackAsset, deleteAudioVersionWithTrackAsset } from "../services/audioVersions";
+import {
+  isTrackAssetKindDeliverable,
+  isTrackAssetStatusDeliverable,
+  sendLocalAudioResponse,
+} from "../services/audioDelivery";
+import { assertTrackAssetBelongsToTrackProject, canReadTrackAsset } from "../services/trackAssets";
 
 const router = Router();
 
@@ -296,27 +301,6 @@ async function ensureStorageDirectory(projectId: string, trackId: string) {
   return current;
 }
 
-async function resolveExistingStoragePath(storageKey: string) {
-  const resolved = resolveStoragePath(storageKey);
-  const realRoot = await fsp.realpath(UPLOADS_ROOT);
-  let current = UPLOADS_ROOT;
-
-  for (const segment of storageKey.split("/")) {
-    current = path.join(current, segment);
-    const segmentStat = await fsp.lstat(current);
-    if (segmentStat.isSymbolicLink()) {
-      throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
-    }
-  }
-
-  const realResolved = await fsp.realpath(resolved);
-  if (!isPathInside(realRoot, realResolved)) {
-    throw new AppError(500, "INVALID_STORAGE_KEY", "Stored audio path is invalid");
-  }
-  return realResolved;
-}
-
-
 async function cleanupAudioFile(filePath: string | undefined, audioId: string) {
   if (!filePath) return;
   try {
@@ -324,34 +308,6 @@ async function cleanupAudioFile(filePath: string | undefined, audioId: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.error("Audio cleanup failed", { audioId });
   }
-}
-
-function parseByteRange(rangeHeader: string | undefined, size: number) {
-  if (!rangeHeader) return null;
-  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
-  if (!match || (!match[1] && !match[2]) || size < 1) throw new AppError(416, "INVALID_RANGE", "Invalid audio byte range");
-  let start: number;
-  let end: number;
-  if (match[1]) {
-    start = Number(match[1]);
-    end = match[2] ? Number(match[2]) : size - 1;
-    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= size || end < start) throw new AppError(416, "INVALID_RANGE", "Invalid audio byte range");
-    end = Math.min(end, size - 1);
-  } else {
-    const suffixLength = Number(match[2]);
-    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) throw new AppError(416, "INVALID_RANGE", "Invalid audio byte range");
-    start = Math.max(size - suffixLength, 0);
-    end = size - 1;
-  }
-  return { start, end };
-}
-
-function contentDispositionFilename(originalFilename: string) {
-  const normalized = originalFilename.normalize("NFC").replace(/[\r\n\0]/g, "").trim();
-  const safe = normalized.replace(/["\\/]/g, "_").replace(/[^\x20-\x7e]/g, "_").slice(0, 150) || "audio";
-  const utf8Name = normalized.slice(0, 255) || "audio";
-  const encoded = encodeURIComponent(utf8Name).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
-  return `inline; filename="${safe}"; filename*=UTF-8''${encoded}`;
 }
 
 export async function deleteStoredAudioVersion(audioId: string) {
@@ -1273,60 +1229,106 @@ const streamAudioHandler = asyncHandler(async (req, res, next) => {
   const audio = await prisma.audioVersion.findFirst({ where: { id: audioId, trackId, track: { projectId } } });
   if (!audio) throw new AppError(404, "AUDIO_NOT_FOUND", "Audio version not found");
   if (audio.isExternal || !audio.storageKey || !audio.mimeType) throw new AppError(409, "EXTERNAL_AUDIO", "External audio is not available through the local stream endpoint");
-  let storedPath: string;
-  let stat;
-  try {
-    storedPath = await resolveExistingStoragePath(audio.storageKey);
-    stat = await fsp.stat(storedPath);
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") throw new AppError(404, "AUDIO_FILE_NOT_FOUND", "Audio file not found");
-    throw new AppError(503, "STORAGE_UNAVAILABLE", "Audio storage is unavailable");
-  }
-  if (!stat.isFile() || stat.size < 1) throw new AppError(404, "AUDIO_FILE_NOT_FOUND", "Audio file not found");
-
-  let range;
-  try { range = parseByteRange(req.headers.range, stat.size); } catch (error) {
-    res.setHeader("Content-Range", `bytes */${stat.size}`);
-    throw error;
-  }
-  const start = range?.start ?? 0;
-  const end = range?.end ?? stat.size - 1;
-  const contentLength = end - start + 1;
-  res.status(range ? 206 : 200);
-  res.setHeader("Accept-Ranges", "bytes");
-  res.setHeader("Content-Length", String(contentLength));
-  res.setHeader("Content-Type", audio.mimeType);
-  res.setHeader("Content-Disposition", contentDispositionFilename(audio.originalFilename));
-  res.setHeader("Cache-Control", "private, no-store");
-  if (range) res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`);
-  if (req.method === "HEAD") { res.end(); return; }
-
-  const stream = fs.createReadStream(storedPath, { start, end });
-  req.once("aborted", () => stream.destroy());
-  res.once("close", () => stream.destroy());
-  stream.once("error", () => {
-    console.error("Audio stream failed", { audioId });
-    if (!res.headersSent) next(new AppError(503, "STORAGE_UNAVAILABLE", "Audio storage is unavailable")); else res.destroy();
+  await sendLocalAudioResponse({
+    req,
+    res,
+    next,
+    uploadsRoot: UPLOADS_ROOT,
+    storageKey: audio.storageKey,
+    mimeType: audio.mimeType,
+    originalFilename: audio.originalFilename,
+    disposition: req.query.download === "1" || req.query.download === "true" ? "attachment" : "inline",
+    missingErrorCode: "AUDIO_FILE_NOT_FOUND",
+    missingErrorMessage: "Audio file not found",
+    streamErrorCode: "STORAGE_UNAVAILABLE",
+    streamErrorMessage: "Audio storage is unavailable",
+    logContext: { audioId },
   });
-  stream.pipe(res);
+});
+
+async function resolveAssetAccessOrThrow(args: {
+  req: Request;
+  projectId: string;
+  trackId: string;
+  download: boolean;
+}) {
+  const user = requireCurrentUser(args.req);
+  const access = await resolveProjectTrackAccess({
+    prisma,
+    user: { id: user.id, role: user.role },
+    projectId: args.projectId,
+    trackId: args.trackId,
+    breakGlassProjectId: args.req.session.breakGlassProjectId,
+  });
+  if (!access || !canReadTrackAsset(access)) {
+    throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+  }
+  if (args.download && !access.capabilities.canDownload) {
+    throw new AppError(403, "FORBIDDEN", "Download is not allowed for this scope");
+  }
+  return access;
+}
+
+const streamTrackAssetHandler = asyncHandler(async (req, res, next) => {
+  const { projectId, trackId, assetId } = assetStreamParamsSchema.parse(req.params);
+  await resolveAssetAccessOrThrow({ req, projectId, trackId, download: req.query.download === "1" || req.query.download === "true" });
+
+  const asset = await prisma.trackAsset.findFirst({
+    where: {
+      id: assetId,
+      trackId,
+      projectId,
+    },
+  });
+  if (!asset) throw new AppError(404, "ASSET_NOT_FOUND", "Track asset not found");
+  assertTrackAssetBelongsToTrackProject(asset, { projectId, trackId });
+  if (asset.deletedAt || asset.status === "DELETED") throw new AppError(404, "ASSET_NOT_FOUND", "Track asset not found");
+  if (!isTrackAssetStatusDeliverable(asset.status)) throw new AppError(409, "ASSET_NOT_READY", "Track asset is not available");
+  if (!isTrackAssetKindDeliverable(asset.kind)) throw new AppError(409, "ASSET_NOT_DELIVERABLE", "Track asset is not available through the audio delivery endpoint");
+  if (asset.storageProvider === "external") {
+    throw new AppError(409, "EXTERNAL_ASSET", "External track assets are not available through the local delivery endpoint");
+  }
+  if (asset.externalUrl) {
+    throw new AppError(409, "INVALID_ASSET_DELIVERY_MODE", "Track asset has an invalid delivery mode");
+  }
+  if (!asset.storageKey || !asset.mimeType || !asset.mimeType.startsWith("audio/")) {
+    throw new AppError(409, "ASSET_NOT_DELIVERABLE", "Track asset is not available through the audio delivery endpoint");
+  }
+
+  await sendLocalAudioResponse({
+    req,
+    res,
+    next,
+    uploadsRoot: UPLOADS_ROOT,
+    storageKey: asset.storageKey,
+    mimeType: asset.mimeType,
+    originalFilename: asset.originalFilename,
+    disposition: req.query.download === "1" || req.query.download === "true" ? "attachment" : "inline",
+    missingErrorCode: "ASSET_FILE_NOT_FOUND",
+    missingErrorMessage: "Track asset file not found",
+    streamErrorCode: "STORAGE_UNAVAILABLE",
+    streamErrorMessage: "Audio storage is unavailable",
+    logContext: { assetId },
+  });
 });
 
 router.head(
   "/:projectId/tracks/:trackId/audio/:audioId/stream",
+  optionalAuth,
   (req, _res, next) => { audioStreamParamsSchema.parse(req.params); next(); },
   streamAudioHandler,
 );
 
 router.get(
   "/:projectId/tracks/:trackId/audio/:audioId/stream",
+  optionalAuth,
   (req, _res, next) => { audioStreamParamsSchema.parse(req.params); next(); },
   streamAudioHandler,
 );
 
 router.get(
   "/:projectId/tracks/:trackId/audio/:audioId/download",
+  optionalAuth,
   (req, _res, next) => { audioStreamParamsSchema.parse(req.params); next(); },
   requireProjectMember,
   asyncHandler(async (req, _res, next) => {
@@ -1350,6 +1352,31 @@ router.get(
     next();
   }),
   streamAudioHandler,
+);
+
+router.head(
+  "/:projectId/tracks/:trackId/assets/:assetId/stream",
+  requireAuth,
+  (req, _res, next) => { assetStreamParamsSchema.parse(req.params); next(); },
+  streamTrackAssetHandler,
+);
+
+router.get(
+  "/:projectId/tracks/:trackId/assets/:assetId/stream",
+  requireAuth,
+  (req, _res, next) => { assetStreamParamsSchema.parse(req.params); next(); },
+  streamTrackAssetHandler,
+);
+
+router.get(
+  "/:projectId/tracks/:trackId/assets/:assetId/download",
+  requireAuth,
+  (req, _res, next) => { assetStreamParamsSchema.parse(req.params); next(); },
+  asyncHandler(async (req, _res, next) => {
+    req.query.download = "1";
+    next();
+  }),
+  streamTrackAssetHandler,
 );
 
 export default router;

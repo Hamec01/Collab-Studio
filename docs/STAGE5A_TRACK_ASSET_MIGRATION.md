@@ -60,6 +60,21 @@ Slice 4 still does not:
 - cut over frontend/player/routes to `TrackAsset`
 - retire legacy `AudioVersion`
 
+Slice 6 adds TrackAsset-native delivery routes locally:
+
+- `GET|HEAD /api/projects/:projectId/tracks/:trackId/assets/:assetId/stream`
+- `GET /api/projects/:projectId/tracks/:trackId/assets/:assetId/download`
+- shared local media delivery service reused by legacy and native routes
+- DTO delivery URLs for READY local audio assets
+- local integration coverage for auth/range/header/path-safety cases
+
+Slice 6 still does not:
+
+- cut frontend/player over to `assets`
+- remove legacy `audioVersions`
+- change uploads layout
+- deploy to production
+
 ## Legacy inventory
 
 Current production-relevant audio/file metadata lives in `AudioVersion`:
@@ -80,6 +95,11 @@ Current routes depending on legacy audio metadata:
 - `POST /api/projects/:projectId/tracks/:trackId/audio`
 - `GET|HEAD /api/projects/:projectId/tracks/:trackId/audio/:audioId/stream`
 - `GET /api/projects/:projectId/tracks/:trackId/audio/:audioId/download`
+
+Slice 6 adds native delivery routes:
+
+- `GET|HEAD /api/projects/:projectId/tracks/:trackId/assets/:assetId/stream`
+- `GET /api/projects/:projectId/tracks/:trackId/assets/:assetId/download`
 
 Current frontend dependencies:
 
@@ -214,8 +234,62 @@ Primary normalization rules:
 
 - `READY` + mapped legacy audio + non-external asset => legacy stream/download URLs are returned;
 - `UPLOADING`, `FAILED`, `DELETED`, or `deletedAt != null` => no playable URLs;
-- native assets without legacy mapping currently return `streamUrl = null` and `downloadUrl = null` until asset routes exist;
+- native READY local audio assets now return TrackAsset-native `streamUrl` and `downloadUrl`;
 - external legacy/native assets preserve `externalUrl` and `externalProvider`, and do not expose local legacy URLs.
+
+### Native delivery route contract
+
+Route paths:
+
+- `GET|HEAD /api/projects/:projectId/tracks/:trackId/assets/:assetId/stream`
+- `GET /api/projects/:projectId/tracks/:trackId/assets/:assetId/download`
+
+Authorization:
+
+- authenticated only
+- project and track membership is resolved through the same access service as legacy routes
+- any readable member can stream
+- download still requires `capabilities.canDownload`
+- outsider is denied as not found
+- anonymous is denied as unauthenticated
+
+Asset validation:
+
+- route scope must match `projectId`, `trackId`, and `assetId`
+- `deletedAt = null`
+- `status = READY`
+- kind must be one of `MASTER`, `AUDIO_VERSION`, `INSTRUMENTAL`, `ACAPELLA`, `STEM`, `DEMO`, `REFERENCE`
+- `storageProvider = local`
+- `externalUrl = null`
+- `storageKey` and `mimeType` are required
+- `mimeType` must be `audio/*`
+
+External / invalid mode behavior:
+
+- `storageProvider = external` returns `409 EXTERNAL_ASSET`
+- mixed or incomplete delivery descriptors return `409 INVALID_ASSET_DELIVERY_MODE` or `409 ASSET_NOT_DELIVERABLE`
+- DTOs do not emit local delivery URLs for those assets
+
+Range behavior:
+
+- no range => `200`
+- valid single range => `206`
+- suffix and open-ended ranges are supported
+- invalid or multi-range => `416 INVALID_RANGE` with `Content-Range: bytes */<size>`
+- zero-byte files return stable `404`
+
+Header behavior:
+
+- stream route uses `inline`
+- download route uses `attachment`
+- both emit sanitized `filename` and `filename*`
+- `Cache-Control` stays `private, no-store`
+
+Legacy route hardening in slice 6:
+
+- guest-token stream behavior remains
+- authenticated legacy stream/download now hydrate session user explicitly before guest fallback
+- local byte-range/file delivery is served by the shared internal delivery service for both route families
 
 ### Public vs internal DTO
 
@@ -624,6 +698,21 @@ Slice 4 isolated CLI coverage adds:
 - no changes to `Project` / `Track` / `User` / `AudioVersion`
 - production-guard refusal without `TRACK_ASSET_BACKFILL_CONFIRM=YES`
 
+Slice 6 isolated PostgreSQL + temporary uploads delivery coverage adds:
+
+- mapped local TrackAsset stream/download parity with legacy bytes
+- HEAD parity
+- valid, suffix, and invalid range handling
+- native local TrackAsset without legacy mapping
+- external asset conflict behavior
+- missing file, invalid storage key, symlink, and zero-byte handling
+- `UPLOADING`, `FAILED`, `DELETED`, and `deletedAt` denial
+- kind-based non-deliverable denial
+- owner/editor/viewer stream access, viewer download denial parity, outsider denial, anonymous denial
+- cross-project and wrong-track denial
+- sanitized `Content-Disposition`
+- additive DTO URL exposure only for deliverable assets
+
 ## Validation SQL
 
 After migration:
@@ -656,6 +745,15 @@ TrackAsset helpers must continue current path safety rules:
 - resolved path must stay under uploads root
 
 Physical delete remains deferred. Slice 1 only introduces soft-delete-ready metadata fields (`status`, `deletedAt`).
+
+Slice 6 shared delivery keeps the same safety model for stream/download:
+
+- no absolute paths
+- no traversal
+- no backslashes
+- no symlink segments
+- resolved file must stay under uploads root
+- raw storage paths are never serialized into public DTOs
 
 ## Cleanup strategy
 

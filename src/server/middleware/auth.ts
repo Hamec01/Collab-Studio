@@ -63,8 +63,39 @@ function loadAuthenticatedUser(req: Request, res: Response, next: NextFunction, 
     .catch(next);
 }
 
+function loadOptionalUser(req: Request, next: NextFunction, onLoaded: () => void) {
+  if (req.user) {
+    onLoaded();
+    return;
+  }
+
+  const userId = req.session.userId;
+  if (!userId) {
+    onLoaded();
+    return;
+  }
+
+  prisma.user
+    .findUnique({ where: { id: userId }, select: safeUserSelect })
+    .then((user) => {
+      if (!user) {
+        req.session.destroy(() => undefined);
+        onLoaded();
+        return;
+      }
+
+      req.user = user;
+      onLoaded();
+    })
+    .catch(next);
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   loadAuthenticatedUser(req, res, next, next);
+}
+
+export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  loadOptionalUser(req, next, next);
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
