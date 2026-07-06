@@ -33,8 +33,8 @@ type TrackContextPanelProps = {
   onResolveDiscussionThread: (threadId: string, resolved: boolean) => void;
   onReanchorDiscussionThread: (threadId: string, selection: LyricsDiscussionSelection) => void;
   onSendMessage: (text: string) => void;
-  onAddTask: (title: string, assignedToId?: string) => void;
-  onUpdateTaskStatus: (taskId: string, status: Task["status"]) => void;
+  onAddTask: (title: string, assignedToId?: string) => Promise<void> | void;
+  onUpdateTaskStatus: (taskId: string, status: Task["status"]) => Promise<void> | void;
   onUnauthorized: () => void;
 };
 

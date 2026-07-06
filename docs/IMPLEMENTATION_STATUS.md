@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 6 июля 2026 года (Stage 6 slice 2 local PASS)
+Последнее обновление: 6 июля 2026 года (Stage 6 slice 3 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 6`
-- Active slice: Stage 6 slice 2 — track chat hardening completed locally; send permission now matches backend editor/owner policy, viewer chat is explicitly read-only, async send errors stay in-form, production untouched
+- Active slice: Stage 6 slice 3 — track tasks hardening completed locally; task create/status UX now awaits server writes, viewers are explicit read-only, production untouched
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -43,7 +43,7 @@
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
 | Stage 5A — TrackAsset migration | completed | Production foundation, delivery routes and asset-first frontend cutover are live; legacy fallback preserved; backfill execute NOT run |
 | Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
-| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 2 completed locally: mobile line comments sheet plus track chat hardening (permission parity, awaited submit, read-only/error UX); production deploy not performed |
+| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 3 completed locally: mobile line comments sheet, track chat hardening and track tasks hardening (awaited writes, read-only/error UX); production deploy not performed |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
 | Stage 8 — PWA и offline lyrics | pending | Не начат |
 | Stage 9 — Public profiles и publications | pending | Не начат |
@@ -163,7 +163,13 @@ Stage 5A:
     - chat submit now awaits async send, blocks double-submit while pending and surfaces API errors inline
     - focused component coverage added for send success, send failure and viewer-disabled chat state
     - production deploy intentionally not performed
-22. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
+22. Stage 6 slice 3 завершён локально:
+    - track task create/status UX now awaits server writes instead of assuming synchronous success
+    - failed create and failed status updates surface inline error state without silently resetting the form
+    - viewer/read-only users now see disabled task controls plus explicit permission guidance
+    - focused component coverage added for create success, create failure, status failure and viewer-disabled task state
+    - production deploy intentionally not performed
+23. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
 
 ## Журнал slices
 
