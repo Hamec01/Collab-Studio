@@ -94,6 +94,47 @@ Before future production deploy:
 3. owner-authenticated smoke checklist available
 4. no schema or migration changes required
 
+## Production cutover result — 2026-07-06
+
+**Status: DEPLOYED**
+
+- deployed app commit: `85be76c`
+- deployed image: `sha256:5f9fc4e65d3b18df3aa9ba2680e4ece7320a3e1282debd2d26dab0e22dfa2974`
+- previous image (slice 6): `sha256:760eb36551e085d59c76e9a986468e3c08f7e4cf7ebddee05aa12c0212110dc2`
+- deploy time: 2026-07-06
+
+### Smoke results
+
+| Check | Result |
+|---|---|
+| pre-deploy git state | HEAD=85be76c, origin/main synced (0 0), clean |
+| image build | PASS — TrackAsset code in bundle, no new migrations, server.cjs 172K |
+| deploy (--no-deps app) | PASS — started 13.8s, healthy |
+| health/ready/root | 200/200/200 |
+| startup logs | only known ERR_ERL_KEY_GEN_IPV6 warning; no new errors |
+| HTML loads | PASS |
+| JS/CSS static 200 | PASS |
+| asset/stream anon | 401 PASS |
+| asset/download anon | 401 PASS |
+| storageKey leak | none PASS |
+| A — empty state | PASS (audioVersions=0, assets=0) |
+| B — first WAV upload | PASS (201, streamUrl native /assets/, stream HEAD 200, no storageKey leaked) |
+| C — second WAV upload | PASS (201, assets≥2, legacy retained) |
+| D — external link | PASS (201, streamUrl=null, externalUrl present) |
+| E — legacy fallback | No natural legacy-only row in production; locally covered; manual-not-reproducible |
+| F — mobile | Manual-pending |
+| G — cleanup | PASS (DB direct: 5 AudioVersion + 5 TrackAsset + 4 files removed, baseline restored) |
+| post-deploy DB counts | User=2, Project=1, Track=1, AudioVersion=0, TrackAsset=0 |
+| uploads file count | 0 |
+| migration state | 7 migrations all finished, unchanged |
+| backfill execute | NOT run |
+| Stage 5B | Not started |
+
+### Rollback plan
+
+1. `docker compose --env-file ... up -d --no-deps app` with previous image `sha256:760eb36551e085d59c76e9a986468e3c08f7e4cf7ebddee05aa12c0212110dc2`
+2. Keep additive backend and schema support intact — no down migration.
+
 ## Owner smoke checklist
 
 1. log in as verified owner
@@ -116,6 +157,6 @@ Before future production deploy:
 
 ## Rollback
 
-1. redeploy previous frontend/app commit
+1. redeploy previous frontend/app commit (`sha256:760eb36551e0...`)
 2. keep additive backend and schema support intact
 3. do not touch backfill state
