@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "prisma generate && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "prisma generate && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild scripts/backfill-track-assets.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/scripts/backfill-track-assets.js",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "prelint": "npm run prisma:generate",
@@ -25,7 +25,7 @@
     "smoke:stage3:production-safe": "tsx scripts/stage3_production_smoke.ts",
     "backfill:stage4b:lyrics": "tsx scripts/backfill-stage4b-lyrics.ts",
     "rehearsal:stage4b:lyrics": "tsx scripts/rehearse-stage4b-lyrics.ts",
-    "backfill:track-assets": "tsx scripts/backfill-track-assets.ts",
+    "backfill:track-assets": "node dist/scripts/backfill-track-assets.js",
     "audit-orphan-audio": "tsx scripts/audit-orphan-audio.ts",
     "backup": "bash scripts/backup.sh",
     "restore": "bash scripts/restore.sh"
