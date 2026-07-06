@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 6 июля 2026 года (Stage 5B slice 1 local PASS)
+Последнее обновление: 6 июля 2026 года (Stage 5B slice 1.1 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 5B`
-- Active slice: Stage 5B slice 1 — TrackAsset-bound audio annotations completed locally; new annotations persist `trackAssetId`, UI filters by active source with legacy fallback, shared player seek preserved; production untouched
+- Active slice: Stage 5B slice 1.1 — audio annotation hardening completed locally; TrackAsset delete now cascades bound annotations, timestamp creation requires reliable in-app playback capability, outsider API rejection covered; production untouched
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -42,7 +42,7 @@
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
 | Stage 5A — TrackAsset migration | completed | Production foundation, delivery routes and asset-first frontend cutover are live; legacy fallback preserved; backfill execute NOT run |
-| Stage 5B — Player и audio annotations | in_progress | Slice 1 completed locally: annotations now bind to `TrackAsset` when available, legacy track-level fallback preserved, production deploy not performed |
+| Stage 5B — Player и audio annotations | in_progress | Slice 1.1 completed locally: delete cascade hardening, reliable-playback annotation gating, outsider API rejection covered; production deploy not performed |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
 | Stage 8 — PWA и offline lyrics | pending | Не начат |
@@ -142,7 +142,14 @@ Stage 5A:
     - clicking an annotation still seeks through shared playback engine
     - legacy-only and native-only audio states are covered locally
     - production deploy intentionally not performed
-19. Следующий шаг — только следующий Stage 5B slice после отдельного подтверждения.
+19. Stage 5B slice 1.1 завершён локально:
+    - `Annotation.trackAssetId` FK hardened from `ON DELETE SET NULL` to `ON DELETE CASCADE` via new additive migration
+    - deleting a `TrackAsset` now removes its bound annotations instead of reclassifying them as legacy fallback
+    - timestamp annotation creation now depends on real in-app playback capability, not just local/external labeling
+    - external asset with reliable shared-player playback can annotate; external link without timeline support stays disabled
+    - outsider annotation create request is rejected under existing access policy and does not write DB rows
+    - production deploy intentionally not performed
+20. Следующий шаг — только следующий Stage 5B slice после отдельного подтверждения.
 
 ## Журнал slices
 

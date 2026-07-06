@@ -616,7 +616,7 @@ model Annotation {
   createdAt        DateTime @default(now())
 
   track      Track       @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  trackAsset TrackAsset? @relation(fields: [trackAssetId], references: [id], onDelete: SetNull)
+  trackAsset TrackAsset? @relation(fields: [trackAssetId], references: [id], onDelete: Cascade)
   author     User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([trackId])

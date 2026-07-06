@@ -21,6 +21,7 @@ const mockSelectedAudio: PlayableAudioSource = {
   createdAt: "2026-07-06T12:00:00.000Z",
   uploadedBy: null,
   canDelete: true,
+  supportsTimestampAnnotations: true,
   sourceType: "asset",
 };
 

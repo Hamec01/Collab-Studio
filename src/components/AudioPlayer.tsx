@@ -54,7 +54,16 @@ export default function AudioPlayer({
   const hasActiveSource = !!sourceUrl;
   const hasExternalSource = !sourceUrl && !!externalUrl;
   const activeTrackAssetId = activeVersion?.trackAssetId ?? null;
-  const canCreateTimestampAnnotation = canAnnotate && hasActiveSource && !!activeTrackAssetId;
+  const canCreateTimestampAnnotation = canAnnotate && Boolean(activeVersion?.supportsTimestampAnnotations) && hasActiveSource && !!activeTrackAssetId;
+  const annotationUnavailableReason = !canAnnotate
+    ? "У вас нет прав на создание заметок"
+    : !activeVersion
+      ? "Заметки доступны только для активной версии, которая воспроизводится внутри приложения"
+      : !activeTrackAssetId
+        ? "Заметки доступны только для версии, связанной с TrackAsset"
+        : !activeVersion.supportsTimestampAnnotations || !hasActiveSource
+          ? "Заметки доступны только для версии с надёжным таймкодом и seek внутри приложения"
+          : null;
 
   // Use shared player from PlayerProvider
   const player = usePlayer();
@@ -252,6 +261,17 @@ export default function AudioPlayer({
               <Link2 className="w-3.5 h-3.5" />
               Добавить ссылку
             </button>
+            <button
+              type="button"
+              disabled
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-neutral-800 bg-neutral-950 text-neutral-500 disabled:cursor-not-allowed focus:outline-none"
+              title={annotationUnavailableReason ?? "Заметки недоступны"}
+              aria-label="Добавить заметку"
+              aria-description={annotationUnavailableReason ?? "Заметки недоступны"}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Заметка недоступна
+            </button>
           </div>
         </div>
       ) : (
@@ -410,8 +430,9 @@ export default function AudioPlayer({
                 onClick={handleOpenAnnotation}
                 disabled={!canCreateTimestampAnnotation}
                 className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-950 text-indigo-400 px-3 py-2 rounded-lg border border-neutral-800 hover:border-indigo-500/30 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-                title={canCreateTimestampAnnotation ? "Добавить заметку на текущем таймкоде" : "Заметки доступны только для активной локальной версии TrackAsset"}
+                title={canCreateTimestampAnnotation ? "Добавить заметку на текущем таймкоде" : (annotationUnavailableReason ?? "Заметки недоступны")}
                 aria-label="Добавить заметку"
+                aria-description={canCreateTimestampAnnotation ? "Добавить заметку на текущем таймкоде" : (annotationUnavailableReason ?? "Заметки недоступны")}
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Заметка ({formatTime(safeCurrentTime)})</span>

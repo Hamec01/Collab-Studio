@@ -25,6 +25,7 @@ function makeSource(overrides: Partial<PlayableAudioSource> = {}): PlayableAudio
     createdAt: overrides.createdAt ?? "2026-07-06T10:00:00.000Z",
     uploadedBy: overrides.uploadedBy ?? { id: "u1", displayName: "Uploader", avatarUrl: null },
     canDelete: overrides.canDelete ?? true,
+    supportsTimestampAnnotations: overrides.supportsTimestampAnnotations ?? Boolean((("streamUrl" in overrides ? overrides.streamUrl : "/audio/demo.wav")) && (overrides.trackAssetId ?? null)),
   };
 }
 
@@ -163,11 +164,11 @@ describe("AudioPlayer", () => {
     expect(screen.getAllByText("Аудио не загружено")).toHaveLength(2);
   });
 
-  it("shows external action instead of local playback for external-only sources", () => {
+  it("shows external action and disables annotations for external-only sources without reliable playback", () => {
     render(
       <PlayerProvider>
         <AudioPlayer
-          audioSources={[makeSource({ id: "ext-1", streamUrl: null, downloadUrl: null, externalUrl: "https://example.com/audio.mp3", externalProvider: "other" })]}
+          audioSources={[makeSource({ id: "ext-1", sourceType: "asset", trackAssetId: "asset-ext-1", streamUrl: null, downloadUrl: null, externalUrl: "https://example.com/audio.mp3", externalProvider: "other", supportsTimestampAnnotations: false })]}
           annotations={[]}
           onAddAnnotation={vi.fn()}
           onSelectAudioSource={vi.fn()}
@@ -180,7 +181,8 @@ describe("AudioPlayer", () => {
     const link = screen.getByRole("link", { name: "Открыть ссылку" });
     expect(link).toHaveAttribute("href", "https://example.com/audio.mp3");
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
-    expect(screen.queryByRole("button", { name: "Добавить заметку" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Добавить заметку" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Добавить заметку" })).toHaveAttribute("title", expect.stringContaining("надёжным таймкодом"));
   });
 
   it("shows current asset annotations and legacy null annotations, but hides other asset annotations", async () => {
@@ -280,6 +282,39 @@ describe("AudioPlayer", () => {
     expect(onAddAnnotation).toHaveBeenCalledWith(0, "Bound note", "asset-1");
   });
 
+  it("allows annotations for asset-backed external playback when currentTime is reliable in-app", async () => {
+    const user = userEvent.setup();
+    const onAddAnnotation = vi.fn();
+    render(
+      <PlayerProvider>
+        <AudioPlayer
+          audioSources={[makeSource({
+            id: "asset-streamed-external",
+            sourceType: "asset",
+            trackAssetId: "asset-streamed-external",
+            legacyAudioVersionId: null,
+            streamUrl: "/assets/asset-streamed-external/stream",
+            downloadUrl: "/assets/asset-streamed-external/download",
+            externalUrl: "https://example.com/audio.mp3",
+            externalProvider: "other",
+            supportsTimestampAnnotations: true,
+          })]}
+          annotations={[]}
+          onAddAnnotation={onAddAnnotation}
+          onSelectAudioSource={vi.fn()}
+          selectedAudioSourceId="asset-streamed-external"
+          canAnnotate
+        />
+      </PlayerProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Добавить заметку" }));
+    await user.type(screen.getByPlaceholderText("Что происходит в этот момент?"), "External but playable");
+    await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
+
+    expect(onAddAnnotation).toHaveBeenCalledWith(0, "External but playable", "asset-streamed-external");
+  });
+
   it("disables annotation creation for legacy-only playback", () => {
     render(
       <PlayerProvider>
@@ -295,6 +330,7 @@ describe("AudioPlayer", () => {
     );
 
     expect(screen.getByRole("button", { name: "Добавить заметку" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Добавить заметку" })).toHaveAttribute("title", expect.stringContaining("TrackAsset"));
   });
 
 });

@@ -12,9 +12,13 @@
 
 ## Data model
 
-- `Annotation.trackAssetId` — nullable FK на `TrackAsset`, `ON DELETE SET NULL`
-- additive migration:
+- `Annotation.trackAssetId` — nullable FK на `TrackAsset`
+- additive migrations:
   - `20260706130000_stage5b_audio_annotations_track_assets`
+  - `20260706150000_stage5b_annotation_track_asset_cascade`
+- delete semantics:
+  - asset-bound annotations delete together with `TrackAsset`
+  - `ON DELETE CASCADE` prevents accidental downgrade into legacy `trackAssetId=null` fallback
 
 ## Server contract
 
@@ -38,6 +42,9 @@
 - клик по annotation вызывает seek в shared playback engine
 - если активного local TrackAsset нет:
   - создание timestamp annotation disabled
+- если source не даёт надёжный in-app timeline/seek:
+  - создание timestamp annotation disabled with explicit reason
+- external asset can still allow annotation only when it is actually streamed inside the shared player and yields reliable currentTime
 - external-only и legacy-only states не создают fake `trackAssetId`
 
 ## Compatibility rules

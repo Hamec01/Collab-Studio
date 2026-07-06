@@ -50,6 +50,7 @@ function makeSource(overrides: Partial<PlayableAudioSource> = {}): PlayableAudio
     createdAt: overrides.createdAt ?? "2026-07-06T10:00:00.000Z",
     uploadedBy: overrides.uploadedBy ?? { id: "u1", displayName: "Uploader", avatarUrl: null },
     canDelete: overrides.canDelete ?? true,
+    supportsTimestampAnnotations: overrides.supportsTimestampAnnotations ?? true,
   };
 }
 

@@ -54,6 +54,7 @@ function isUsableLegacyAudio(audio: AudioVersion) {
 }
 
 function toAssetSource(asset: TrackAsset): PlayableAudioSource {
+  const supportsTimestampAnnotations = Boolean(asset.id && asset.streamUrl);
   return {
     sourceType: "asset",
     id: asset.id,
@@ -72,6 +73,7 @@ function toAssetSource(asset: TrackAsset): PlayableAudioSource {
     createdAt: asset.createdAt,
     uploadedBy: asset.uploadedBy,
     canDelete: Boolean(asset.legacyAudioVersionId),
+    supportsTimestampAnnotations,
   };
 }
 
@@ -94,6 +96,7 @@ function toLegacySource(audio: AudioVersion): PlayableAudioSource {
     createdAt: audio.createdAt,
     uploadedBy: audio.uploadedBy,
     canDelete: true,
+    supportsTimestampAnnotations: false,
   };
 }
 

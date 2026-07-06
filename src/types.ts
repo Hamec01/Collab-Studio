@@ -117,6 +117,7 @@ export interface PlayableAudioSource {
     avatarUrl: string | null;
   } | null;
   canDelete: boolean;
+  supportsTimestampAnnotations: boolean;
 }
 
 export interface CollaborationUser {

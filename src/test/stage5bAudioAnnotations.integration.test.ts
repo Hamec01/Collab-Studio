@@ -272,3 +272,115 @@ test("Stage 5B slice 1 binds annotations to TrackAsset and rejects cross-track a
   assert.equal(rejectResponse.body.error.code, "TRACK_ASSET_NOT_FOUND");
   assert.equal(await prisma.annotation.count({ where: { text: "Wrong asset" } }), 0);
 });
+
+test("Stage 5B slice 1.1 cascades asset-bound annotations when TrackAsset is deleted", async () => {
+  const owner = await createUser({ username: "owner_stage5b_cascade", displayName: "Owner Cascade" });
+  const project = await prisma.project.create({
+    data: {
+      title: "Stage 5B cascade",
+      type: "album",
+      members: { create: { userId: owner.id, role: "owner" } },
+      tracks: {
+        create: {
+          title: "Track Cascade",
+          lyrics: "",
+          lyricsPlainText: "",
+          lyricsRevision: 0,
+          lyricsDocument: { schemaVersion: 1, blocks: [{ id: "paragraph_010", type: "paragraph", children: [{ text: "" }] }] },
+          tags: [],
+        },
+      },
+    },
+    include: { tracks: true },
+  });
+
+  const track = project.tracks[0];
+  const asset = await prisma.trackAsset.create({
+    data: {
+      trackId: track.id,
+      projectId: project.id,
+      uploadedByUserId: owner.id,
+      kind: "AUDIO_VERSION",
+      status: "READY",
+      originalFilename: "cascade.wav",
+      storageProvider: "local",
+      mimeType: "audio/wav",
+      sizeBytes: 128,
+      durationMs: 1000,
+      versionNumber: 1,
+      isPrimary: true,
+    },
+  });
+
+  const annotation = await prisma.annotation.create({
+    data: {
+      trackId: track.id,
+      trackAssetId: asset.id,
+      authorId: owner.id,
+      timestampSeconds: 10,
+      text: "To be deleted",
+    },
+  });
+
+  await prisma.trackAsset.delete({ where: { id: asset.id } });
+
+  assert.equal(await prisma.annotation.count({ where: { id: annotation.id } }), 0);
+});
+
+test("Stage 5B slice 1.1 rejects annotation creation from non-member according to access policy", async () => {
+  const owner = await createUser({ username: "owner_stage5b_member", displayName: "Owner Member" });
+  const outsider = await createUser({ username: "outsider_stage5b_member", displayName: "Outsider Member" });
+  const project = await prisma.project.create({
+    data: {
+      title: "Stage 5B outsider",
+      type: "album",
+      members: { create: { userId: owner.id, role: "owner" } },
+      tracks: {
+        create: {
+          title: "Track Secure",
+          lyrics: "",
+          lyricsPlainText: "",
+          lyricsRevision: 0,
+          lyricsDocument: { schemaVersion: 1, blocks: [{ id: "paragraph_020", type: "paragraph", children: [{ text: "" }] }] },
+          tags: [],
+        },
+      },
+    },
+    include: { tracks: true },
+  });
+
+  const track = project.tracks[0];
+  const asset = await prisma.trackAsset.create({
+    data: {
+      trackId: track.id,
+      projectId: project.id,
+      uploadedByUserId: owner.id,
+      kind: "AUDIO_VERSION",
+      status: "READY",
+      originalFilename: "secure.wav",
+      storageProvider: "local",
+      mimeType: "audio/wav",
+      sizeBytes: 128,
+      durationMs: 1000,
+      versionNumber: 1,
+      isPrimary: true,
+    },
+  });
+
+  const outsiderJar = await createSession(outsider.id);
+  const response = await apiJson<{ error?: { code: string } }>(
+    `/api/projects/${project.id}/tracks/${track.id}/annotations`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        timestampSeconds: 7,
+        text: "Outsider note",
+        trackAssetId: asset.id,
+      }),
+    },
+    outsiderJar,
+  );
+
+  assert.ok(response.status === 403 || response.status === 404);
+  assert.equal(await prisma.annotation.count({ where: { text: "Outsider note" } }), 0);
+});
