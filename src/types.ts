@@ -95,6 +95,30 @@ export interface TrackAsset {
   } | null;
 }
 
+export interface PlayableAudioSource {
+  sourceType: "asset" | "legacy";
+  id: string;
+  trackAssetId: string | null;
+  legacyAudioVersionId: string | null;
+  versionNumber: number | null;
+  title: string;
+  originalFilename: string;
+  streamUrl: string | null;
+  downloadUrl: string | null;
+  externalUrl: string | null;
+  externalProvider: "google" | "yandex" | "telegram" | "other" | null;
+  mimeType: string | null;
+  durationMs: number | null;
+  isPrimary: boolean;
+  createdAt: string;
+  uploadedBy: {
+    id: string | null;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
+  canDelete: boolean;
+}
+
 export interface CollaborationUser {
   id: string;
   username: string;

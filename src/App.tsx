@@ -70,6 +70,7 @@ import { LyricsCommentsSheet } from "./features/track-workspace/lyrics/LyricsCom
 import { LyricsDiscussionsSheet } from "./features/track-workspace/lyrics/LyricsDiscussionsSheet";
 import { useLyricsDiscussions } from "./features/track-workspace/lyrics/useLyricsDiscussions";
 import { LyricsPlayerPlaceholder } from "./features/track-workspace/lyrics/LyricsPlayerPlaceholder";
+import { normalizeTrackAudioSources, resolveSelectedAudioSource } from "./features/track-workspace/audio/normalizeTrackAudio";
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
 type MobileTab = "projects" | "editor" | "rightPanel";
@@ -94,9 +95,9 @@ export default function App() {
     withAuth,
   } = useAuth();
   const {
-    selectedAudioVersionId,
-    setSelectedAudioVersionId,
-    syncSelectedAudioVersion,
+    selectedAudioSourceId,
+    setSelectedAudioSourceId,
+    syncSelectedAudioSource,
   } = usePlayer();
   const [globalError, setGlobalError] = useState<string>("");
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
@@ -164,6 +165,11 @@ export default function App() {
   const activeTrack = useMemo(
     () => activeProject?.tracks.find((track) => track.id === activeTrackId) || null,
     [activeProject, activeTrackId],
+  );
+  const activeTrackAudioSources = useMemo(() => (activeTrack ? normalizeTrackAudioSources(activeTrack) : []), [activeTrack]);
+  const activeTrackSelectedAudio = useMemo(
+    () => resolveSelectedAudioSource(activeTrackAudioSources, selectedAudioSourceId),
+    [activeTrackAudioSources, selectedAudioSourceId],
   );
 
   const projectRole = useMemo(() => {
@@ -254,7 +260,7 @@ export default function App() {
 
   const clearWorkspace = () => {
     resetWorkspaceQuery();
-    setSelectedAudioVersionId(null);
+    setSelectedAudioSourceId(null);
     setSelectedLineIndex(null);
     clearDiscussionState();
     setShowLyricsComments(false);
@@ -602,8 +608,8 @@ export default function App() {
       setLyricsSaveStatus(localDraft.syncState === "conflict" ? "conflict" : "local");
     })();
 
-    syncSelectedAudioVersion(activeTrack.audioVersions);
-  }, [activeTrack?.id, activeProject?.id, currentUser?.id, syncSelectedAudioVersion]);
+    syncSelectedAudioSource(activeTrackAudioSources);
+  }, [activeTrack?.id, activeProject?.id, currentUser?.id, activeTrackAudioSources, syncSelectedAudioSource]);
 
   useEffect(() => {
     if (authPhase !== "authenticated") return;
@@ -679,7 +685,8 @@ export default function App() {
         tab: "lyrics",
       }),
     );
-    setSelectedAudioVersionId(project.tracks[0]?.audioVersions[0]?.id ?? null);
+    const initialAudio = normalizeTrackAudioSources(project.tracks[0] ?? { audioVersions: [], assets: [] })[0] ?? null;
+    setSelectedAudioSourceId(initialAudio?.id ?? null);
   };
 
   const handleDeleteProject = async (projectId: string) => {
@@ -707,7 +714,8 @@ export default function App() {
         tab: "lyrics",
       }),
     );
-    setSelectedAudioVersionId(track.audioVersions[0]?.id ?? null);
+    const initialAudio = normalizeTrackAudioSources(track)[0] ?? null;
+    setSelectedAudioSourceId(initialAudio?.id ?? null);
   };
 
   const handleAddProjectMember = async (projectId: string, payload: { login: string; role: "viewer" | "editor" }) => {
@@ -1030,7 +1038,8 @@ export default function App() {
                   statusMessage={lyricsWorkspaceStatusMessage}
                   restoreDraft={restoreDraftSnapshot}
                   selectedLineIndex={selectedLineIndex}
-                  selectedAudioVersionId={selectedAudioVersionId}
+                  audioSources={activeTrackAudioSources}
+                  selectedAudioSourceId={selectedAudioSourceId}
                   onChangeDraftLyrics={handleDraftLyricsChange}
                   onChangeDraftDocument={handleDraftDocumentChange}
                   onChangeDiscussionSelection={setDiscussionSelection}
@@ -1050,7 +1059,7 @@ export default function App() {
                   }}
                   onRequestUpload={() => setShowUploadModal(true)}
                   onAddAnnotation={handleAddAnnotation}
-                  onSelectAudioVersion={setSelectedAudioVersionId}
+                  onSelectAudioSource={setSelectedAudioSourceId}
                 />
               ) : (
                 <StateView kind="empty" message={t("state.track.empty")} className="min-h-[220px] flex items-center" />
@@ -1104,8 +1113,8 @@ export default function App() {
         </>
       )}
 
-      {currentUser && (
-        <LyricsPlayerPlaceholder track={activeTrack} selectedAudioVersionId={selectedAudioVersionId} />
+      {currentUser && activeTrack && (
+        <LyricsPlayerPlaceholder trackTitle={activeTrack.title} selectedAudio={activeTrackSelectedAudio} />
       )}
 
       {activeTrack && !lyricsDiscussionsEnabled && (

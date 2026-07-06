@@ -3,7 +3,7 @@ import { FolderOpen } from "lucide-react";
 import AudioPlayer from "../../../components/AudioPlayer";
 import LyricsEditor, { type LyricsSaveStatus, type RestoreDraftSnapshot } from "../../../components/LyricsEditor";
 import Button from "../../../shared/ui/Button";
-import type { Annotation, LyricVersion, Track } from "../../../types";
+import type { Annotation, LyricVersion, PlayableAudioSource, Track } from "../../../types";
 import { featureFlags } from "../../../app/featureFlags";
 import type { LyricsDiscussionSelection } from "./lyricsDiscussions";
 import { buildLyricsLineAnchors } from "./lyricsDiscussions";
@@ -23,7 +23,8 @@ type TrackLyricsWorkspaceProps = {
   statusMessage: string;
   restoreDraft: RestoreDraftSnapshot | null;
   selectedLineIndex: number | null;
-  selectedAudioVersionId: string | null;
+  audioSources: PlayableAudioSource[];
+  selectedAudioSourceId: string | null;
   onChangeDraftLyrics: (lyrics: string) => void;
   onChangeDraftDocument: (document: LyricsDocument) => void;
   onChangeDiscussionSelection: (selection: LyricsDiscussionSelection | null) => void;
@@ -40,7 +41,7 @@ type TrackLyricsWorkspaceProps = {
   onJumpToDiscussion: () => void;
   onRequestUpload: () => void;
   onAddAnnotation: (timestampSeconds: number, text: string) => void;
-  onSelectAudioVersion: React.Dispatch<React.SetStateAction<string | null>>;
+  onSelectAudioSource: React.Dispatch<React.SetStateAction<string | null>>;
 };
 
 export function TrackLyricsWorkspace({
@@ -56,7 +57,8 @@ export function TrackLyricsWorkspace({
   statusMessage,
   restoreDraft,
   selectedLineIndex,
-  selectedAudioVersionId,
+  audioSources,
+  selectedAudioSourceId,
   onChangeDraftLyrics,
   onChangeDraftDocument,
   onChangeDiscussionSelection,
@@ -73,7 +75,7 @@ export function TrackLyricsWorkspace({
   onJumpToDiscussion,
   onRequestUpload,
   onAddAnnotation,
-  onSelectAudioVersion,
+  onSelectAudioSource,
 }: TrackLyricsWorkspaceProps) {
   const lyricsLineAnchors = buildLyricsLineAnchors(draftDocument);
   const commentsCount = (lineIndex: number) => {
@@ -135,11 +137,11 @@ export function TrackLyricsWorkspace({
       />
 
       <AudioPlayer
-        audioVersions={track.audioVersions}
+        audioSources={audioSources}
         annotations={track.annotations as Annotation[]}
         onAddAnnotation={onAddAnnotation}
-        onSelectAudioVersion={onSelectAudioVersion}
-        selectedAudioVersionId={selectedAudioVersionId}
+        onSelectAudioSource={onSelectAudioSource}
+        selectedAudioSourceId={selectedAudioSourceId}
         canAnnotate={canEdit}
         onRequestUploadFile={onRequestUpload}
         onRequestAddLink={onRequestUpload}

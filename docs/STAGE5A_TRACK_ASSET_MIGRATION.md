@@ -75,6 +75,22 @@ Slice 6 still does not:
 - change uploads layout
 - deploy to production
 
+Slice 7 adds local frontend asset-first cutover only:
+
+- frontend normalizes additive `assets` plus legacy `audioVersions` into one playable source model
+- player selection prefers usable `TrackAsset` rows and falls back to legacy audio only when needed
+- mapped `TrackAsset` rows suppress matching legacy `AudioVersion` rows
+- upload flow stays refetch-based; frontend does not fabricate TrackAsset rows
+- native-only assets remain playable
+- external-only assets render as safe outbound links instead of fake local playback
+
+Slice 7 still does not:
+
+- remove `audioVersions`
+- change upload API responses
+- add native asset delete
+- deploy to production
+
 ## Legacy inventory
 
 Current production-relevant audio/file metadata lives in `AudioVersion`:
@@ -101,7 +117,7 @@ Slice 6 adds native delivery routes:
 - `GET|HEAD /api/projects/:projectId/tracks/:trackId/assets/:assetId/stream`
 - `GET /api/projects/:projectId/tracks/:trackId/assets/:assetId/download`
 
-Current frontend dependencies:
+Current frontend dependencies before slice 7:
 
 - `src/components/AudioPlayer.tsx`
 - `src/features/track-workspace/lyrics/TrackLyricsWorkspace.tsx`
@@ -109,6 +125,14 @@ Current frontend dependencies:
 - upload modal inside `src/App.tsx`
 - `src/api/projects.ts`
 - `src/types.ts`
+
+Slice 7 frontend cutover wiring:
+
+- `src/features/track-workspace/audio/normalizeTrackAudio.ts`
+- `src/app/player/PlayerProvider.tsx`
+- `src/components/AudioPlayer.tsx`
+- `src/features/track-workspace/lyrics/TrackLyricsWorkspace.tsx`
+- `src/features/track-workspace/lyrics/LyricsPlayerPlaceholder.tsx`
 
 Current full-track API responses that now expose additive `assets`:
 
@@ -236,6 +260,63 @@ Primary normalization rules:
 - `UPLOADING`, `FAILED`, `DELETED`, or `deletedAt != null` => no playable URLs;
 - native READY local audio assets now return TrackAsset-native `streamUrl` and `downloadUrl`;
 - external legacy/native assets preserve `externalUrl` and `externalProvider`, and do not expose local legacy URLs.
+
+### Slice 7 frontend normalized source model
+
+Frontend slice 7 introduces one normalized playable source model with these fields:
+
+- `sourceType`
+- `id`
+- `trackAssetId`
+- `legacyAudioVersionId`
+- `versionNumber`
+- `title`
+- `originalFilename`
+- `streamUrl`
+- `downloadUrl`
+- `externalUrl`
+- `externalProvider`
+- `mimeType`
+- `durationMs`
+- `isPrimary`
+- `createdAt`
+- `uploadedBy`
+- `canDelete`
+
+The normalized source intentionally excludes `storageKey`, filesystem paths, and uploads-root details.
+
+### Slice 7 frontend selection and dedupe rules
+
+Frontend asset-first selection now works as follows:
+
+1. normalize usable native `TrackAsset` rows first
+2. keep only one row per asset id
+3. suppress a legacy `AudioVersion` only when a usable asset already references the same `legacyAudioVersionId`
+4. append unmapped usable legacy rows in existing legacy server order
+5. within asset rows, order by:
+   - `isPrimary=true`
+   - `versionNumber` descending
+   - `createdAt` descending
+   - `id` ascending
+6. if multiple assets are marked primary, only the first normalized row remains primary in frontend state
+7. if no usable asset exists, frontend falls back to legacy-only behavior
+
+Migration-state handling:
+
+- legacy-only: player behaves as before via `audioVersions`
+- dual-written: mapped assets win and duplicates disappear
+- partial backfill: mapped assets and unmapped legacy rows coexist without duplication
+- native-only local assets remain playable
+- external-only assets render as safe outbound links instead of fake local playback
+- invalid, failed, uploading, or deleted rows are excluded
+
+### Slice 7 upload and delete behavior
+
+- upload and external-link endpoints still return legacy `AudioVersion` responses
+- frontend does not synthesize TrackAsset rows client-side
+- after upload/link success, frontend re-fetches the track and re-normalizes additive `assets` plus legacy `audioVersions`
+- delete capability is true only when `legacyAudioVersionId` exists
+- native-only assets remain non-destructive in slice 7 because no native delete route exists
 
 ### Native delivery route contract
 

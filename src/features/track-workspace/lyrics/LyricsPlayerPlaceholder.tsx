@@ -1,16 +1,14 @@
 import { Music2 } from "lucide-react";
-import type { Track } from "../../../types";
+import type { PlayableAudioSource } from "../../../types";
 import { useI18n } from "../../../app/i18n/I18nProvider";
 
 type LyricsPlayerPlaceholderProps = {
-  track: Track | null;
-  selectedAudioVersionId: string | null;
+  trackTitle: string;
+  selectedAudio: PlayableAudioSource | null;
 };
 
-export function LyricsPlayerPlaceholder({ track, selectedAudioVersionId }: LyricsPlayerPlaceholderProps) {
+export function LyricsPlayerPlaceholder({ trackTitle, selectedAudio }: LyricsPlayerPlaceholderProps) {
   const { t } = useI18n();
-  if (!track) return null;
-  const selected = track.audioVersions.find((audio) => audio.id === selectedAudioVersionId) ?? track.audioVersions[0] ?? null;
 
   return (
     <div
@@ -21,9 +19,9 @@ export function LyricsPlayerPlaceholder({ track, selectedAudioVersionId }: Lyric
         <Music2 className="h-4 w-4" />
       </div>
       <div className="min-w-0 text-left">
-        <div className="truncate text-xs font-semibold text-white">{track.title}</div>
+        <div className="truncate text-xs font-semibold text-white">{trackTitle}</div>
         <div className="truncate text-[11px] text-neutral-400">
-          {selected ? selected.originalFilename : t("lyrics.player.empty")}
+          {selectedAudio ? selectedAudio.originalFilename : t("lyrics.player.empty")}
         </div>
       </div>
       <span className="ml-auto text-[10px] font-medium text-neutral-500">{t("lyrics.player.available")}</span>

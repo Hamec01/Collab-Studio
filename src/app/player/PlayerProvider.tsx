@@ -1,33 +1,33 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
-import type { AudioVersion } from "../../types";
+import type { PlayableAudioSource } from "../../types";
 
 type PlayerContextValue = {
-  selectedAudioVersionId: string | null;
-  setSelectedAudioVersionId: React.Dispatch<React.SetStateAction<string | null>>;
-  syncSelectedAudioVersion: (audioVersions: AudioVersion[]) => void;
+  selectedAudioSourceId: string | null;
+  setSelectedAudioSourceId: React.Dispatch<React.SetStateAction<string | null>>;
+  syncSelectedAudioSource: (audioSources: PlayableAudioSource[]) => void;
 };
 
 const PlayerContext = createContext<PlayerContextValue | undefined>(undefined);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const [selectedAudioVersionId, setSelectedAudioVersionId] = useState<string | null>(null);
+  const [selectedAudioSourceId, setSelectedAudioSourceId] = useState<string | null>(null);
 
-  const syncSelectedAudioVersion = useCallback((audioVersions: AudioVersion[]) => {
-    setSelectedAudioVersionId((prev) => {
-      if (prev && audioVersions.some((version) => version.id === prev)) {
+  const syncSelectedAudioSource = useCallback((audioSources: PlayableAudioSource[]) => {
+    setSelectedAudioSourceId((prev) => {
+      if (prev && audioSources.some((source) => source.id === prev)) {
         return prev;
       }
-      return audioVersions[0]?.id ?? null;
+      return audioSources[0]?.id ?? null;
     });
   }, []);
 
   const value = useMemo(
     () => ({
-      selectedAudioVersionId,
-      setSelectedAudioVersionId,
-      syncSelectedAudioVersion,
+      selectedAudioSourceId,
+      setSelectedAudioSourceId,
+      syncSelectedAudioSource,
     }),
-    [selectedAudioVersionId, syncSelectedAudioVersion],
+    [selectedAudioSourceId, syncSelectedAudioSource],
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

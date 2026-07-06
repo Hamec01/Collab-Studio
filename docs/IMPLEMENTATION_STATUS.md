@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 5A`
-- Active slice: Stage 5A slice 6 production delivery deployed — app commit `0a4ae6b`, native delivery routes live, frontend cutover intentionally not performed, owner authenticated smoke manual-pending
+- Active slice: Stage 5A slice 7 completed locally — frontend asset-first cutover implemented with legacy fallback preserved, production deploy intentionally not performed, owner authenticated smoke still manual-pending for later rollout
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -41,7 +41,7 @@
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
-| Stage 5A — TrackAsset migration | in_progress | Slice 6 production delivery deployed at app commit `0a4ae6b`; anonymous route smoke PASS, frontend not cut over, owner authenticated smoke manual-pending |
+| Stage 5A — TrackAsset migration | in_progress | Slice 7 completed locally: frontend now prefers additive `Track.assets` with legacy fallback; production still on slice 6 app commit `0a4ae6b`, owner authenticated smoke manual-pending |
 | Stage 5B — Player и audio annotations | pending | Не начат |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
@@ -99,7 +99,14 @@ Stage 5A:
     - uploads file count unchanged: `0`
     - production backfill execute NOT run
     - owner-authenticated validation + functional smoke manual pending because no reusable verified session was available in this shell
-14. Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения; Stage 4C+/5B не начинать.
+14. Slice 7 завершён локально:
+    - frontend player now uses normalized playable sources built from additive `assets` plus legacy fallback
+    - mapped assets suppress duplicate legacy `audioVersions`
+    - legacy-only, partial-backfill, native-only and external-only states covered locally
+    - upload flow remains refetch-based; backend response contract unchanged
+    - frontend production deploy intentionally not performed
+    - owner production smoke remains manual-pending for the future rollout turn
+15. Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения; Stage 4C+/5B не начинать.
 
 ## Журнал slices
 
@@ -124,6 +131,7 @@ Stage 5A:
 | 2026-07-06 | Stage 5A slice 4 | Добавлен resumable backfill CLI для `AudioVersion -> TrackAsset`: dry-run/execute, stable compound cursor, missing/conflict reporting, primary preservation, production execute guard; isolated seeded execute rehearsal PASS и restored-backup dry-run PASS | `main`, local diff | focused CLI integration PASS; restored-backup dry-run PASS; production untouched | Следующий шаг — следующий Stage 5A slice только после отдельного подтверждения |
 | 2026-07-06 | Stage 5A slice 5 | Исправлен runtime packaging для backfill CLI, production app обновлён до `b353b20`, exact production dry-run выполнен дважды и вернул clean JSON без DB writes; additive migration уже была applied, execute intentionally not run | `main@b353b20` | production app/postgres healthy; dry-run #1 PASS; dry-run #2/idempotency PASS; counts unchanged (`AudioVersion=0`, `TrackAsset=0`) | Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения |
 | 2026-07-06 | Stage 5A slice 6 | TrackAsset-native delivery routes deployed to production at `0a4ae6b`; anonymous native route smoke PASS under auth-first contract, shared delivery service live, DB counts unchanged, frontend still on `audioVersions`, owner authenticated smoke manual-pending | `main@0a4ae6b` | production health PASS; app/postgres healthy; no new Prisma/schema/runtime errors; image `sha256:760eb36551e085d59c76e9a986468e3c08f7e4cf7ebddee05aa12c0212110dc2` | Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения |
+| 2026-07-06 | Stage 5A slice 7 | Локально выполнен frontend asset-first cutover: введён normalized playable source model, player/selection switched to additive `Track.assets` with legacy fallback, external-only sources rendered as safe links, upload contract unchanged, production untouched | `main`, local diff | focused selector/component PASS; production untouched | Следующий шаг — production rollout этого slice только после отдельного подтверждения |
 
 ## Blockers
 

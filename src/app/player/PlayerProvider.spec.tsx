@@ -5,16 +5,16 @@ import userEvent from "@testing-library/user-event";
 import { PlayerProvider, usePlayer } from "./PlayerProvider";
 
 function PlayerProbe() {
-  const { selectedAudioVersionId, syncSelectedAudioVersion, setSelectedAudioVersionId } = usePlayer();
+  const { selectedAudioSourceId, syncSelectedAudioSource, setSelectedAudioSourceId } = usePlayer();
 
   return (
     <div>
-      <div data-testid="selected">{selectedAudioVersionId ?? "none"}</div>
+      <div data-testid="selected">{selectedAudioSourceId ?? "none"}</div>
       <button
         onClick={() => {
-          syncSelectedAudioVersion([
-            { id: "a1", label: "A1", sourceType: "uploaded", storageKey: "s1", url: null, externalUrl: null, externalProvider: null, durationSec: null, sizeBytes: null, mimeType: null, uploadedBy: null, createdAt: "2026-07-02T00:00:00.000Z" },
-            { id: "a2", label: "A2", sourceType: "uploaded", storageKey: "s2", url: null, externalUrl: null, externalProvider: null, durationSec: null, sizeBytes: null, mimeType: null, uploadedBy: null, createdAt: "2026-07-02T00:00:00.000Z" },
+          syncSelectedAudioSource([
+            { id: "a1", sourceType: "legacy", trackAssetId: null, legacyAudioVersionId: "a1", versionNumber: 1, title: "A1", originalFilename: "a1.wav", streamUrl: "/a1", downloadUrl: "/a1/download", externalUrl: null, externalProvider: null, mimeType: "audio/wav", durationMs: null, isPrimary: true, createdAt: "2026-07-02T00:00:00.000Z", uploadedBy: null, canDelete: true },
+            { id: "a2", sourceType: "legacy", trackAssetId: null, legacyAudioVersionId: "a2", versionNumber: 2, title: "A2", originalFilename: "a2.wav", streamUrl: "/a2", downloadUrl: "/a2/download", externalUrl: null, externalProvider: null, mimeType: "audio/wav", durationMs: null, isPrimary: false, createdAt: "2026-07-02T00:00:00.000Z", uploadedBy: null, canDelete: true },
           ]);
         }}
       >
@@ -22,15 +22,15 @@ function PlayerProbe() {
       </button>
       <button
         onClick={() => {
-          setSelectedAudioVersionId("a2");
+          setSelectedAudioSourceId("a2");
         }}
       >
         select-a2
       </button>
       <button
         onClick={() => {
-          syncSelectedAudioVersion([
-            { id: "a3", label: "A3", sourceType: "uploaded", storageKey: "s3", url: null, externalUrl: null, externalProvider: null, durationSec: null, sizeBytes: null, mimeType: null, uploadedBy: null, createdAt: "2026-07-02T00:00:00.000Z" },
+          syncSelectedAudioSource([
+            { id: "a3", sourceType: "asset", trackAssetId: "a3", legacyAudioVersionId: null, versionNumber: null, title: "A3", originalFilename: "a3.wav", streamUrl: "/a3", downloadUrl: "/a3/download", externalUrl: null, externalProvider: null, mimeType: "audio/wav", durationMs: null, isPrimary: true, createdAt: "2026-07-02T00:00:00.000Z", uploadedBy: null, canDelete: false },
           ]);
         }}
       >

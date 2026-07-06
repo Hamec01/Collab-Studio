@@ -16,14 +16,14 @@ import {
   Upload,
   Volume2,
 } from "lucide-react";
-import { Annotation, AudioVersion } from "../types";
+import { Annotation, PlayableAudioSource } from "../types";
 
 interface AudioPlayerProps {
-  audioVersions: AudioVersion[];
+  audioSources: PlayableAudioSource[];
   annotations: Annotation[];
   onAddAnnotation: (timestampSeconds: number, text: string) => void;
-  onSelectAudioVersion: (versionId: string) => void;
-  selectedAudioVersionId: string | null;
+  onSelectAudioSource: (sourceId: string) => void;
+  selectedAudioSourceId: string | null;
   canAnnotate: boolean;
   onRequestUploadFile?: () => void;
   onRequestAddLink?: () => void;
@@ -38,18 +38,20 @@ function formatTime(seconds: number) {
 }
 
 export default function AudioPlayer({
-  audioVersions,
+  audioSources,
   annotations,
   onAddAnnotation,
-  onSelectAudioVersion,
-  selectedAudioVersionId,
+  onSelectAudioSource,
+  selectedAudioSourceId,
   canAnnotate,
   onRequestUploadFile,
   onRequestAddLink,
 }: AudioPlayerProps) {
-  const activeVersion = audioVersions.find((v) => v.id === selectedAudioVersionId) || audioVersions[0] || null;
-  const sourceUrl = activeVersion?.streamUrl || activeVersion?.externalUrl || null;
+  const activeVersion = audioSources.find((v) => v.id === selectedAudioSourceId) || audioSources[0] || null;
+  const sourceUrl = activeVersion?.streamUrl || null;
+  const externalUrl = activeVersion?.externalUrl || null;
   const hasActiveSource = !!sourceUrl;
+  const hasExternalSource = !sourceUrl && !!externalUrl;
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -214,24 +216,24 @@ export default function AudioPlayer({
           </h4>
           <p className="text-[11px] text-neutral-400 truncate">
             {activeVersion
-              ? `Версия #${activeVersion.versionNumber} · ${activeVersion.uploadedBy.displayName}${createdAtLabel ? ` · ${createdAtLabel}` : ""}`
+              ? `${activeVersion.versionNumber !== null ? `Версия #${activeVersion.versionNumber}` : "Аудио"} · ${activeVersion.uploadedBy?.displayName ?? "Неизвестный пользователь"}${createdAtLabel ? ` · ${createdAtLabel}` : ""}`
               : "Загрузите файл или добавьте ссылку, чтобы включить плеер."}
           </p>
         </div>
 
-        {audioVersions.length > 0 && (
+        {audioSources.length > 0 && (
           <div className="flex items-center gap-1.5 shrink-0 sm:pl-2">
             <span className="text-[10px] font-mono text-neutral-400">ВЕРСИИ:</span>
             <select
-              value={selectedAudioVersionId || ""}
-              onChange={(e) => onSelectAudioVersion(e.target.value)}
+              value={selectedAudioSourceId || ""}
+              onChange={(e) => onSelectAudioSource(e.target.value)}
               className="max-w-[170px] bg-neutral-900 border border-neutral-800 rounded p-1.5 text-[11px] text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/60 cursor-pointer"
               aria-label="Выбор версии аудио"
               title="Выбор версии аудио"
             >
-              {audioVersions.map((av) => (
+              {audioSources.map((av, index) => (
                 <option key={av.id} value={av.id}>
-                  v{av.versionNumber} ({av.originalFilename.length > 15 ? `${av.originalFilename.substring(0, 15)}...` : av.originalFilename})
+                  {av.versionNumber !== null ? `v${av.versionNumber}` : `audio-${index + 1}`} ({av.originalFilename.length > 15 ? `${av.originalFilename.substring(0, 15)}...` : av.originalFilename})
                 </option>
               ))}
             </select>
@@ -246,12 +248,27 @@ export default function AudioPlayer({
               <Music2 className="w-5 h-5 text-neutral-500" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white">Аудио не загружено</p>
-              <p className="text-xs text-neutral-400">Добавьте файл или ссылку, чтобы активировать плеер и таймлайн.</p>
+              <p className="text-sm font-semibold text-white">{hasExternalSource ? "Внешний аудиоисточник" : "Аудио не загружено"}</p>
+              <p className="text-xs text-neutral-400">
+                {hasExternalSource
+                  ? "Для этой версии доступна только внешняя ссылка."
+                  : "Добавьте файл или ссылку, чтобы активировать плеер и таймлайн."}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+            {hasExternalSource && externalUrl && (
+              <a
+                href={externalUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-sky-800 bg-sky-950/40 text-sky-200 hover:bg-sky-900/40 focus:outline-none focus:ring-2 focus:ring-sky-500/60"
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                Открыть ссылку
+              </a>
+            )}
             <button
               type="button"
               onClick={onRequestUploadFile}
