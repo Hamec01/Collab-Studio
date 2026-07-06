@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TrackContextPanel } from "./TrackContextPanel";
 import type { AuthUser, Project, Track } from "../../types";
 import type { LyricsDiscussionSelection } from "./lyrics/lyricsDiscussions";
@@ -139,6 +139,13 @@ function renderPanel(useLyricsDiscussions: boolean, canEdit: boolean) {
 }
 
 describe("TrackContextPanel discussions switch", () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
+  });
+
   it("keeps legacy comments UI when the feature flag path is off", () => {
     renderPanel(false, true);
     expect(screen.getByText("ПРАВКИ И ОБСУЖДЕНИЕ")).toBeInTheDocument();
@@ -217,5 +224,40 @@ describe("TrackContextPanel discussions switch", () => {
 
     await user.click(screen.getByRole("button", { name: /Перепривязать/i }));
     expect(onReanchorDiscussionThread).toHaveBeenCalledWith("thread-1", selection);
+  });
+
+  it("disables track chat input for viewers", async () => {
+    render(
+      <TrackContextPanel
+        track={track}
+        project={project}
+        currentUser={currentUser}
+        activeSidebar="chat"
+        canResolve={false}
+        canEdit={false}
+        canSend={false}
+        draftLyrics={track.lyrics}
+        selectedLineIndex={null}
+        discussionSelection={null}
+        discussionAnchors={[]}
+        discussionThreads={track.lyricsDiscussions ?? []}
+        useLyricsDiscussions={false}
+        onSelectSidebar={vi.fn()}
+        onClearSelectedLine={vi.fn()}
+        onClearDiscussionSelection={vi.fn()}
+        onAddComment={vi.fn()}
+        onResolveComment={vi.fn()}
+        onCreateDiscussionThread={vi.fn()}
+        onReplyDiscussionThread={vi.fn()}
+        onResolveDiscussionThread={vi.fn()}
+        onReanchorDiscussionThread={vi.fn()}
+        onSendMessage={vi.fn()}
+        onAddTask={vi.fn()}
+        onUpdateTaskStatus={vi.fn()}
+        onUnauthorized={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Чат доступен только редакторам")).toBeDisabled();
   });
 });

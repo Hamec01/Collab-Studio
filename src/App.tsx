@@ -187,7 +187,7 @@ export default function App() {
   });
 
   const canResolve = canEdit;
-  const canSend = !!currentUser && !!activeProject && !!activeTrack;
+  const canSend = !!currentUser && !!activeProject && !!activeTrack && (projectRole === "owner" || projectRole === "editor");
   const lyricsDiscussionsEnabled = featureFlags.lyricsStructuredEditor;
   const isMobileViewport = () => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
 
