@@ -53,6 +53,25 @@ describe("LyricsEditor discussion flow", () => {
     expect(getByIdSpy).not.toHaveBeenCalled();
   });
 
+  it("opens mobile line comments callback when a lyrics line is selected", async () => {
+    const user = userEvent.setup();
+    const onOpenSelectedLineComments = vi.fn();
+
+    renderWithI18n(
+      <LyricsEditor
+        {...buildProps({
+          selectedLineIndex: null,
+          onOpenSelectedLineComments,
+          trackCommentsCount: () => 2,
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /line one/i }));
+
+    expect(onOpenSelectedLineComments).toHaveBeenCalledWith(0);
+  });
+
   it("starts read-first and requests a lease before edit mode", async () => {
     const user = userEvent.setup();
     const onStartEdit = vi.fn(async () => true);

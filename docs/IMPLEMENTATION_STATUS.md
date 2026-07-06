@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 6 июля 2026 года (Stage 5B slice 1.1 local PASS)
+Последнее обновление: 6 июля 2026 года (Stage 6 slice 1 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -15,8 +15,8 @@
 - Branch: `main`
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
-- Active Stage: `Stage 5B`
-- Active slice: Stage 5B slice 1.1 — audio annotation hardening completed locally; TrackAsset delete now cascades bound annotations, timestamp creation requires reliable in-app playback capability, outsider API rejection covered; production untouched
+- Active Stage: `Stage 6`
+- Active slice: Stage 6 slice 1 — mobile line comments sheet completed locally; line tap opens mobile sheet, comments filter by `lineIndex`, Back closes sheet without leaving track, production untouched
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -42,8 +42,8 @@
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
 | Stage 5A — TrackAsset migration | completed | Production foundation, delivery routes and asset-first frontend cutover are live; legacy fallback preserved; backfill execute NOT run |
-| Stage 5B — Player и audio annotations | in_progress | Slice 1.1 completed locally: delete cascade hardening, reliable-playback annotation gating, outsider API rejection covered; production deploy not performed |
-| Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
+| Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
+| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 1 completed locally: mobile line comments sheet implemented on top of existing `Comment`/`lineIndex` flow; production deploy not performed |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
 | Stage 8 — PWA и offline lyrics | pending | Не начат |
 | Stage 9 — Public profiles и publications | pending | Не начат |
@@ -149,7 +149,15 @@ Stage 5A:
     - external asset with reliable shared-player playback can annotate; external link without timeline support stays disabled
     - outsider annotation create request is rejected under existing access policy and does not write DB rows
     - production deploy intentionally not performed
-20. Следующий шаг — только следующий Stage 5B slice после отдельного подтверждения.
+20. Stage 6 slice 1 завершён локально:
+    - mobile line comments sheet now opens from lyric line selection
+    - sheet filters comments by `lineIndex` and preserves selected line context
+    - create/resolve use existing `Comment` API and permissions without schema changes
+    - read-only, loading, empty and error states are covered in the sheet
+    - browser Back closes the sheet without leaving the track route
+    - shared audio player remains mounted while the sheet is open
+    - production deploy intentionally not performed
+21. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
 
 ## Журнал slices
 

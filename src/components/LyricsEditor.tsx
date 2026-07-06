@@ -50,6 +50,7 @@ interface LyricsEditorProps {
   onUseServerDraft: () => void;
   onDownloadLocalDraft: () => void;
   onJumpToDiscussion: () => void;
+  onOpenSelectedLineComments?: (lineIndex: number) => void;
 }
 
 export default function LyricsEditor({
@@ -81,6 +82,7 @@ export default function LyricsEditor({
   onUseServerDraft,
   onDownloadLocalDraft,
   onJumpToDiscussion,
+  onOpenSelectedLineComments,
 }: LyricsEditorProps) {
   const { t } = useI18n();
   const [versionLabel, setVersionLabel] = useState("");
@@ -495,13 +497,17 @@ export default function LyricsEditor({
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        onSelectLine(isSelected ? null : idx);
-                        if (onChangeDiscussionSelection) onChangeDiscussionSelection(isSelected ? null : selectionFromLineAnchor(entry));
+                        const nextIndex = isSelected ? null : idx;
+                        onSelectLine(nextIndex);
+                        if (onChangeDiscussionSelection) onChangeDiscussionSelection(nextIndex === null ? null : selectionFromLineAnchor(entry));
+                        if (nextIndex !== null) onOpenSelectedLineComments?.(nextIndex);
                       }
                     }}
                     onClick={() => {
-                      onSelectLine(isSelected ? null : idx);
-                      if (onChangeDiscussionSelection) onChangeDiscussionSelection(isSelected ? null : selectionFromLineAnchor(entry));
+                      const nextIndex = isSelected ? null : idx;
+                      onSelectLine(nextIndex);
+                      if (onChangeDiscussionSelection) onChangeDiscussionSelection(nextIndex === null ? null : selectionFromLineAnchor(entry));
+                      if (nextIndex !== null) onOpenSelectedLineComments?.(nextIndex);
                     }}
                     className={`group flex w-full items-center justify-between gap-3 p-1.5 px-3 rounded-lg transition-all cursor-pointer border text-left ${
                       isSectionHeader

@@ -189,6 +189,7 @@ export default function App() {
   const canResolve = canEdit;
   const canSend = !!currentUser && !!activeProject && !!activeTrack;
   const lyricsDiscussionsEnabled = featureFlags.lyricsStructuredEditor;
+  const isMobileViewport = () => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
 
   const clearDraftTimers = () => {
     if (autosaveTimerRef.current !== null) {
@@ -904,6 +905,14 @@ export default function App() {
     await refreshCurrentTrack();
   };
 
+  const handleOpenSelectedLineComments = (lineIndex: number) => {
+    setSelectedLineIndex(lineIndex);
+    if (!lyricsDiscussionsEnabled && isMobileViewport()) {
+      setActiveSidebar("comments");
+      setShowLyricsComments(true);
+    }
+  };
+
   const handleSendMessage = async (text: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => postChatMessage(activeProject.id, activeTrack.id, { text }));
@@ -1058,16 +1067,17 @@ export default function App() {
                   onStartEdit={lyricsLease.requestEdit}
                   onStopEdit={() => void stopLyricsEditing()}
                   onRestoreLocalDraft={handleRestoreLocalDraft}
-                  onUseServerDraft={handleUseServerDraft}
-                  onDownloadLocalDraft={handleDownloadLocalDraft}
-                  onJumpToDiscussion={() => {
-                    setActiveSidebar("comments");
-                    setShowLyricsComments(true);
-                  }}
-                  onRequestUpload={() => setShowUploadModal(true)}
-                  onAddAnnotation={handleAddAnnotation}
-                  onSelectAudioSource={setSelectedAudioSourceId}
-                />
+                    onUseServerDraft={handleUseServerDraft}
+                    onDownloadLocalDraft={handleDownloadLocalDraft}
+                    onJumpToDiscussion={() => {
+                      setActiveSidebar("comments");
+                      setShowLyricsComments(true);
+                    }}
+                    onOpenSelectedLineComments={handleOpenSelectedLineComments}
+                    onRequestUpload={() => setShowUploadModal(true)}
+                    onAddAnnotation={handleAddAnnotation}
+                    onSelectAudioSource={setSelectedAudioSourceId}
+                  />
               ) : (
                 <StateView kind="empty" message={t("state.track.empty")} className="min-h-[220px] flex items-center" />
               )}
@@ -1139,6 +1149,7 @@ export default function App() {
           comments={activeTrack.comments}
           selectedLineIndex={selectedLineIndex}
           lyricsLines={draftLyrics.split("\n")}
+          canWrite={canEdit}
           canResolve={canResolve}
           onClose={() => setShowLyricsComments(false)}
           onClearSelectedLine={() => { setSelectedLineIndex(null); setDiscussionSelection(null); }}

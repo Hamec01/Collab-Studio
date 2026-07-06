@@ -107,6 +107,7 @@ export function TrackContextPanel({
             comments={track.comments}
             onAddComment={onAddComment}
             onResolveComment={onResolveComment}
+            canWrite={canEdit}
             canResolve={canResolve}
             selectedLineIndex={selectedLineIndex}
             onClearSelectedLine={onClearSelectedLine}

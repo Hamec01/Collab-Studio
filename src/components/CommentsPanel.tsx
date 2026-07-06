@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { MessageSquare, Check, CornerDownRight, RotateCcw } from "lucide-react";
 import { Comment } from "../types";
+import { ApiError } from "../api/client";
 
 interface CommentsPanelProps {
   comments: Comment[];
-  onAddComment: (text: string, lineIndex?: number) => void;
-  onResolveComment: (commentId: string) => void;
+  onAddComment: (text: string, lineIndex?: number) => Promise<void> | void;
+  onResolveComment: (commentId: string) => Promise<void> | void;
+  canWrite?: boolean;
   canResolve: boolean;
   selectedLineIndex: number | null;
   onClearSelectedLine: () => void;
@@ -16,6 +18,7 @@ export default function CommentsPanel({
   comments,
   onAddComment,
   onResolveComment,
+  canWrite = true,
   canResolve,
   selectedLineIndex,
   onClearSelectedLine,
@@ -23,12 +26,36 @@ export default function CommentsPanel({
 }: CommentsPanelProps) {
   const [text, setText] = useState("");
   const [filterResolved, setFilterResolved] = useState<"all" | "unresolved" | "resolved">("unresolved");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resolvingCommentId, setResolvingCommentId] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    onAddComment(text.trim(), selectedLineIndex !== null ? selectedLineIndex : undefined);
-    setText("");
+    if (!text.trim() || !canWrite || isSubmitting) return;
+    setErrorMessage("");
+    setIsSubmitting(true);
+    try {
+      await onAddComment(text.trim(), selectedLineIndex !== null ? selectedLineIndex : undefined);
+      setText("");
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : "Не удалось сохранить комментарий.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResolve = async (commentId: string) => {
+    if (!canResolve || resolvingCommentId) return;
+    setErrorMessage("");
+    setResolvingCommentId(commentId);
+    try {
+      await onResolveComment(commentId);
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : "Не удалось обновить комментарий.");
+    } finally {
+      setResolvingCommentId(null);
+    }
   };
 
   const filteredComments = comments.filter((c) => {
@@ -87,6 +114,12 @@ export default function CommentsPanel({
         </div>
       )}
 
+      {errorMessage && (
+        <div className="mb-3 rounded-lg border border-red-900/30 bg-red-950/40 p-2 text-xs text-red-300" role="alert">
+          {errorMessage}
+        </div>
+      )}
+
       {/* Form to leave comments */}
       <form onSubmit={handleSubmit} className="mb-4">
         <div className="flex gap-2">
@@ -95,20 +128,28 @@ export default function CommentsPanel({
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={
-              selectedLineIndex !== null
+              !canWrite
+                ? "Комментирование недоступно"
+                : selectedLineIndex !== null
                 ? `Комментарий к строке ${selectedLineIndex + 1}...`
                 : "Общий комментарий к тексту..."
             }
-            className="flex-1 bg-neutral-900 border border-neutral-800 focus:border-indigo-500 rounded-lg p-2 text-xs text-white focus:outline-none transition-colors"
+            className="flex-1 bg-neutral-900 border border-neutral-800 focus:border-indigo-500 rounded-lg p-2 text-xs text-white focus:outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={!canWrite || isSubmitting}
           />
           <button
             type="submit"
-            disabled={!text.trim()}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-900 disabled:text-neutral-600 text-white p-2 px-3 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center cursor-pointer"
+            disabled={!text.trim() || !canWrite || isSubmitting}
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-900 disabled:text-neutral-600 text-white p-2 px-3 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
           >
-            Оставить
+            {isSubmitting ? "Сохраняем..." : "Оставить"}
           </button>
         </div>
+        {!canWrite && (
+          <p className="mt-2 text-[11px] text-neutral-500">
+            У вас нет прав на создание комментариев.
+          </p>
+        )}
       </form>
 
       {/* List of comments */}
@@ -147,13 +188,13 @@ export default function CommentsPanel({
                 </div>
 
                 <button
-                  onClick={() => onResolveComment(comment.id)}
-                  disabled={!canResolve}
+                  onClick={() => { void handleResolve(comment.id); }}
+                  disabled={!canResolve || resolvingCommentId !== null}
                   className={`p-1 rounded-md border transition-all cursor-pointer ${
                     comment.resolved
                       ? "bg-neutral-800 border-neutral-700 text-amber-500 hover:bg-neutral-700"
                       : "bg-emerald-950/30 border-emerald-900/30 text-emerald-400 hover:bg-emerald-900/40"
-                  }`}
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
                   title={comment.resolved ? "Вернуть в активные" : "Отметить как исправленное"}
                 >
                   {comment.resolved ? (

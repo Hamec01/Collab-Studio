@@ -39,6 +39,7 @@ type TrackLyricsWorkspaceProps = {
   onUseServerDraft: () => void;
   onDownloadLocalDraft: () => void;
   onJumpToDiscussion: () => void;
+  onOpenSelectedLineComments?: (lineIndex: number) => void;
   onRequestUpload: () => void;
   onAddAnnotation: (timestampSeconds: number, text: string, trackAssetId: string) => void;
   onSelectAudioSource: React.Dispatch<React.SetStateAction<string | null>>;
@@ -73,6 +74,7 @@ export function TrackLyricsWorkspace({
   onUseServerDraft,
   onDownloadLocalDraft,
   onJumpToDiscussion,
+  onOpenSelectedLineComments,
   onRequestUpload,
   onAddAnnotation,
   onSelectAudioSource,
@@ -134,6 +136,7 @@ export function TrackLyricsWorkspace({
         onUseServerDraft={onUseServerDraft}
         onDownloadLocalDraft={onDownloadLocalDraft}
         onJumpToDiscussion={onJumpToDiscussion}
+        onOpenSelectedLineComments={onOpenSelectedLineComments}
       />
 
       <AudioPlayer
