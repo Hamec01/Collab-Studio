@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Bookmark,
   ChevronDown,
@@ -17,6 +17,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { Annotation, PlayableAudioSource } from "../types";
+import { usePlayer } from "../app/player/PlayerProvider";
 
 interface AudioPlayerProps {
   audioSources: PlayableAudioSource[];
@@ -53,24 +54,22 @@ export default function AudioPlayer({
   const hasActiveSource = !!sourceUrl;
   const hasExternalSource = !sourceUrl && !!externalUrl;
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [volume, setVolume] = useState(0.8);
+  // Use shared player from PlayerProvider
+  const player = usePlayer();
 
+  // Local state for loop markers (not shared with sticky player)
   const [loopA, setLoopA] = useState<number | null>(null);
   const [loopB, setLoopB] = useState<number | null>(null);
   const [isLoopEnabled, setIsLoopEnabled] = useState(false);
 
+  // Local state for annotation dialog
   const [showAnnotDialog, setShowAnnotDialog] = useState(false);
   const [annotText, setAnnotText] = useState("");
   const [annotTime, setAnnotTime] = useState<number | null>(null);
   const [showAnnotationsList, setShowAnnotationsList] = useState(false);
 
-  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
-  const safeCurrentTime = Number.isFinite(currentTime) && currentTime >= 0 ? Math.min(currentTime, safeDuration || currentTime) : 0;
+  const safeDuration = Number.isFinite(player.duration) && player.duration > 0 ? player.duration : 0;
+  const safeCurrentTime = Number.isFinite(player.currentTime) && player.currentTime >= 0 ? Math.min(player.currentTime, safeDuration || player.currentTime) : 0;
   const loopEnd = loopB !== null ? loopB : safeDuration;
 
   const createdAtLabel = useMemo(() => {
@@ -80,67 +79,32 @@ export default function AudioPlayer({
     return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
   }, [activeVersion?.createdAt]);
 
+  // Load source when activeVersion changes
   useEffect(() => {
-    if (!audioRef.current) return;
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-    audioRef.current.load();
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
+    player.loadSource(sourceUrl);
     setLoopA(null);
     setLoopB(null);
     setIsLoopEnabled(false);
-  }, [activeVersion?.id, sourceUrl]);
+  }, [activeVersion?.id, sourceUrl, player]);
 
+  // Handle A/B loop
   useEffect(() => {
-    if (!audioRef.current) return;
-    audioRef.current.playbackRate = playbackSpeed;
-  }, [playbackSpeed]);
-
-  useEffect(() => {
-    if (!audioRef.current) return;
-    audioRef.current.volume = volume;
-  }, [volume]);
-
-  const handleTimeUpdate = () => {
-    if (!audioRef.current) return;
-    const curr = audioRef.current.currentTime;
-    setCurrentTime(curr);
-    if (isLoopEnabled && loopA !== null && loopB !== null && curr >= loopB) {
-      audioRef.current.currentTime = loopA;
-      setCurrentTime(loopA);
+    if (!isLoopEnabled || loopA === null || loopB === null) return;
+    if (player.currentTime >= loopB) {
+      player.seekTo(loopA);
     }
-  };
-
-  const handleLoadedMetadata = () => {
-    if (!audioRef.current) return;
-    const d = audioRef.current.duration;
-    setDuration(Number.isFinite(d) && d > 0 ? d : 0);
-  };
-
-  const togglePlay = () => {
-    if (!audioRef.current || !hasActiveSource) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-      return;
-    }
-    audioRef.current.play().then(() => setIsPlaying(true)).catch(() => undefined);
-  };
+  }, [player.currentTime, isLoopEnabled, loopA, loopB, player]);
 
   const seekBy = (delta: number) => {
-    if (!audioRef.current || !hasActiveSource) return;
-    const next = Math.min(Math.max(audioRef.current.currentTime + delta, 0), safeDuration || Number.MAX_SAFE_INTEGER);
-    audioRef.current.currentTime = next;
-    setCurrentTime(next);
+    if (!hasActiveSource) return;
+    const next = Math.min(Math.max(player.currentTime + delta, 0), safeDuration || Number.MAX_SAFE_INTEGER);
+    player.seekTo(next);
   };
 
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!audioRef.current || !hasActiveSource) return;
+    if (!hasActiveSource) return;
     const time = Number(e.target.value);
-    audioRef.current.currentTime = time;
-    setCurrentTime(time);
+    player.seekTo(time);
   };
 
   const setMarkerA = () => {
@@ -181,29 +145,17 @@ export default function AudioPlayer({
     setAnnotTime(null);
   };
 
-  const seekTo = (seconds: number) => {
-    if (!audioRef.current || !hasActiveSource) return;
-    audioRef.current.currentTime = seconds;
-    setCurrentTime(seconds);
-    if (!isPlaying) {
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => undefined);
+  const seekToAndPlay = async (seconds: number) => {
+    if (!hasActiveSource) return;
+    player.seekTo(seconds);
+    if (!player.isPlaying) {
+      await player.play();
     }
   };
 
   return (
     <section className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 sm:p-4 flex flex-col gap-3 shadow-xl w-full">
       <div className="h-0.5 w-full rounded-full bg-gradient-to-r from-indigo-500/80 to-teal-500/80" />
-
-      {hasActiveSource && (
-        <audio
-          ref={audioRef}
-          src={sourceUrl || undefined}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onEnded={() => setIsPlaying(false)}
-          className="hidden"
-        />
-      )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="text-left min-w-0">
@@ -345,13 +297,13 @@ export default function AudioPlayer({
           <div className="flex flex-wrap items-center gap-2 border-t border-neutral-900 pt-3">
             <div className="flex items-center gap-2">
               <button
-                onClick={togglePlay}
+                onClick={() => player.togglePlay()}
                 disabled={!hasActiveSource}
                 className="w-9 h-9 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-neutral-900 disabled:text-neutral-700 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500/70"
-                title={isPlaying ? "Пауза" : "Воспроизвести"}
-                aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+                title={player.isPlaying ? "Пауза" : "Воспроизвести"}
+                aria-label={player.isPlaying ? "Пауза" : "Воспроизвести"}
               >
-                {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
+                {player.isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
               </button>
 
               <button
@@ -382,8 +334,8 @@ export default function AudioPlayer({
                 min={0}
                 max={1}
                 step={0.05}
-                value={volume}
-                onChange={(e) => setVolume(Number(e.target.value))}
+                value={player.volume}
+                onChange={(e) => player.setVolume(Number(e.target.value))}
                 disabled={!hasActiveSource}
                 className="w-24 h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
                 aria-label="Громкость"
@@ -429,8 +381,8 @@ export default function AudioPlayer({
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-mono text-neutral-500">СКОРОСТЬ</span>
               <select
-                value={playbackSpeed}
-                onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                value={player.playbackRate}
+                onChange={(e) => player.setPlaybackRate(Number(e.target.value))}
                 className="bg-neutral-900 border border-neutral-800 rounded p-1.5 text-xs text-neutral-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 cursor-pointer"
                 aria-label="Скорость воспроизведения"
                 title="Скорость воспроизведения"
@@ -547,7 +499,7 @@ export default function AudioPlayer({
               >
                 <div className="flex items-start gap-2 text-left">
                   <button
-                    onClick={() => seekTo(annot.timestampSeconds)}
+                    onClick={() => seekToAndPlay(annot.timestampSeconds)}
                     className="font-mono bg-indigo-950 text-indigo-400 border border-indigo-900/50 hover:bg-indigo-900 hover:text-white transition-colors p-1 px-1.5 rounded text-[10px] leading-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
                     title="Перейти к таймкоду"
                     aria-label={`Перейти к таймкоду ${formatTime(annot.timestampSeconds)}`}

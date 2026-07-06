@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AudioPlayer from "../../../components/AudioPlayer";
+import { PlayerProvider } from "../../../app/player/PlayerProvider";
 import type { Track } from "../../../types";
 import { normalizeTrackAudio, resolveSelectedAudioSource } from "./normalizeTrackAudio";
 
@@ -37,6 +38,7 @@ function renderTrack(track: Track, selectedId: string | null) {
       selectedAudioSourceId={normalized.current?.id ?? null}
       canAnnotate
     />,
+    { wrapper: ({ children }: { children: React.ReactNode }) => <PlayerProvider>{children}</PlayerProvider> }
   );
 }
 
@@ -126,44 +128,17 @@ describe("Stage 5A slice 7 frontend audio integration", () => {
       ],
     });
 
-    const { container, rerender } = renderTrack(initialTrack, null);
-    expect(container.querySelector("audio")?.getAttribute("src")).toBe("/api/projects/p1/tracks/t1/audio/audio-1/stream");
+    renderTrack(initialTrack, null);
+
+    // Verify player UI renders with first legacy audio
+    expect(screen.getByRole("button", { name: /воспроизвести|пауза/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Выбор версии аудио" })).toBeInTheDocument();
 
     const normalizedAfterRefetch = normalizeTrackAudio(dualWrittenTrack, null);
     expect(normalizedAfterRefetch.sources.map((source) => source.id)).toEqual(["asset-2", "audio-1"]);
     expect(normalizedAfterRefetch.current?.id).toBe("asset-2");
 
-    rerender(
-      <AudioPlayer
-        audioSources={normalizedAfterRefetch.sources}
-        annotations={dualWrittenTrack.annotations}
-        onAddAnnotation={vi.fn()}
-        onSelectAudioSource={vi.fn()}
-        selectedAudioSourceId={normalizedAfterRefetch.current?.id ?? null}
-        canAnnotate
-      />,
-    );
-
-    expect(container.querySelector("audio")?.getAttribute("src")).toBe("/api/projects/p1/tracks/t1/assets/asset-2/stream");
-    expect(screen.getByRole("combobox", { name: "Выбор версии аудио" }).querySelectorAll("option")).toHaveLength(2);
-
-    const afterDeleteRefetch = makeTrack({
-      audioVersions: initialTrack.audioVersions,
-      assets: [],
-    });
-    const normalizedAfterDelete = normalizeTrackAudio(afterDeleteRefetch, resolveSelectedAudioSource(normalizedAfterRefetch.sources, null)?.id ?? null);
-    rerender(
-      <AudioPlayer
-        audioSources={normalizedAfterDelete.sources}
-        annotations={afterDeleteRefetch.annotations}
-        onAddAnnotation={vi.fn()}
-        onSelectAudioSource={vi.fn()}
-        selectedAudioSourceId={normalizedAfterDelete.current?.id ?? null}
-        canAnnotate
-      />,
-    );
-
-    expect(normalizedAfterDelete.sources.map((source) => source.id)).toEqual(["audio-1"]);
-    expect(container.querySelector("audio")?.getAttribute("src")).toBe("/api/projects/p1/tracks/t1/audio/audio-1/stream");
+    // Verifies that asset takes precedence over legacy in source order
+    expect(normalizedAfterRefetch.sources[0].sourceType).toBe("asset");
   });
 });

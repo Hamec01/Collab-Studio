@@ -69,7 +69,7 @@ import { TrackContextPanel, type TrackSidebar } from "./features/track-workspace
 import { LyricsCommentsSheet } from "./features/track-workspace/lyrics/LyricsCommentsSheet";
 import { LyricsDiscussionsSheet } from "./features/track-workspace/lyrics/LyricsDiscussionsSheet";
 import { useLyricsDiscussions } from "./features/track-workspace/lyrics/useLyricsDiscussions";
-import { LyricsPlayerPlaceholder } from "./features/track-workspace/lyrics/LyricsPlayerPlaceholder";
+import { StickyAudioPlayer } from "./components/StickyAudioPlayer";
 import { normalizeTrackAudioSources, resolveSelectedAudioSource } from "./features/track-workspace/audio/normalizeTrackAudio";
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
@@ -98,6 +98,7 @@ export default function App() {
     selectedAudioSourceId,
     setSelectedAudioSourceId,
     syncSelectedAudioSource,
+    loadSource,
   } = usePlayer();
   const [globalError, setGlobalError] = useState<string>("");
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
@@ -535,6 +536,12 @@ export default function App() {
       clearWorkspace();
     }
   }, [authPhase]);
+
+  // Load audio source into shared player when selected audio changes
+  useEffect(() => {
+    const sourceUrl = activeTrackSelectedAudio?.streamUrl || null;
+    loadSource(sourceUrl);
+  }, [activeTrackSelectedAudio?.id, activeTrackSelectedAudio?.streamUrl, loadSource]);
 
   useEffect(() => {
     if (authSystemError) {
@@ -1113,8 +1120,17 @@ export default function App() {
         </>
       )}
 
-      {currentUser && activeTrack && (
-        <LyricsPlayerPlaceholder trackTitle={activeTrack.title} selectedAudio={activeTrackSelectedAudio} />
+      {currentUser && activeTrack && activeTrackSelectedAudio && (
+        <StickyAudioPlayer
+          trackTitle={activeTrack.title}
+          selectedAudio={activeTrackSelectedAudio}
+          onOpenTrack={() => {
+            if (activeProjectId && activeTrackId) {
+              setMobileTab("editor");
+              navigate(buildPrivatePath({ projectId: activeProjectId, trackId: activeTrackId, tab: "lyrics" }));
+            }
+          }}
+        />
       )}
 
       {activeTrack && !lyricsDiscussionsEnabled && (

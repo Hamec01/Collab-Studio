@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 6 июля 2026 года (slice 7 production cutover)
+Последнее обновление: 6 июля 2026 года (slice 8 player consolidation)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 5A`
-- Active slice: Stage 5A slice 7 production cutover deployed — frontend asset-first live at commit 85be76c, image 5f9fc4e65d3b; non-auth smoke PASS; owner-authenticated smoke methodology invalid (DB-created session, real track used); forensic audit confirmed baseline restored; official owner smoke pending
+- Active slice: Stage 5A slice 8 — player state consolidation completed locally; shared playback engine eliminates duplicate audio elements and state desync; sticky mini-player with full controls; mobile navigation already functional via bottom nav; all tests PASS; Docker build PASS; production untouched
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -121,7 +121,19 @@ Stage 5A:
     - production backfill execute NOT run
     - health/frontend `200` post-deploy
     - Stage 5B не начинать без отдельного подтверждения
-16. Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения; Stage 4C+/5B не начинать.
+16. Slice 8 завершён локально:
+    - shared playback engine (PlayerProvider) created with single HTMLAudioElement and React Context
+    - AudioPlayer refactored to consume shared player (removed local audio ref/state)
+    - StickyAudioPlayer (mini-player) implemented with full controls: play/pause, time display, progress bar, track navigation
+    - App.tsx integration: useEffect loads sources into shared player, conditional sticky player rendering
+    - mobile navigation verified: bottom nav "Projects" button already provides project list access
+    - unit tests added: PlayerProvider.test.tsx (MockAudioElement pattern), StickyAudioPlayer.test.tsx
+    - integration tests updated: AudioPlayer.spec.tsx, trackAudioCutover.integration.spec.tsx wrapped in PlayerProvider
+    - e2e smoke tests added: desktop player structure, mobile viewport navigation
+    - full local gate PASS: format/validate/generate/lint/test (169 tests)/build/e2e (3 tests)/diff check/Docker build
+    - App.tsx: 1236 lines
+    - production untouched
+17. Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения; Stage 4C+/5B не начинать.
 
 ## Журнал slices
 
@@ -148,6 +160,7 @@ Stage 5A:
 | 2026-07-06 | Stage 5A slice 6 | TrackAsset-native delivery routes deployed to production at `0a4ae6b`; anonymous native route smoke PASS under auth-first contract, shared delivery service live, DB counts unchanged, frontend still on `audioVersions`, owner authenticated smoke manual-pending | `main@0a4ae6b` | production health PASS; app/postgres healthy; no new Prisma/schema/runtime errors; image `sha256:760eb36551e085d59c76e9a986468e3c08f7e4cf7ebddee05aa12c0212110dc2` | Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения |
 | 2026-07-06 | Stage 5A slice 7 | Локально выполнен frontend asset-first cutover: введён normalized playable source model, player/selection switched to additive `Track.assets` with legacy fallback, external-only sources rendered as safe links, upload contract unchanged, production untouched | `main`, local diff | focused selector/component PASS; production untouched | Следующий шаг — production rollout этого slice только после отдельного подтверждения |
 | 2026-07-06 | Stage 5A slice 7 production cutover | Frontend asset-first deployed to production: app `85be76c` image `5f9fc4e65d3b`; owner smoke A/B/C/D/G PASS; legacy fallback preserved; DB baseline confirmed; no new migrations; backfill execute NOT run; mobile smoke manual-pending | `main@85be76c` | health 200; app/postgres healthy; non-auth HTML/JS/CSS 200; asset routes 401 anon; no storageKey leak | Stage 5B не начинать без отдельного подтверждения |
+| 2026-07-06 | Stage 5A slice 8 | Локально выполнена player consolidation: shared playback engine eliminates duplicate audio elements and state desync; sticky mini-player with full controls; mobile bottom nav already functional; new files: PlayerProvider.tsx/test, StickyAudioPlayer.tsx/test; refactored: AudioPlayer, App.tsx; e2e smoke tests added; production untouched | `main`, local diff | lint/test (169)/build/e2e (3)/diff/Docker build PASS; App.tsx 1236 lines; production untouched | Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения |
 
 ## Blockers
 
