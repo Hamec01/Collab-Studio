@@ -68,6 +68,36 @@ Minimum API smoke:
 9. verify external asset route returns stable conflict if an external row exists
 10. delete smoke audio/project and confirm cleanup
 
+### Production slice 6 result
+
+- deployed app commit: `0a4ae6b`
+- deployed image id: `sha256:760eb36551e085d59c76e9a986468e3c08f7e4cf7ebddee05aa12c0212110dc2`
+- additive Stage 5A migration already remained applied:
+  - `20260705150000_stage5a_track_asset_foundation`
+- app healthy: yes
+- postgres healthy: yes
+- `/api/health`: `200`
+- frontend `/`: `200`
+- anonymous native route checks:
+  - valid-shaped stream => `401 UNAUTHENTICATED`
+  - valid-shaped download => `401 UNAUTHENTICATED`
+  - malformed UUID while anonymous => `401 UNAUTHENTICATED`
+  - this is accepted because auth runs before param validation on these routes
+- no raw storage path leakage observed in anonymous responses
+- no new Prisma/schema/runtime errors observed
+- known warning still present:
+  - `ERR_ERL_KEY_GEN_IPV6`
+- read-only post-deploy counts remained:
+  - `User=2`
+  - `Project=1`
+  - `Track=1`
+  - `AudioVersion=0`
+  - `TrackAsset=0`
+  - uploads file count: `0`
+- production backfill execute not run
+- authenticated malformed-UUID validation smoke: manual pending
+- owner functional smoke: manual pending
+
 ## Owner manual smoke checklist
 
 1. log in as verified owner
