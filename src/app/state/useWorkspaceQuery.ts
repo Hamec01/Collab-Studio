@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isApiError } from "../../api/client";
 import { listNotifications } from "../../api/notifications";
-import { getTrack, listProjects } from "../../api/projects";
+import { getProject, getTrack, listProjects } from "../../api/projects";
 import type { AppNotification, Project, Track } from "../../types";
 
 type UseWorkspaceQueryArgs = {
@@ -104,6 +104,27 @@ export function useWorkspaceQuery({
     }
   }, [withAuth]);
 
+  const refreshActiveProject = useCallback(async (projectId: string) => {
+    if (!projectId) return;
+
+    workspaceControllerRef.current?.abort();
+    const controller = new AbortController();
+    workspaceControllerRef.current = controller;
+
+    try {
+      const project = await withAuth(() => getProject(projectId, controller.signal));
+      if (controller.signal.aborted) return;
+
+      setProjects((prev) =>
+        prev.map((existing) => (existing.id === projectId ? project : existing)),
+      );
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) return;
+      if (isApiError(error) && error.status === 401) return;
+      throw error;
+    }
+  }, [withAuth]);
+
   const refreshNotifications = useCallback(async () => {
     notificationsControllerRef.current?.abort();
     const controller = new AbortController();
@@ -162,6 +183,7 @@ export function useWorkspaceQuery({
     workspaceReady,
     workspaceLoading,
     workspaceError,
+    refreshActiveProject,
     refreshActiveTrack,
     refreshNotifications,
     invalidateWorkspace,

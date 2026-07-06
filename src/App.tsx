@@ -27,6 +27,7 @@ import {
   createTrack,
   getTrack,
   pinLyricVersion,
+  postProjectChatMessage,
   postChatMessage,
   saveLyricsDraft,
   removeProjectMember,
@@ -71,6 +72,7 @@ import { LyricsDiscussionsSheet } from "./features/track-workspace/lyrics/Lyrics
 import { useLyricsDiscussions } from "./features/track-workspace/lyrics/useLyricsDiscussions";
 import { StickyAudioPlayer } from "./components/StickyAudioPlayer";
 import { normalizeTrackAudioSources, resolveSelectedAudioSource } from "./features/track-workspace/audio/normalizeTrackAudio";
+import { ProjectChatPanel } from "./features/project-workspace/ProjectChatPanel";
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
 type MobileTab = "projects" | "editor" | "rightPanel";
@@ -141,6 +143,7 @@ export default function App() {
     setNotifications,
     workspaceReady,
     workspaceError,
+    refreshActiveProject,
     refreshActiveTrack,
     refreshNotifications,
     resetWorkspaceQuery,
@@ -188,6 +191,7 @@ export default function App() {
 
   const canResolve = canEdit;
   const canSend = !!currentUser && !!activeProject && !!activeTrack && (projectRole === "owner" || projectRole === "editor");
+  const canSendProjectChat = !!currentUser && !!activeProject && (projectRole === "owner" || projectRole === "editor");
   const lyricsDiscussionsEnabled = featureFlags.lyricsStructuredEditor;
   const isMobileViewport = () => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
 
@@ -919,6 +923,12 @@ export default function App() {
     await refreshCurrentTrack();
   };
 
+  const handleSendProjectMessage = async (text: string) => {
+    if (!activeProject) return;
+    await withAuth(() => postProjectChatMessage(activeProject.id, { text }));
+    await refreshActiveProject(activeProject.id);
+  };
+
   const handleAddTask = async (title: string, assignedToId?: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => createTask(activeProject.id, activeTrack.id, { title, assignedToId: assignedToId ?? null }));
@@ -1112,6 +1122,13 @@ export default function App() {
                   onAddTask={handleAddTask}
                   onUpdateTaskStatus={handleUpdateTaskStatus}
                   onUnauthorized={expireSession}
+                />
+              ) : activeProject ? (
+                <ProjectChatPanel
+                  project={activeProject}
+                  currentUser={currentUser}
+                  canSend={canSendProjectChat}
+                  onSendMessage={handleSendProjectMessage}
                 />
               ) : (
                 <StateView kind="empty" message={t("state.sidebar.empty")} className="h-full min-h-[220px] flex items-center" />

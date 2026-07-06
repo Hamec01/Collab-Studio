@@ -202,6 +202,13 @@ export function postChatMessage(projectId: string, trackId: string, payload: { t
   });
 }
 
+export function postProjectChatMessage(projectId: string, payload: { text: string }) {
+  return apiRequest<ChatMessage>(`/api/projects/${projectId}/chat`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export function createTask(
   projectId: string,
   trackId: string,

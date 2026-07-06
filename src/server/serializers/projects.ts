@@ -4,6 +4,7 @@ import {
   serializeAnnotation,
   serializeChatMessage,
   serializeComment,
+  serializeProjectChatMessage,
   serializeTask,
 } from "./collaboration";
 import { serializeLegacyCommentAsDiscussion, serializeLyricsDiscussionThread, discussionThreadInclude } from "./discussions";
@@ -52,6 +53,32 @@ export const trackRelationsInclude = {
   },
 } satisfies Prisma.TrackInclude;
 
+export const projectRelationsInclude = {
+  members: {
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          displayName: true,
+          avatarUrl: true,
+          role: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
+  tracks: {
+    include: trackRelationsInclude,
+    orderBy: { updatedAt: "desc" as const },
+  },
+  projectChatMessages: {
+    include: { author: { select: collaborationUserSelect } },
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+  },
+} satisfies Prisma.ProjectInclude;
+
 export type MemberWithUser = ProjectMember & {
   user: Pick<User, "id" | "username" | "email" | "displayName" | "avatarUrl" | "role">;
 };
@@ -60,10 +87,9 @@ export type TrackWithRelations = Prisma.TrackGetPayload<{
   include: typeof trackRelationsInclude;
 }>;
 
-export type ProjectWithRelations = Project & {
-  members?: MemberWithUser[];
-  tracks?: TrackWithRelations[];
-};
+export type ProjectWithRelations = Prisma.ProjectGetPayload<{
+  include: typeof projectRelationsInclude;
+}>;
 
 export function serializeProjectMember(member: MemberWithUser) {
   return {
@@ -179,6 +205,7 @@ export function serializeProject(project: ProjectWithRelations, currentUserId?: 
       : null,
     participants: members,
     members,
+    chat: (project.projectChatMessages ?? []).map(serializeProjectChatMessage),
     tracks: (project.tracks ?? []).map(serializeTrack),
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),

@@ -261,6 +261,7 @@ export interface Project {
   owner: ProjectOwnerSummary | null;
   participants: ProjectMember[];
   members: ProjectMember[];
+  chat?: ChatMessage[];
   tracks: Track[];
   createdAt: string;
   updatedAt: string;

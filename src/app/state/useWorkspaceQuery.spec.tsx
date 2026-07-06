@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceQuery } from "./useWorkspaceQuery";
 
 vi.mock("../../api/projects", () => ({
+  getProject: vi.fn(),
   listProjects: vi.fn(),
   getTrack: vi.fn(),
 }));
@@ -11,11 +12,12 @@ vi.mock("../../api/notifications", () => ({
   listNotifications: vi.fn(),
 }));
 
-import { getTrack, listProjects } from "../../api/projects";
+import { getProject, getTrack, listProjects } from "../../api/projects";
 import { listNotifications } from "../../api/notifications";
 
 const listProjectsMock = vi.mocked(listProjects);
 const listNotificationsMock = vi.mocked(listNotifications);
+const getProjectMock = vi.mocked(getProject);
 const getTrackMock = vi.mocked(getTrack);
 
 function deferred<T>() {
@@ -131,5 +133,59 @@ describe("useWorkspaceQuery abort behavior", () => {
     await waitFor(() => expect(firstSignal?.aborted).toBe(true));
 
     firstTrack.reject(new DOMException("Aborted", "AbortError"));
+  });
+
+  it("aborts previous project refresh request when a new one starts", async () => {
+    const firstProject = deferred<never>();
+    let firstSignal: AbortSignal | undefined;
+
+    getProjectMock.mockImplementation((projectId: string, signal?: AbortSignal) => {
+      if (projectId === "p1") {
+        firstSignal = signal;
+        return firstProject.promise;
+      }
+      return Promise.resolve({
+        id: "p2",
+        title: "Project 2",
+        type: "album",
+        coverUrl: null,
+        tags: [],
+        currentUserRole: "editor",
+        owner: null,
+        participants: [],
+        members: [],
+        chat: [],
+        tracks: [],
+        createdAt: "2026-07-02T00:00:00.000Z",
+        updatedAt: "2026-07-02T00:00:00.000Z",
+      });
+    });
+
+    listProjectsMock.mockResolvedValue([]);
+    listNotificationsMock.mockResolvedValue([]);
+
+    const withAuth = async <T,>(op: () => Promise<T>) => op();
+
+    const { result } = renderHook(() =>
+      useWorkspaceQuery({
+        authPhase: "authenticated",
+        currentUserId: "u1",
+        withAuth,
+      }),
+    );
+
+    await act(async () => {
+      void result.current.refreshActiveProject("p1");
+    });
+
+    await waitFor(() => expect(getProjectMock).toHaveBeenCalledWith("p1", expect.any(AbortSignal)));
+
+    await act(async () => {
+      void result.current.refreshActiveProject("p2");
+    });
+
+    await waitFor(() => expect(firstSignal?.aborted).toBe(true));
+
+    firstProject.reject(new DOMException("Aborted", "AbortError"));
   });
 });

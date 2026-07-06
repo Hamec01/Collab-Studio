@@ -19,11 +19,13 @@ import {
   trackEntityParamsSchema,
   updateTaskSchema,
 } from "../schemas/collaboration";
+import { projectParamsSchema } from "../schemas/projects";
 import {
   collaborationUserSelect,
   serializeAnnotation,
   serializeChatMessage,
   serializeComment,
+  serializeProjectChatMessage,
   serializeTask,
 } from "../serializers/collaboration";
 import { discussionThreadInclude, serializeLyricsDiscussionThread } from "../serializers/discussions";
@@ -366,6 +368,51 @@ router.put(
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     res.json(serializeLyricsDiscussionThread(thread, readTrackLyrics(await prisma.track.findUniqueOrThrow({ where: { id: trackId } })).document));
+  }),
+);
+
+router.post(
+  "/:projectId/chat",
+  (req, _res, next) => {
+    projectParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canChat");
+    const { projectId } = projectParamsSchema.parse(req.params);
+    const input = createChatMessageSchema.parse(req.body);
+
+    const message = await prisma.$transaction(async (tx) => {
+      const project = await tx.project.findUnique({
+        where: { id: projectId },
+        select: { id: true },
+      });
+      if (!project) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+
+      const created = await tx.projectChatMessage.create({
+        data: {
+          projectId,
+          authorId: user.id,
+          text: input.text,
+        },
+        include: chatInclude,
+      });
+
+      const preview = input.text.length > 80 ? `${input.text.slice(0, 80)}...` : input.text;
+      await createProjectMemberNotifications(tx, {
+        projectId,
+        actorId: user.id,
+        actorName: user.displayName,
+        type: "project_chat_message_created",
+        message: `left a project chat message: \"${preview}\"`,
+      });
+
+      return created;
+    });
+
+    res.status(201).json(serializeProjectChatMessage(message));
   }),
 );
 

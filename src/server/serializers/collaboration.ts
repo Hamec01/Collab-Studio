@@ -1,4 +1,4 @@
-import type { Annotation, ChatMessage, Comment, Notification, Project, Task, Track, User } from "@prisma/client";
+import type { Annotation, ChatMessage, Comment, Notification, Project, ProjectChatMessage, Task, Track, User } from "@prisma/client";
 
 export const collaborationUserSelect = {
   id: true,
@@ -15,6 +15,10 @@ type CommentWithUsers = Comment & {
 };
 
 type ChatMessageWithAuthor = ChatMessage & {
+  author: CollaborationUser | null;
+};
+
+type ProjectChatMessageWithAuthor = ProjectChatMessage & {
   author: CollaborationUser | null;
 };
 
@@ -61,7 +65,7 @@ export function serializeComment(comment: CommentWithUsers) {
   };
 }
 
-export function serializeChatMessage(message: ChatMessageWithAuthor) {
+function serializeChatMessageBase(message: { id: string; authorId: string | null; text: string; createdAt: Date; author: CollaborationUser | null }) {
   return {
     id: message.id,
     authorId: message.authorId,
@@ -71,6 +75,14 @@ export function serializeChatMessage(message: ChatMessageWithAuthor) {
     timestamp: message.createdAt.toISOString(),
     createdAt: message.createdAt.toISOString(),
   };
+}
+
+export function serializeChatMessage(message: ChatMessageWithAuthor) {
+  return serializeChatMessageBase(message);
+}
+
+export function serializeProjectChatMessage(message: ProjectChatMessageWithAuthor) {
+  return serializeChatMessageBase(message);
 }
 
 export function serializeTask(task: TaskWithUsers) {

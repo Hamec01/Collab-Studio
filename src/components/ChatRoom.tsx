@@ -8,9 +8,26 @@ interface ChatRoomProps {
   onSendMessage: (text: string) => Promise<void> | void;
   currentUser: AuthUser | null;
   canSend: boolean;
+  title?: string;
+  description?: string;
+  emptyMessage?: string;
+  inputPlaceholder?: string;
+  readOnlyPlaceholder?: string;
+  readOnlyMessage?: string;
 }
 
-export default function ChatRoom({ chat, onSendMessage, currentUser, canSend }: ChatRoomProps) {
+export default function ChatRoom({
+  chat,
+  onSendMessage,
+  currentUser,
+  canSend,
+  title = "ЧАТ ОБСУЖДЕНИЯ ПРАВОК",
+  description = "Быстрые сообщения соавторам по текущему треку",
+  emptyMessage = "История сообщений пуста. Начните обсуждение!",
+  inputPlaceholder = "Напишите соавторам...",
+  readOnlyPlaceholder = "Чат доступен только редакторам",
+  readOnlyMessage = "У вас нет прав на отправку сообщений в чат трека.",
+}: ChatRoomProps) {
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -48,8 +65,8 @@ export default function ChatRoom({ chat, onSendMessage, currentUser, canSend }: 
   return (
     <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 h-full flex flex-col">
       <div className="border-b border-neutral-900 pb-2 mb-3">
-        <h3 className="text-xs font-mono text-neutral-400 font-semibold uppercase tracking-wider">ЧАТ ОБСУЖДЕНИЯ ПРАВОК</h3>
-        <p className="text-[10px] text-neutral-500 mt-0.5">Быстрые сообщения соавторам по текущему треку</p>
+        <h3 className="text-xs font-mono text-neutral-400 font-semibold uppercase tracking-wider">{title}</h3>
+        <p className="text-[10px] text-neutral-500 mt-0.5">{description}</p>
       </div>
 
       {errorMessage && (
@@ -62,7 +79,7 @@ export default function ChatRoom({ chat, onSendMessage, currentUser, canSend }: 
       <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1">
         {chat.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-4">
-            <p className="text-[11px] text-neutral-500 italic">История сообщений пуста. Начните обсуждение!</p>
+            <p className="text-[11px] text-neutral-500 italic">{emptyMessage}</p>
           </div>
         ) : (
           chat.map((msg) => {
@@ -108,7 +125,7 @@ export default function ChatRoom({ chat, onSendMessage, currentUser, canSend }: 
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={canSend ? "Напишите соавторам..." : "Чат доступен только редакторам"}
+          placeholder={canSend ? inputPlaceholder : readOnlyPlaceholder}
           className="flex-1 bg-neutral-900 border border-neutral-800 focus:border-indigo-500 rounded-lg p-2 text-xs text-white focus:outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           disabled={!canSend || isSending}
         />
@@ -122,7 +139,7 @@ export default function ChatRoom({ chat, onSendMessage, currentUser, canSend }: 
       </form>
       {!canSend && (
         <p className="mt-2 text-[11px] text-neutral-500">
-          У вас нет прав на отправку сообщений в чат трека.
+          {readOnlyMessage}
         </p>
       )}
     </div>

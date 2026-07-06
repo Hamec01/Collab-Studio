@@ -26,7 +26,7 @@ import {
   updateProjectSchema,
 } from "../schemas/projects";
 import { assetStreamParamsSchema, audioStreamParamsSchema, audioTrackParamsSchema, createTrackSchema, externalAudioFormSchema, localAudioFormSchema, lyricsLeaseTokenSchema, parseCreateLyricVersion, parseUpdateLyricsDraft, trackParamsSchema, updateTrackSchema, versionParamsSchema } from "../schemas/tracks";
-import { serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
+import { projectRelationsInclude, serializeAudioVersion, serializeLyricVersion, serializeProject, serializeProjectMember, serializeTrack, trackRelationsInclude } from "../serializers/projects";
 import {
   prepareLyricsWrite,
   saveLyricsDraftAtomic,
@@ -71,17 +71,6 @@ const memberInclude = {
       avatarUrl: true,
       role: true,
     },
-  },
-} as const;
-
-const projectInclude = {
-  members: {
-    include: memberInclude,
-    orderBy: { createdAt: "asc" as const },
-  },
-  tracks: {
-    include: trackRelationsInclude,
-    orderBy: { updatedAt: "desc" as const },
   },
 } as const;
 
@@ -325,7 +314,7 @@ router.get(
           some: { userId: user.id },
         },
       },
-      include: projectInclude,
+      include: projectRelationsInclude,
       orderBy: { updatedAt: "desc" },
     });
 
@@ -346,7 +335,7 @@ router.post(
       initialTrackTitle: input.initialTrackTitle,
       coverUrl: input.coverUrl || null,
       tags: input.tags ?? [],
-    }, user, projectInclude);
+    }, user, projectRelationsInclude);
 
     res.status(201).json(serializeProject(project, user.id));
   }),
@@ -362,7 +351,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const user = requireCurrentUser(req);
     const { projectId } = projectParamsSchema.parse(req.params);
-    const project = await prisma.project.findUnique({ where: { id: projectId }, include: projectInclude });
+    const project = await prisma.project.findUnique({ where: { id: projectId }, include: projectRelationsInclude });
     if (!project) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
     res.json(serializeProject(project, user.id));
   }),
@@ -387,7 +376,7 @@ router.patch(
         ...(input.coverUrl !== undefined ? { coverUrl: input.coverUrl || null } : {}),
         ...(input.tags !== undefined ? { tags: input.tags } : {}),
       },
-      include: projectInclude,
+      include: projectRelationsInclude,
     });
     res.json(serializeProject(project, user.id));
   }),
