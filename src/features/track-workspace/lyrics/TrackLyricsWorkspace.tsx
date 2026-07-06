@@ -40,7 +40,7 @@ type TrackLyricsWorkspaceProps = {
   onDownloadLocalDraft: () => void;
   onJumpToDiscussion: () => void;
   onRequestUpload: () => void;
-  onAddAnnotation: (timestampSeconds: number, text: string) => void;
+  onAddAnnotation: (timestampSeconds: number, text: string, trackAssetId: string) => void;
   onSelectAudioSource: React.Dispatch<React.SetStateAction<string | null>>;
 };
 

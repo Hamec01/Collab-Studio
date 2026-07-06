@@ -225,7 +225,7 @@ export function updateTask(
   });
 }
 
-export function createAnnotation(projectId: string, trackId: string, payload: { timestampSeconds: number; text: string }) {
+export function createAnnotation(projectId: string, trackId: string, payload: { timestampSeconds: number; text: string; trackAssetId?: string | null }) {
   return apiRequest<Annotation>(`/api/projects/${projectId}/tracks/${trackId}/annotations`, {
     method: "POST",
     body: payload,

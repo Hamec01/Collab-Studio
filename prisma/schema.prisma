@@ -481,6 +481,7 @@ model TrackAsset {
   sourceAsset        TrackAsset?   @relation("TrackAssetDerivation", fields: [sourceAssetId], references: [id], onDelete: SetNull)
   derivedAssets      TrackAsset[]  @relation("TrackAssetDerivation")
   legacyAudioVersion AudioVersion? @relation("TrackAssetLegacyAudioVersion", fields: [legacyAudioVersionId], references: [id], onDelete: SetNull)
+  annotations        Annotation[]
 
   @@unique([legacyAudioVersionId])
   @@index([trackId, kind, createdAt])
@@ -608,16 +609,20 @@ model Task {
 model Annotation {
   id               String   @id @default(uuid()) @db.Uuid
   trackId          String   @db.Uuid
+  trackAssetId     String?  @db.Uuid
   authorId         String?  @db.Uuid
   timestampSeconds Int
   text             String
   createdAt        DateTime @default(now())
 
-  track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  track      Track       @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  trackAsset TrackAsset? @relation(fields: [trackAssetId], references: [id], onDelete: SetNull)
+  author     User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([trackId])
+  @@index([trackAssetId])
   @@index([authorId])
+  @@index([trackId, trackAssetId, timestampSeconds])
   @@index([trackId, timestampSeconds])
 }
 

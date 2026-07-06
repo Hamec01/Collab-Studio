@@ -93,6 +93,7 @@ export function serializeTask(task: TaskWithUsers) {
 export function serializeAnnotation(annotation: AnnotationWithAuthor) {
   return {
     id: annotation.id,
+    trackAssetId: annotation.trackAssetId,
     authorId: annotation.authorId,
     author: annotation.author?.displayName ?? "Deleted user",
     authorUser: serializeCollaborationUser(annotation.author),

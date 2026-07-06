@@ -6,9 +6,22 @@ import type { PlayableAudioSource } from "../types";
 
 const mockSelectedAudio: PlayableAudioSource = {
   id: "audio-1",
+  trackAssetId: "asset-1",
+  legacyAudioVersionId: null,
+  versionNumber: 1,
+  title: "Test Audio",
   originalFilename: "test-audio.mp3",
   streamUrl: "https://example.com/audio.mp3",
-  sourceType: "upload",
+  downloadUrl: "https://example.com/audio.mp3?download=1",
+  externalUrl: null,
+  externalProvider: null,
+  mimeType: "audio/mpeg",
+  durationMs: 120000,
+  isPrimary: true,
+  createdAt: "2026-07-06T12:00:00.000Z",
+  uploadedBy: null,
+  canDelete: true,
+  sourceType: "asset",
 };
 
 describe("StickyAudioPlayer", () => {

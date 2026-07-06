@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 6 июля 2026 года (slice 8 player consolidation)
+Последнее обновление: 6 июля 2026 года (Stage 5B slice 1 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -15,8 +15,8 @@
 - Branch: `main`
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
-- Active Stage: `Stage 5A`
-- Active slice: Stage 5A slice 8 — player state consolidation completed locally; shared playback engine eliminates duplicate audio elements and state desync; sticky mini-player with full controls; mobile navigation already functional via bottom nav; all tests PASS; Docker build PASS; production untouched
+- Active Stage: `Stage 5B`
+- Active slice: Stage 5B slice 1 — TrackAsset-bound audio annotations completed locally; new annotations persist `trackAssetId`, UI filters by active source with legacy fallback, shared player seek preserved; production untouched
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -41,8 +41,8 @@
 | Stage 3 — Projects, scopes и invitations | completed | Пройден |
 | Stage 4A — Plain-text Lyrics Workspace | completed | Пройден, committed at `f2875d0` |
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
-| Stage 5A — TrackAsset migration | in_progress | Slice 7 production cutover deployed: frontend asset-first live at app commit `85be76c`, image `5f9fc4e65d3b`; non-auth smoke PASS; owner smoke methodology invalid (DB-created session, real track used); forensic audit confirmed baseline restored; official owner smoke pending; legacy fallback preserved; backfill execute NOT run |
-| Stage 5B — Player и audio annotations | pending | Не начат |
+| Stage 5A — TrackAsset migration | completed | Production foundation, delivery routes and asset-first frontend cutover are live; legacy fallback preserved; backfill execute NOT run |
+| Stage 5B — Player и audio annotations | in_progress | Slice 1 completed locally: annotations now bind to `TrackAsset` when available, legacy track-level fallback preserved, production deploy not performed |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | pending | Не начат |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
 | Stage 8 — PWA и offline lyrics | pending | Не начат |
@@ -133,7 +133,16 @@ Stage 5A:
     - full local gate PASS: format/validate/generate/lint/test (169 tests)/build/e2e (3 tests)/diff check/Docker build
     - App.tsx: 1236 lines
     - production untouched
-17. Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения; Stage 4C+/5B не начинать.
+17. Stage 5A считается завершённым по локальным и production gates; legacy `audioVersions` compatibility сохранена, backfill execute intentionally not run because production has `AudioVersion=0`.
+18. Stage 5B slice 1 завершён локально:
+    - `Annotation.trackAssetId` added as nullable additive field with FK to `TrackAsset`
+    - create-annotation API accepts `trackAssetId` and rejects cross-track/cross-project assets
+    - frontend annotation creation now sends active `TrackAsset.id`
+    - annotation list now shows only current asset annotations plus legacy `trackAssetId=null` fallback
+    - clicking an annotation still seeks through shared playback engine
+    - legacy-only and native-only audio states are covered locally
+    - production deploy intentionally not performed
+19. Следующий шаг — только следующий Stage 5B slice после отдельного подтверждения.
 
 ## Журнал slices
 

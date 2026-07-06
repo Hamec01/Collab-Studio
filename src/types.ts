@@ -220,6 +220,7 @@ export interface Task {
 
 export interface Annotation {
   id: string;
+  trackAssetId: string | null;
   authorId: string | null;
   author: string;
   authorUser: CollaborationUser | null;

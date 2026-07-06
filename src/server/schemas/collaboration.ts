@@ -95,4 +95,5 @@ export const updateTaskSchema = z
 export const createAnnotationSchema = z.object({
   timestampSeconds: z.number().finite().min(0).max(604800),
   text: nonEmptyText(5000),
+  trackAssetId: z.string().uuid().nullable().optional(),
 });

@@ -466,8 +466,29 @@ router.post(
     const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);
     const input = createAnnotationSchema.parse(req.body);
     await requireTrack(projectId, trackId);
+    if (input.trackAssetId) {
+      const asset = await prisma.trackAsset.findFirst({
+        where: {
+          id: input.trackAssetId,
+          trackId,
+          projectId,
+          deletedAt: null,
+          status: { not: "DELETED" },
+        },
+        select: { id: true },
+      });
+      if (!asset) {
+        throw new AppError(404, "TRACK_ASSET_NOT_FOUND", "Track asset not found");
+      }
+    }
     const annotation = await prisma.annotation.create({
-      data: { trackId, authorId: user.id, timestampSeconds: Math.floor(input.timestampSeconds), text: input.text },
+      data: {
+        trackId,
+        trackAssetId: input.trackAssetId ?? null,
+        authorId: user.id,
+        timestampSeconds: Math.floor(input.timestampSeconds),
+        text: input.text,
+      },
       include: annotationInclude,
     });
     res.status(201).json(serializeAnnotation(annotation));

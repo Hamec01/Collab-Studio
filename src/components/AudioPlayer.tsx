@@ -22,7 +22,7 @@ import { usePlayer } from "../app/player/PlayerProvider";
 interface AudioPlayerProps {
   audioSources: PlayableAudioSource[];
   annotations: Annotation[];
-  onAddAnnotation: (timestampSeconds: number, text: string) => void;
+  onAddAnnotation: (timestampSeconds: number, text: string, trackAssetId: string) => void;
   onSelectAudioSource: (sourceId: string) => void;
   selectedAudioSourceId: string | null;
   canAnnotate: boolean;
@@ -53,6 +53,8 @@ export default function AudioPlayer({
   const externalUrl = activeVersion?.externalUrl || null;
   const hasActiveSource = !!sourceUrl;
   const hasExternalSource = !sourceUrl && !!externalUrl;
+  const activeTrackAssetId = activeVersion?.trackAssetId ?? null;
+  const canCreateTimestampAnnotation = canAnnotate && hasActiveSource && !!activeTrackAssetId;
 
   // Use shared player from PlayerProvider
   const player = usePlayer();
@@ -78,6 +80,13 @@ export default function AudioPlayer({
     if (Number.isNaN(d.getTime())) return "";
     return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
   }, [activeVersion?.createdAt]);
+
+  const visibleAnnotations = useMemo(
+    () => annotations
+      .filter((annotation) => annotation.trackAssetId === null || (activeTrackAssetId !== null && annotation.trackAssetId === activeTrackAssetId))
+      .sort((a, b) => a.timestampSeconds - b.timestampSeconds || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)),
+    [annotations, activeTrackAssetId],
+  );
 
   // Load source when activeVersion changes
   useEffect(() => {
@@ -131,15 +140,15 @@ export default function AudioPlayer({
   };
 
   const handleOpenAnnotation = () => {
-    if (!canAnnotate || !hasActiveSource) return;
+    if (!canCreateTimestampAnnotation) return;
     setAnnotTime(safeCurrentTime);
     setAnnotText("");
     setShowAnnotDialog(true);
   };
 
   const saveAnnotation = () => {
-    if (annotTime === null || !annotText.trim()) return;
-    onAddAnnotation(annotTime, annotText.trim());
+    if (annotTime === null || !annotText.trim() || !activeTrackAssetId) return;
+    onAddAnnotation(annotTime, annotText.trim(), activeTrackAssetId);
     setShowAnnotDialog(false);
     setAnnotText("");
     setAnnotTime(null);
@@ -399,9 +408,9 @@ export default function AudioPlayer({
             <div className="ml-auto flex items-center gap-2 w-full sm:w-auto sm:justify-end">
               <button
                 onClick={handleOpenAnnotation}
-                disabled={!hasActiveSource || !canAnnotate}
+                disabled={!canCreateTimestampAnnotation}
                 className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-[11px] font-semibold bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-950 text-indigo-400 px-3 py-2 rounded-lg border border-neutral-800 hover:border-indigo-500/30 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-                title="Добавить заметку на текущем таймкоде"
+                title={canCreateTimestampAnnotation ? "Добавить заметку на текущем таймкоде" : "Заметки доступны только для активной локальной версии TrackAsset"}
                 aria-label="Добавить заметку"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -433,7 +442,7 @@ export default function AudioPlayer({
             </div>
           </div>
 
-          {annotations.length > 0 && (
+          {visibleAnnotations.length > 0 && (
             <div>
               <button
                 onClick={() => setShowAnnotationsList(!showAnnotationsList)}
@@ -442,7 +451,7 @@ export default function AudioPlayer({
                 aria-label="Показать заметки"
               >
                 <Bookmark className="w-3.5 h-3.5" />
-                <span>Заметки ({annotations.length})</span>
+                <span>Заметки ({visibleAnnotations.length})</span>
                 {showAnnotationsList ? <ChevronDown className="w-3.5 h-3.5 ml-1" /> : <ChevronUp className="w-3.5 h-3.5 ml-1" />}
               </button>
             </div>
@@ -484,15 +493,12 @@ export default function AudioPlayer({
         </div>
       )}
 
-      {showAnnotationsList && annotations.length > 0 && (
+      {showAnnotationsList && visibleAnnotations.length > 0 && (
         <div className="mt-1 bg-neutral-900/60 border border-neutral-850 p-3 rounded-lg text-xs space-y-1.5 max-h-[140px] overflow-y-auto">
           <div className="text-[10px] font-mono text-neutral-500 border-b border-neutral-850 pb-1 mb-2">
             ЗАМЕТКИ К ТАЙМКОДАМ
           </div>
-          {annotations
-            .slice()
-            .sort((a, b) => a.timestampSeconds - b.timestampSeconds)
-            .map((annot) => (
+          {visibleAnnotations.map((annot) => (
               <div
                 key={annot.id}
                 className="flex items-start justify-between gap-3 p-1.5 hover:bg-neutral-900/80 rounded transition-colors"

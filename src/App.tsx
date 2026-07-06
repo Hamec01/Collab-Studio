@@ -922,9 +922,9 @@ export default function App() {
     await refreshCurrentTrack();
   };
 
-  const handleAddAnnotation = async (timestampSeconds: number, text: string) => {
+  const handleAddAnnotation = async (timestampSeconds: number, text: string, trackAssetId: string) => {
     if (!activeProject || !activeTrack) return;
-    await withAuth(() => createAnnotation(activeProject.id, activeTrack.id, { timestampSeconds, text }));
+    await withAuth(() => createAnnotation(activeProject.id, activeTrack.id, { timestampSeconds, text, trackAssetId }));
     await refreshCurrentTrack();
   };
 

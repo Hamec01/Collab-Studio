@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AudioPlayer from "./AudioPlayer";
 import { PlayerProvider } from "../app/player/PlayerProvider";
-import type { PlayableAudioSource } from "../types";
+import type { Annotation, PlayableAudioSource } from "../types";
 
 function makeSource(overrides: Partial<PlayableAudioSource> = {}): PlayableAudioSource {
   return {
@@ -28,9 +28,17 @@ function makeSource(overrides: Partial<PlayableAudioSource> = {}): PlayableAudio
   };
 }
 
-// Test wrapper that provides PlayerProvider
-function Wrapper({ children }: { children: React.ReactNode }) {
-  return <PlayerProvider>{children}</PlayerProvider>;
+function makeAnnotation(overrides: Partial<Annotation> = {}): Annotation {
+  return {
+    id: overrides.id ?? "annotation-1",
+    trackAssetId: overrides.trackAssetId ?? null,
+    authorId: overrides.authorId ?? "u1",
+    author: overrides.author ?? "Owner",
+    authorUser: overrides.authorUser ?? { id: "u1", username: "owner", displayName: "Owner", avatarUrl: null },
+    timestampSeconds: overrides.timestampSeconds ?? 15,
+    text: overrides.text ?? "Note",
+    createdAt: overrides.createdAt ?? "2026-07-06T10:00:00.000Z",
+  };
 }
 
 describe("AudioPlayer", () => {
@@ -172,5 +180,121 @@ describe("AudioPlayer", () => {
     const link = screen.getByRole("link", { name: "Открыть ссылку" });
     expect(link).toHaveAttribute("href", "https://example.com/audio.mp3");
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+    expect(screen.queryByRole("button", { name: "Добавить заметку" })).toBeNull();
   });
+
+  it("shows current asset annotations and legacy null annotations, but hides other asset annotations", async () => {
+    const user = userEvent.setup();
+    render(
+      <PlayerProvider>
+        <AudioPlayer
+          audioSources={[makeSource({ id: "asset-1", trackAssetId: "asset-1", sourceType: "asset" })]}
+          annotations={[
+            makeAnnotation({ id: "legacy-note", trackAssetId: null, text: "Legacy note", timestampSeconds: 5 }),
+            makeAnnotation({ id: "asset-note", trackAssetId: "asset-1", text: "Asset note", timestampSeconds: 8 }),
+            makeAnnotation({ id: "other-note", trackAssetId: "asset-2", text: "Other asset note", timestampSeconds: 12 }),
+          ]}
+          onAddAnnotation={vi.fn()}
+          onSelectAudioSource={vi.fn()}
+          selectedAudioSourceId="asset-1"
+          canAnnotate
+        />
+      </PlayerProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Показать заметки" }));
+    expect(screen.getByText("Legacy note")).toBeInTheDocument();
+    expect(screen.getByText("Asset note")).toBeInTheDocument();
+    expect(screen.queryByText("Other asset note")).not.toBeInTheDocument();
+  });
+
+  it("switches visible annotations when source changes", async () => {
+    const user = userEvent.setup();
+    const sources = [
+      makeSource({ id: "asset-1", trackAssetId: "asset-1", sourceType: "asset", versionNumber: 1 }),
+      makeSource({ id: "asset-2", trackAssetId: "asset-2", sourceType: "asset", versionNumber: 2, isPrimary: false }),
+    ];
+    const annotations = [
+      makeAnnotation({ id: "legacy-note", trackAssetId: null, text: "Legacy note" }),
+      makeAnnotation({ id: "asset-1-note", trackAssetId: "asset-1", text: "Asset 1 note" }),
+      makeAnnotation({ id: "asset-2-note", trackAssetId: "asset-2", text: "Asset 2 note" }),
+    ];
+    const onSelectAudioSource = vi.fn();
+    const firstRender = render(
+      <PlayerProvider>
+        <AudioPlayer
+          audioSources={sources}
+          annotations={annotations}
+          onAddAnnotation={vi.fn()}
+          onSelectAudioSource={onSelectAudioSource}
+          selectedAudioSourceId="asset-1"
+          canAnnotate
+        />
+      </PlayerProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Показать заметки" }));
+    expect(screen.getByText("Asset 1 note")).toBeInTheDocument();
+    expect(screen.queryByText("Asset 2 note")).not.toBeInTheDocument();
+
+    firstRender.unmount();
+
+    render(
+      <PlayerProvider>
+        <AudioPlayer
+          audioSources={sources}
+          annotations={annotations}
+          onAddAnnotation={vi.fn()}
+          onSelectAudioSource={onSelectAudioSource}
+          selectedAudioSourceId="asset-2"
+          canAnnotate
+        />
+      </PlayerProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Показать заметки" }));
+    expect(screen.getByText("Asset 2 note")).toBeInTheDocument();
+    expect(screen.queryByText("Asset 1 note")).not.toBeInTheDocument();
+  });
+
+  it("creates annotations only for asset-backed local playback", async () => {
+    const user = userEvent.setup();
+    const onAddAnnotation = vi.fn();
+    render(
+      <PlayerProvider>
+        <AudioPlayer
+          audioSources={[makeSource({ id: "asset-1", trackAssetId: "asset-1", sourceType: "asset" })]}
+          annotations={[]}
+          onAddAnnotation={onAddAnnotation}
+          onSelectAudioSource={vi.fn()}
+          selectedAudioSourceId="asset-1"
+          canAnnotate
+        />
+      </PlayerProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Добавить заметку" }));
+    await user.type(screen.getByPlaceholderText("Что происходит в этот момент?"), "Bound note");
+    await user.click(screen.getByRole("button", { name: "Сохранить заметку" }));
+
+    expect(onAddAnnotation).toHaveBeenCalledWith(0, "Bound note", "asset-1");
+  });
+
+  it("disables annotation creation for legacy-only playback", () => {
+    render(
+      <PlayerProvider>
+        <AudioPlayer
+          audioSources={[makeSource({ id: "legacy-1", sourceType: "legacy", trackAssetId: null, legacyAudioVersionId: "legacy-1" })]}
+          annotations={[makeAnnotation({ trackAssetId: null, text: "Legacy note" })]}
+          onAddAnnotation={vi.fn()}
+          onSelectAudioSource={vi.fn()}
+          selectedAudioSourceId="legacy-1"
+          canAnnotate
+        />
+      </PlayerProvider>
+    );
+
+    expect(screen.getByRole("button", { name: "Добавить заметку" })).toBeDisabled();
+  });
+
 });
