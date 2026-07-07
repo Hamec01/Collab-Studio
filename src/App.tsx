@@ -79,6 +79,7 @@ import type { ProjectSidebar } from "./features/project-workspace/ProjectContext
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
 import { resolveNotificationTarget } from "./features/notifications/notificationTargets";
+import { buildWorkspaceActivity, resolveActivityTarget, type WorkspaceActivityItem } from "./features/notifications/workspaceInbox";
 type MobileTab = "projects" | "editor" | "rightPanel";
 type ExternalProvider = "google" | "yandex" | "telegram" | "other";
 const AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
@@ -173,6 +174,7 @@ export default function App() {
     () => projects.find((project) => project.id === activeProjectId) || null,
     [projects, activeProjectId],
   );
+  const workspaceActivity = useMemo(() => buildWorkspaceActivity(projects), [projects]);
 
   const activeTrack = useMemo(
     () => activeProject?.tracks.find((track) => track.id === activeTrackId) || null,
@@ -1022,6 +1024,17 @@ export default function App() {
     }
   };
 
+  const handleOpenActivity = async (activity: WorkspaceActivityItem) => {
+    const target = resolveActivityTarget(activity);
+    try {
+      if (target.trackSidebar) setActiveSidebar(target.trackSidebar);
+      if (target.projectSidebar) setProjectSidebar(target.projectSidebar);
+      navigate(target.href);
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : "Не удалось открыть событие активности");
+    }
+  };
+
   const handleReadAllNotifications = async () => {
     if (pendingNotificationId || readAllNotificationsPending) return;
     setReadAllNotificationsPending(true);
@@ -1223,9 +1236,11 @@ export default function App() {
             <div className="max-w-7xl mx-auto w-full px-4 pb-24">
               <NotificationsPanel
                 notifications={notifications}
+                activityItems={workspaceActivity}
                 onMarkAsRead={handleReadNotification}
                 onReadAll={handleReadAllNotifications}
                 onOpenNotification={handleOpenNotification}
+                onOpenActivity={handleOpenActivity}
                 isRefreshing={notificationsSyncing}
                 pendingNotificationId={pendingNotificationId}
                 readAllPending={readAllNotificationsPending}

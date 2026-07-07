@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 7 июля 2026 года (Stage 6 slice 8 local PASS)
+Последнее обновление: 7 июля 2026 года (Stage 6 slice 9 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 6`
-- Active slice: Stage 6 slice 8 — project activity feed foundation completed locally; production untouched
+- Active slice: Stage 6 slice 9 — inbox split foundation completed locally; production untouched
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -43,7 +43,7 @@
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
 | Stage 5A — TrackAsset migration | completed | Production foundation, delivery routes and asset-first frontend cutover are live; legacy fallback preserved; backfill execute NOT run |
 | Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
-| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 8 completed locally: additive project activity feed API/UI on top of existing `ActivityEvent`, plus activity writes for comments/chat/tasks/audio uploads; production deploy not performed |
+| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 9 completed locally: inbox split foundation with global activity aggregation, deterministic activity deep-links and notifications retained as messages/requests; production deploy not performed |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
 | Stage 8 — PWA и offline lyrics | pending | Не начат |
 | Stage 9 — Public profiles и publications | pending | Не начат |
@@ -199,7 +199,13 @@ Stage 5A:
     - project workspace adds compact `Активность` tab without separate fetch layer
     - current comments/chat/tasks/audio upload flows now append safe activity events for the project feed
     - production deploy intentionally not performed
-28. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
+28. Stage 6 slice 9 завершён локально:
+    - workspace inbox now splits into `Активность` and `Сообщения / запросы`
+    - global activity list is aggregated from already loaded `projects[].activity` without a new fetch layer
+    - activity entries now deep-link into exact track/project context where deterministically available
+    - existing notifications remain the source for messages/requests and unread controls
+    - production deploy intentionally not performed
+29. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
 
 ## Журнал slices
 
@@ -230,6 +236,7 @@ Stage 5A:
 | 2026-07-07 | Stage 6 slice 6 | Локально добавлены notification deep-links: notifications now open exact track/project workspace context, project sidebar became controlled for route-driven context restore, and read/open actions are separated in the panel | `main`, local diff | focused lint + Vitest PASS; production untouched | Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения |
 | 2026-07-07 | Stage 6 slice 7 | Локально добавлены controlled notification polling и unread consistency: notifications revalidate on interval/focus/visibility/online, duplicate read actions are blocked while pending, and unread state is reconciled after mutations | `main`, local diff | focused lint + Vitest PASS; production untouched | Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения |
 | 2026-07-07 | Stage 6 slice 8 | Локально добавлен project activity foundation: additive `Project.activity`, compact activity tab in project workspace, and append-only activity writes for comments/chat/tasks/audio uploads on top of existing `ActivityEvent`; production untouched | `main`, local diff | focused Vitest + isolated API integration PASS; production untouched | Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения |
+| 2026-07-07 | Stage 6 slice 9 | Локально добавлен inbox split foundation: global activity aggregated from `projects[].activity`, deterministic activity deep-links, and existing notifications retained as messages/requests within a two-tab inbox panel; production untouched | `main`, local diff | focused lint + Vitest PASS; production untouched | Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения |
 
 ## Blockers
 
