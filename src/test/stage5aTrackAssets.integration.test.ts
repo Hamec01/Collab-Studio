@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import argon2 from "argon2";
@@ -12,9 +13,9 @@ const projectRoot = path.resolve(process.cwd());
 const pgContainer = `stage5a-slice2-pg-${randomBytes(4).toString("hex")}`;
 const pgPassword = `pw_${randomBytes(8).toString("hex")}`;
 const pgDatabase = `db_${randomBytes(6).toString("hex")}`;
-const pgPort = 56000 + Math.floor(Math.random() * 1000);
-const appPort = 57000 + Math.floor(Math.random() * 1000);
-const databaseUrl = `postgresql://postgres:${pgPassword}@127.0.0.1:${pgPort}/${pgDatabase}`;
+let pgPort = 0;
+let appPort = 0;
+let databaseUrl = "";
 
 let prisma: PrismaClient;
 let serverProcess: ReturnType<typeof spawn> | null = null;
@@ -64,6 +65,29 @@ async function runCommand(command: string, args: string[], options: { cwd?: stri
   }
 
   return { stdout, stderr };
+}
+
+async function reserveLocalPort() {
+  return await new Promise<number>((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => reject(new Error("Failed to reserve local port")));
+        return;
+      }
+      const { port } = address;
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(port);
+      });
+    });
+  });
 }
 
 async function waitForHttp(url: string, timeoutMs = 30_000) {
@@ -204,6 +228,9 @@ function findTrack(projects: Array<any>, projectId: string, trackId: string) {
 
 before(async () => {
   uploadsDir = await mkdtemp(path.join(os.tmpdir(), "stage5a-slice2-uploads-"));
+  pgPort = await reserveLocalPort();
+  appPort = await reserveLocalPort();
+  databaseUrl = `postgresql://postgres:${pgPassword}@127.0.0.1:${pgPort}/${pgDatabase}`;
 
   await runCommand("docker", [
     "run", "-d", "--rm",

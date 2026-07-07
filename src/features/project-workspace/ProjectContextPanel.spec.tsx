@@ -69,13 +69,16 @@ describe("ProjectContextPanel", () => {
 
   it("shows project chat by default and switches to project tasks", async () => {
     const user = userEvent.setup();
+    const onSelectSidebar = vi.fn();
 
     render(
       <ProjectContextPanel
         project={project}
         currentUser={currentUser}
+        activeSidebar="chat"
         canSend
         canEdit
+        onSelectSidebar={onSelectSidebar}
         onSendMessage={vi.fn()}
         onAddTask={vi.fn()}
         onUpdateTaskStatus={vi.fn()}
@@ -86,8 +89,7 @@ describe("ProjectContextPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Задачи" }));
 
-    expect(screen.getByText("ЗАДАЧИ ПРОЕКТА")).toBeInTheDocument();
-    expect(screen.getByText("Sequence track list")).toBeInTheDocument();
+    expect(onSelectSidebar).toHaveBeenCalledWith("tasks");
   });
 
   it("passes read-only task state for viewers", async () => {
@@ -97,15 +99,15 @@ describe("ProjectContextPanel", () => {
       <ProjectContextPanel
         project={project}
         currentUser={currentUser}
+        activeSidebar="tasks"
         canSend={false}
         canEdit={false}
+        onSelectSidebar={vi.fn()}
         onSendMessage={vi.fn()}
         onAddTask={vi.fn()}
         onUpdateTaskStatus={vi.fn()}
       />,
     );
-
-    await user.click(screen.getByRole("button", { name: "Задачи" }));
 
     expect(screen.getByText("У вас нет прав создавать проектные задачи и менять их статусы.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Добавить" })).toBeDisabled();

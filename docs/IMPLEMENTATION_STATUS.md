@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 7 июля 2026 года (Stage 6 slice 5 local PASS)
+Последнее обновление: 7 июля 2026 года (Stage 6 slice 6 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 6`
-- Active slice: Stage 6 slice 5 — project tasks foundation completed locally; additive project-scoped tasks model/API/UI is in place, production untouched
+- Active slice: Stage 6 slice 6 — notification deep-links completed locally; exact project/track context routing is in place, production untouched
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -43,7 +43,7 @@
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
 | Stage 5A — TrackAsset migration | completed | Production foundation, delivery routes and asset-first frontend cutover are live; legacy fallback preserved; backfill execute NOT run |
 | Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
-| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 5 completed locally: mobile line comments sheet, hardened track chat/tasks UX, additive project chat foundation, and additive project tasks foundation; production deploy not performed |
+| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 6 completed locally: mobile line comments sheet, hardened track/project chat and task UX, plus notification deep-links into exact project/track context; production deploy not performed |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
 | Stage 8 — PWA и offline lyrics | pending | Не начат |
 | Stage 9 — Public profiles и publications | pending | Не начат |
@@ -183,7 +183,13 @@ Stage 5A:
     - right panel for project-without-track now has chat/tasks tabs instead of chat-only
     - project tasks reuse hardened async/read-only `TaskBoard` UX with project-specific copy
     - production migration and deploy intentionally not performed
-25. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
+25. Stage 6 slice 6 завершён локально:
+    - notifications now resolve into exact track/project workspace context via deterministic deep-link helper
+    - track notifications open the correct audio/team sidebar context
+    - project notifications open the correct project chat/tasks sidebar context
+    - read action remains separate from open-navigation behavior
+    - production deploy intentionally not performed
+26. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
 
 ## Журнал slices
 
@@ -211,6 +217,7 @@ Stage 5A:
 | 2026-07-06 | Stage 5A slice 7 | Локально выполнен frontend asset-first cutover: введён normalized playable source model, player/selection switched to additive `Track.assets` with legacy fallback, external-only sources rendered as safe links, upload contract unchanged, production untouched | `main`, local diff | focused selector/component PASS; production untouched | Следующий шаг — production rollout этого slice только после отдельного подтверждения |
 | 2026-07-06 | Stage 5A slice 7 production cutover | Frontend asset-first deployed to production: app `85be76c` image `5f9fc4e65d3b`; owner smoke A/B/C/D/G PASS; legacy fallback preserved; DB baseline confirmed; no new migrations; backfill execute NOT run; mobile smoke manual-pending | `main@85be76c` | health 200; app/postgres healthy; non-auth HTML/JS/CSS 200; asset routes 401 anon; no storageKey leak | Stage 5B не начинать без отдельного подтверждения |
 | 2026-07-06 | Stage 5A slice 8 | Локально выполнена player consolidation: shared playback engine eliminates duplicate audio elements and state desync; sticky mini-player with full controls; mobile bottom nav already functional; new files: PlayerProvider.tsx/test, StickyAudioPlayer.tsx/test; refactored: AudioPlayer, App.tsx; e2e smoke tests added; production untouched | `main`, local diff | lint/test (169)/build/e2e (3)/diff/Docker build PASS; App.tsx 1236 lines; production untouched | Следующий шаг — только следующий Stage 5A slice после отдельного подтверждения |
+| 2026-07-07 | Stage 6 slice 6 | Локально добавлены notification deep-links: notifications now open exact track/project workspace context, project sidebar became controlled for route-driven context restore, and read/open actions are separated in the panel | `main`, local diff | focused lint + Vitest PASS; production untouched | Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения |
 
 ## Blockers
 

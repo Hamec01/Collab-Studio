@@ -75,8 +75,10 @@ import { useLyricsDiscussions } from "./features/track-workspace/lyrics/useLyric
 import { StickyAudioPlayer } from "./components/StickyAudioPlayer";
 import { normalizeTrackAudioSources, resolveSelectedAudioSource } from "./features/track-workspace/audio/normalizeTrackAudio";
 import { ProjectContextPanel } from "./features/project-workspace/ProjectContextPanel";
+import type { ProjectSidebar } from "./features/project-workspace/ProjectContextPanel";
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
+import { resolveNotificationTarget } from "./features/notifications/notificationTargets";
 type MobileTab = "projects" | "editor" | "rightPanel";
 type ExternalProvider = "google" | "yandex" | "telegram" | "other";
 const AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
@@ -107,6 +109,7 @@ export default function App() {
   const [globalError, setGlobalError] = useState<string>("");
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
   const [activeSidebar, setActiveSidebar] = useState<TrackSidebar>("comments");
+  const [projectSidebar, setProjectSidebar] = useState<ProjectSidebar>("chat");
   const [mobileTab, setMobileTab] = useState<MobileTab>("projects");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -489,11 +492,28 @@ export default function App() {
 
   useEffect(() => {
     if (workspaceReady && location.pathname !== resolvedRouteSelection.canonicalPath) return;
-    setMobileTab(parsedRoute.trackId ? mobileStateFromTab(parsedRoute.tab) : "projects");
-    if (parsedRoute.tab === "team") {
-      setActiveSidebar("comments");
+    if (parsedRoute.trackId) {
+      setMobileTab(mobileStateFromTab(parsedRoute.tab));
+      if (parsedRoute.tab === "team") {
+        const hash = location.hash.replace(/^#/, "");
+        if (hash === "chat" || hash === "tasks" || hash === "rhymes" || hash === "comments") {
+          setActiveSidebar(hash);
+        } else {
+          setActiveSidebar("comments");
+        }
+      }
+      return;
     }
-  }, [workspaceReady, location.pathname, resolvedRouteSelection.canonicalPath, parsedRoute]);
+
+    const hash = location.hash.replace(/^#/, "");
+    if (hash === "project-chat" || hash === "project-tasks") {
+      setProjectSidebar(hash === "project-tasks" ? "tasks" : "chat");
+      setMobileTab("rightPanel");
+      return;
+    }
+
+    setMobileTab("projects");
+  }, [workspaceReady, location.pathname, location.hash, resolvedRouteSelection.canonicalPath, parsedRoute]);
 
   useEffect(() => {
     if (authPhase !== "authenticated" || !workspaceReady) return;
@@ -966,6 +986,17 @@ export default function App() {
     setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
   };
 
+  const handleOpenNotification = async (notification: AppNotification) => {
+    const target = resolveNotificationTarget(notification);
+    if (!notification.read) {
+      await withAuth(() => markNotificationRead(notification.id));
+      setNotifications((prev) => prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item)));
+    }
+    if (target.trackSidebar) setActiveSidebar(target.trackSidebar);
+    if (target.projectSidebar) setProjectSidebar(target.projectSidebar);
+    navigate(target.href);
+  };
+
   const handleReadAllNotifications = async () => {
     await withAuth(() => markAllNotificationsRead());
     setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
@@ -1141,8 +1172,10 @@ export default function App() {
                 <ProjectContextPanel
                   project={activeProject}
                   currentUser={currentUser}
+                  activeSidebar={projectSidebar}
                   canSend={canSendProjectChat}
                   canEdit={projectRole === "owner" || projectRole === "editor"}
+                  onSelectSidebar={setProjectSidebar}
                   onSendMessage={handleSendProjectMessage}
                   onAddTask={handleAddProjectTask}
                   onUpdateTaskStatus={handleUpdateProjectTaskStatus}
@@ -1158,6 +1191,7 @@ export default function App() {
                 notifications={notifications}
                 onMarkAsRead={handleReadNotification}
                 onReadAll={handleReadAllNotifications}
+                onOpenNotification={handleOpenNotification}
               />
             </div>
           </div>

@@ -6,12 +6,14 @@ interface NotificationsPanelProps {
   notifications: AppNotification[];
   onMarkAsRead: (id: string) => void;
   onReadAll: () => void;
+  onOpenNotification: (notification: AppNotification) => void;
 }
 
 export default function NotificationsPanel({
   notifications,
   onMarkAsRead,
   onReadAll,
+  onOpenNotification,
 }: NotificationsPanelProps) {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -65,7 +67,11 @@ export default function NotificationsPanel({
                   : "bg-neutral-900 border-neutral-800/80 hover:border-neutral-700 shadow-sm"
               }`}
             >
-              <div className="text-left pr-6">
+              <button
+                type="button"
+                onClick={() => onOpenNotification(not)}
+                className="block w-full text-left pr-16"
+              >
                 {/* Author Name */}
                 <span className="font-semibold text-xs text-white mr-1.5">{not.author}</span>
                 <span className="text-neutral-300 text-xs">{not.message}</span>
@@ -87,12 +93,16 @@ export default function NotificationsPanel({
                   <Clock className="w-2.5 h-2.5" />
                   {formatTime(not.timestamp)}
                 </span>
-              </div>
+              </button>
 
               {/* Individual read toggle button */}
               {!not.read && (
                 <button
-                  onClick={() => onMarkAsRead(not.id)}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMarkAsRead(not.id);
+                  }}
                   className="absolute right-2 top-2.5 p-1 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-indigo-400 hover:text-white rounded-md transition-all cursor-pointer"
                   title="Отметить как прочитанное"
                 >
