@@ -15,8 +15,8 @@
 - Branch: `main`
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
-- Active Stage: `Stage 6`
-- Active slice: Stage 6 slice 9 — inbox split foundation completed locally; production untouched
+- Active Stage: `Stage 9`
+- Active slice: Stage 9 slice 1 — pending approval
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -45,7 +45,7 @@
 | Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | completed | Локально завершён |
 | Stage 7 — Ready review, retention и export | completed | Локально завершён |
-| Stage 8 — PWA и offline lyrics | pending | Не начат |
+| Stage 8 — PWA и offline lyrics | completed | Пройден |
 | Stage 9 — Public profiles и publications | pending | Не начат |
 | Stage 10 — Discover, follows, comments, DM | pending | Не начат |
 | Stage 11 — SEO, admin, observability, hardening | pending | Не начат |
@@ -245,8 +245,9 @@ Stage 5A:
 | 2026-07-07 | Stage 7 slice 2 | Локально добавлены Track Review transitions: approve/request changes, invalidation, removing approvers. | `main`, local diff | tests PASS |
 | 2026-07-07 | Stage 7 slice 3 | Локально добавлен export: `isProjectReady`, `generateProjectExportStream`, `GET /api/projects/:projectId/export` (ZIP archiver). | `main`, local diff | tests PASS |
 | 2026-07-07 | Stage 7 slice 4 | Локально добавлен retention & trash: soft-delete `Project` with `deletedAt`, project recovery API, protection against silent final asset purge, `purgeTrash` script, и сгенерирована Prisma migration `stage7_retention`. Stage 7 завершён. | `main`, local diff | tests PASS |
+| 2026-07-07 | Stage 8 slice 1-3 | Реализован PWA & offline support: manifest/icons, offline draft, reconnect OCC conflict resolution, secure logout SW cache storage clear, OfflineBanner component, и dynamic ESM/CJS import. Stage 8 завершён. | `main` | lint/test/build/e2e PASS |
 
-## 29. Следующий шаг — только следующий Stage 8 slice после отдельного подтверждения.
+## 29. Следующий шаг — только следующий Stage 9 slice после отдельного подтверждения.
 
 ## Blockers
 
