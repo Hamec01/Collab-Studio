@@ -307,6 +307,16 @@ after(async () => {
   }
 });
 
+test("auth login is case-insensitive for legacy mixed-case usernames", async () => {
+  const user = await createUser({ username: "Hamilio", displayName: "Hamilio" });
+
+  const mixedCaseJar = await login("Hamilio", user.password);
+  assert.ok(mixedCaseJar.cookie.includes("collab.sid="));
+
+  const lowerCaseJar = await login("hamilio", user.password);
+  assert.ok(lowerCaseJar.cookie.includes("collab.sid="));
+});
+
 test("Stage 5A slice 2 API contract and permissions", async () => {
   const owner = await createUser({ username: "owner-stage5a", displayName: "Owner Stage5A" });
   const editor = await createUser({ username: "editor-stage5a", displayName: "Editor Stage5A" });

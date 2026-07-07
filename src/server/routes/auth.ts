@@ -199,7 +199,10 @@ router.post(
 
     const user = await prisma.user.findFirst({
       where: {
-        OR: [{ username: normalizedLogin }, { email: normalizedLogin }],
+        OR: [
+          { username: { equals: normalizedLogin, mode: "insensitive" } },
+          { email: { equals: normalizedLogin, mode: "insensitive" } },
+        ],
       },
     });
 
