@@ -1,6 +1,9 @@
 import type { Archiver, ArchiverOptions } from "archiver";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const archiverFactory = require("archiver") as (format: string, options?: ArchiverOptions) => Archiver;
+import { createRequire } from "node:module";
+// Works in ESM (tsx tests/dev) AND in esbuild CJS bundle (require is available there)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _req = typeof (globalThis as any).require !== "undefined" ? (globalThis as any).require : createRequire(import.meta.url);
+const archiverFactory = _req("archiver") as (format: string, options?: ArchiverOptions) => Archiver;
 import { Writable } from "stream";
 import { prisma } from "../db";
 import { ReviewStatus } from "@prisma/client";
