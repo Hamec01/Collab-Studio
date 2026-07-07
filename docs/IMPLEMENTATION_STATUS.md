@@ -43,8 +43,8 @@
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
 | Stage 5A — TrackAsset migration | completed | Production foundation, delivery routes and asset-first frontend cutover are live; legacy fallback preserved; backfill execute NOT run |
 | Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
-| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 9 completed locally: inbox split foundation with global activity aggregation, deterministic activity deep-links and notifications retained as messages/requests; production deploy not performed |
-| Stage 7 — Ready review, retention и export | pending | Не начат |
+| Stage 6 — Discussions, chats, tasks, activity, Inbox | completed | Локально завершён |
+| Stage 7 — Ready review, retention и export | completed | Локально завершён |
 | Stage 8 — PWA и offline lyrics | pending | Не начат |
 | Stage 9 — Public profiles и publications | pending | Не начат |
 | Stage 10 — Discover, follows, comments, DM | pending | Не начат |
@@ -242,8 +242,11 @@ Stage 5A:
 | 2026-07-07 | Stage 6 slice 10 | Локально добавлен mentions foundation: '@' mentions parser, notification target resolution logic, testing suite. | `main`, local diff | tests PASS |
 | 2026-07-07 | Stage 6 slice 11 | Локально реализована политика email/push: NotificationDelivery model, DeliveryChannel enums, central email router eval, mock email sender. Stage 6 завершён. | `main`, local diff | tests PASS |
 | 2026-07-07 | Stage 7 slice 1 | Локально заложен фундамент для Ready review: TrackSnapshot, TrackReview, TrackReviewApprover models & enums, core creation services. | `main`, local diff | tests PASS |
+| 2026-07-07 | Stage 7 slice 2 | Локально добавлены Track Review transitions: approve/request changes, invalidation, removing approvers. | `main`, local diff | tests PASS |
+| 2026-07-07 | Stage 7 slice 3 | Локально добавлен export: `isProjectReady`, `generateProjectExportStream`, `GET /api/projects/:projectId/export` (ZIP archiver). | `main`, local diff | tests PASS |
+| 2026-07-07 | Stage 7 slice 4 | Локально добавлен retention & trash: soft-delete `Project` with `deletedAt`, project recovery API, protection against silent final asset purge, `purgeTrash` script, и сгенерирована Prisma migration `stage7_retention`. Stage 7 завершён. | `main`, local diff | tests PASS |
 
-## 29. Следующий шаг — только следующий Stage 7 slice после отдельного подтверждения.
+## 29. Следующий шаг — только следующий Stage 8 slice после отдельного подтверждения.
 
 ## Blockers
 
