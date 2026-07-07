@@ -1,5 +1,4 @@
 import type { Archiver, ArchiverOptions } from "archiver";
-import { createRequire } from "node:module";
 import { Writable } from "stream";
 import { prisma } from "../db";
 import { ReviewStatus } from "@prisma/client";
@@ -8,11 +7,16 @@ import * as fsp from "fs/promises";
 import * as path from "path";
 import { getConfig } from "../config";
 
-const _require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const archiverFactory = _require("archiver") as (format: string, options?: ArchiverOptions) => Archiver;
-
 const config = getConfig();
+
+async function loadArchiverFactory() {
+  const archiverModule = await import("archiver");
+  const archiverFactory = ("default" in archiverModule ? archiverModule.default : archiverModule) as unknown as (
+    format: string,
+    options?: ArchiverOptions,
+  ) => Archiver;
+  return archiverFactory;
+}
 
 
 export async function isProjectReady(projectId: string) {
@@ -54,6 +58,7 @@ export async function generateProjectExportStream(projectId: string, outputStrea
     },
   });
 
+  const archiverFactory = await loadArchiverFactory();
   const archive = archiverFactory("zip", { zlib: { level: 9 } });
 
   archive.on("error", (err) => {
