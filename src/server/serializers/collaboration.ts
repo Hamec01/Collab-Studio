@@ -64,6 +64,7 @@ export function serializeComment(comment: CommentWithUsers) {
     authorUser: serializeCollaborationUser(comment.author),
     lineIndex: comment.lineIndex ?? undefined,
     text: comment.text,
+    mentions: comment.mentions ?? [],
     resolved: comment.resolved,
     resolvedById: comment.resolvedById,
     resolvedBy: serializeCollaborationUser(comment.resolvedBy),
@@ -74,13 +75,14 @@ export function serializeComment(comment: CommentWithUsers) {
   };
 }
 
-function serializeChatMessageBase(message: { id: string; authorId: string | null; text: string; createdAt: Date; author: CollaborationUser | null }) {
+function serializeChatMessageBase(message: { id: string; authorId: string | null; text: string; mentions: string[]; createdAt: Date; author: CollaborationUser | null }) {
   return {
     id: message.id,
     authorId: message.authorId,
     author: message.author?.displayName ?? "Deleted user",
     authorUser: serializeCollaborationUser(message.author),
     text: message.text,
+    mentions: message.mentions ?? [],
     timestamp: message.createdAt.toISOString(),
     createdAt: message.createdAt.toISOString(),
   };

@@ -505,6 +505,7 @@ model Comment {
   resolvedById String?   @db.Uuid
   lineIndex    Int?
   text         String
+  mentions     String[]  @default([])
   resolved     Boolean   @default(false)
   resolvedAt   DateTime?
   createdAt    DateTime  @default(now())
@@ -561,6 +562,7 @@ model DiscussionMessage {
   threadId  String    @db.Uuid
   authorId  String?   @db.Uuid
   body      String
+  mentions  String[]  @default([])
   editedAt  DateTime?
   deletedAt DateTime?
   createdAt DateTime  @default(now())
@@ -579,6 +581,7 @@ model ChatMessage {
   trackId   String   @db.Uuid
   authorId  String?  @db.Uuid
   text      String
+  mentions  String[] @default([])
   createdAt DateTime @default(now())
 
   track  Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
@@ -594,6 +597,7 @@ model ProjectChatMessage {
   projectId String   @db.Uuid
   authorId  String?  @db.Uuid
   text      String
+  mentions  String[] @default([])
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

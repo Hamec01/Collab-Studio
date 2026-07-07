@@ -134,6 +134,7 @@ export interface Comment {
   authorUser: CollaborationUser | null;
   lineIndex?: number;
   text: string;
+  mentions?: string[];
   resolved: boolean;
   resolvedById: string | null;
   resolvedBy: CollaborationUser | null;
@@ -150,6 +151,7 @@ export interface LyricsDiscussionMessage {
   author: string;
   authorUser: CollaborationUser | null;
   body: string;
+  mentions?: string[];
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
@@ -200,6 +202,7 @@ export interface ChatMessage {
   author: string;
   authorUser: CollaborationUser | null;
   text: string;
+  mentions?: string[];
   timestamp: string;
   createdAt: string;
 }

@@ -30,6 +30,7 @@ export const projectTaskParamsSchema = z.object({
 export const createCommentSchema = z.object({
   text: nonEmptyText(5000),
   lineIndex: z.number().int().min(0).max(100000).nullable().optional(),
+  mentions: z.array(z.string().uuid()).max(50).optional(),
 });
 
 export const resolveCommentSchema = z.object({
@@ -52,6 +53,7 @@ export const createLyricsDiscussionThreadSchema = z.object({
 
 export const createLyricsDiscussionMessageSchema = z.object({
   body: nonEmptyText(5000),
+  mentions: z.array(z.string().uuid()).max(50).optional(),
 });
 
 export const resolveLyricsDiscussionThreadSchema = z.object({
@@ -62,6 +64,7 @@ export const reanchorLyricsDiscussionThreadSchema = discussionAnchorSchema;
 
 export const createChatMessageSchema = z.object({
   text: nonEmptyText(5000),
+  mentions: z.array(z.string().uuid()).max(50).optional(),
 });
 
 const taskStatusSchema = z

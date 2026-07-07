@@ -32,7 +32,7 @@ import {
 } from "../serializers/collaboration";
 import { discussionThreadInclude, serializeLyricsDiscussionThread } from "../serializers/discussions";
 import { recordActivityEvent } from "../services/activity";
-import { createProjectMemberNotifications } from "../services/notifications";
+import { createProjectMemberNotifications, createTargetedNotifications } from "../services/notifications";
 import { ensureVerifiedForProtectedWrite } from "../services/stage3Access";
 import { readTrackLyrics } from "../services/structuredLyrics";
 
@@ -146,6 +146,7 @@ router.post(
           authorId: user.id,
           text: input.text,
           lineIndex: input.lineIndex ?? null,
+          mentions: input.mentions ?? [],
         },
         include: commentInclude,
       });
@@ -159,6 +160,19 @@ router.post(
         type: "comment_created",
         message: `left a comment: \"${preview}\"`,
       });
+
+      if (input.mentions && input.mentions.length > 0) {
+        await createTargetedNotifications(tx, {
+          projectId,
+          trackId,
+          actorId: user.id,
+          actorName: user.displayName,
+          type: "comment_mention",
+          message: `mentioned you in a comment: \"${preview}\"`,
+          userIds: input.mentions,
+        });
+      }
+
       await recordActivityEvent(tx, {
         projectId,
         actorId: user.id,
@@ -304,6 +318,7 @@ router.post(
           threadId,
           authorId: user.id,
           body: input.body,
+          mentions: input.mentions ?? [],
         },
       });
 
@@ -312,6 +327,21 @@ router.post(
         include: discussionThreadInclude,
       });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    if (input.mentions && input.mentions.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        const preview = input.body.length > 80 ? `${input.body.slice(0, 80)}...` : input.body;
+        await createTargetedNotifications(tx, {
+          projectId,
+          trackId,
+          actorId: user.id,
+          actorName: user.displayName,
+          type: "discussion_mention",
+          message: `mentioned you in a discussion: \"${preview}\"`,
+          userIds: input.mentions ?? [],
+        });
+      });
+    }
 
     res.status(201).json(serializeLyricsDiscussionThread(thread, readTrackLyrics(await prisma.track.findUniqueOrThrow({ where: { id: trackId } })).document));
   }),
@@ -425,6 +455,7 @@ router.post(
           projectId,
           authorId: user.id,
           text: input.text,
+          mentions: input.mentions ?? [],
         },
         include: chatInclude,
       });
@@ -437,6 +468,18 @@ router.post(
         type: "project_chat_message_created",
         message: `left a project chat message: \"${preview}\"`,
       });
+
+      if (input.mentions && input.mentions.length > 0) {
+        await createTargetedNotifications(tx, {
+          projectId,
+          actorId: user.id,
+          actorName: user.displayName,
+          type: "project_chat_mention",
+          message: `mentioned you in project chat: \"${preview}\"`,
+          userIds: input.mentions,
+        });
+      }
+
       await recordActivityEvent(tx, {
         projectId,
         actorId: user.id,
@@ -466,7 +509,7 @@ router.post(
     const track = await requireTrack(projectId, trackId);
     const message = await prisma.$transaction(async (tx) => {
       const created = await tx.chatMessage.create({
-        data: { trackId, authorId: user.id, text: input.text },
+        data: { trackId, authorId: user.id, text: input.text, mentions: input.mentions ?? [] },
         include: chatInclude,
       });
       const preview = input.text.length > 80 ? `${input.text.slice(0, 80)}...` : input.text;
@@ -481,6 +524,19 @@ router.post(
           preview,
         },
       });
+
+      if (input.mentions && input.mentions.length > 0) {
+        await createTargetedNotifications(tx, {
+          projectId,
+          trackId,
+          actorId: user.id,
+          actorName: user.displayName,
+          type: "track_chat_mention",
+          message: `mentioned you in track chat: \"${preview}\"`,
+          userIds: input.mentions,
+        });
+      }
+
       return created;
     });
     res.status(201).json(serializeChatMessage(message));

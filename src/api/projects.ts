@@ -142,7 +142,7 @@ export function saveLyricsDraft(
   );
 }
 
-export function createComment(projectId: string, trackId: string, payload: { text: string; lineIndex?: number }) {
+export function createComment(projectId: string, trackId: string, payload: { text: string; lineIndex?: number; mentions?: string[] }) {
   return apiRequest<Comment>(`/api/projects/${projectId}/tracks/${trackId}/comments`, {
     method: "POST",
     body: payload,
@@ -174,7 +174,7 @@ export function createLyricsDiscussionThread(projectId: string, trackId: string,
   });
 }
 
-export function createLyricsDiscussionMessage(projectId: string, trackId: string, threadId: string, payload: { body: string }) {
+export function createLyricsDiscussionMessage(projectId: string, trackId: string, threadId: string, payload: { body: string; mentions?: string[] }) {
   return apiRequest<LyricsDiscussionThread>(`/api/projects/${projectId}/tracks/${trackId}/discussions/threads/${threadId}/messages`, {
     method: "POST",
     body: payload,
@@ -195,14 +195,14 @@ export function reanchorLyricsDiscussionThread(projectId: string, trackId: strin
   });
 }
 
-export function postChatMessage(projectId: string, trackId: string, payload: { text: string }) {
+export function postChatMessage(projectId: string, trackId: string, payload: { text: string; mentions?: string[] }) {
   return apiRequest<ChatMessage>(`/api/projects/${projectId}/tracks/${trackId}/chat`, {
     method: "POST",
     body: payload,
   });
 }
 
-export function postProjectChatMessage(projectId: string, payload: { text: string }) {
+export function postProjectChatMessage(projectId: string, payload: { text: string; mentions?: string[] }) {
   return apiRequest<ChatMessage>(`/api/projects/${projectId}/chat`, {
     method: "POST",
     body: payload,
