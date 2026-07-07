@@ -1,6 +1,7 @@
 import React from "react";
 import { type LucideIcon } from "lucide-react";
 import Button from "../../shared/ui/Button";
+import OfflineBanner from "./OfflineBanner";
 
 type MobileNavItem = {
   key: string;
@@ -38,6 +39,8 @@ export default function AppShell({ title, headerRight, showMobileNav, mobileNavI
         </div>
         {headerRight}
       </header>
+
+      <OfflineBanner />
 
       <main className="app-shell-main flex-1 min-h-0 overflow-y-auto">
         {children}

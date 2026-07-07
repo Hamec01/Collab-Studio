@@ -18,7 +18,8 @@ export type TranslationKey =
   | "lyrics.player.available"
   | "modal.audioUpload"
   | "modal.audioFormats"
-  | "modal.close";
+  | "modal.close"
+  | "shell.offline";
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
   ru: {
@@ -40,6 +41,7 @@ export const translations: Record<Locale, Record<TranslationKey, string>> = {
     "modal.audioUpload": "Добавление аудио",
     "modal.audioFormats": "Поддерживаются форматы: mp3, wav, flac, ogg, aac, m4a, webm. Лимит 25 МБ.",
     "modal.close": "Закрыть",
+    "shell.offline": "Автономный режим",
   },
   en: {
     "shell.brand": "collabStudio Stage 4",
@@ -58,7 +60,8 @@ export const translations: Record<Locale, Record<TranslationKey, string>> = {
     "lyrics.player.available": "Player available",
     "state.readOnly": "Read-only mode",
     "modal.audioUpload": "Add audio",
-    "modal.audioFormats": "Supported formats: mp3, wav, flac, ogg, aac, m4a, webm. Limit is 25 MB.",
+    "modal.audioFormats": "Supported formats: mp3, wav, flac, ogg, aac, m4a, webm. Max size 25MB.",
     "modal.close": "Close",
+    "shell.offline": "Offline mode",
   },
 };

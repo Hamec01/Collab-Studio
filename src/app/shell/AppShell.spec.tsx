@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { FolderOpen } from "lucide-react";
 import AppShell from "./AppShell";
+import { I18nProvider } from "../i18n/I18nProvider";
 
 describe("AppShell", () => {
   it("renders mobile nav with touch target buttons", async () => {
@@ -11,21 +12,23 @@ describe("AppShell", () => {
     const onPress = vi.fn();
 
     render(
-      <AppShell
-        title="Title"
-        showMobileNav
-        mobileNavItems={[
-          {
-            key: "projects",
-            label: "Projects",
-            icon: FolderOpen,
-            active: true,
-            onPress,
-          },
-        ]}
-      >
-        <div>Body</div>
-      </AppShell>,
+      <I18nProvider>
+        <AppShell
+          title="Title"
+          showMobileNav
+          mobileNavItems={[
+            {
+              key: "projects",
+              label: "Projects",
+              icon: FolderOpen,
+              active: true,
+              onPress,
+            },
+          ]}
+        >
+          <div>Body</div>
+        </AppShell>
+      </I18nProvider>,
     );
 
     expect(screen.getByRole("navigation", { name: "Mobile Navigation" })).toBeInTheDocument();

@@ -3,6 +3,7 @@ import React from "react";
 import { describe, expect, it } from "vitest";
 import { FolderOpen } from "lucide-react";
 import AppShell from "../app/shell/AppShell";
+import { I18nProvider } from "../app/i18n/I18nProvider";
 
 const viewports = [
   { width: 320, height: 568 },
@@ -20,21 +21,23 @@ describe("Stage 2 viewport coverage", () => {
       window.dispatchEvent(new Event("resize"));
 
       render(
-        <AppShell
-          title="collabStudio Stage 4"
-          showMobileNav={viewport.width < 1024}
-          mobileNavItems={[
-            {
-              key: "projects",
-              label: "Projects",
-              icon: FolderOpen,
-              active: true,
-              onPress: () => undefined,
-            },
-          ]}
-        >
-          <div>viewport body</div>
-        </AppShell>,
+        <I18nProvider>
+          <AppShell
+            title="collabStudio Stage 4"
+            showMobileNav={viewport.width < 1024}
+            mobileNavItems={[
+              {
+                key: "projects",
+                label: "Projects",
+                icon: FolderOpen,
+                active: true,
+                onPress: () => undefined,
+              },
+            ]}
+          >
+            <div>viewport body</div>
+          </AppShell>
+        </I18nProvider>,
       );
 
       expect(screen.getByText("viewport body")).toBeInTheDocument();

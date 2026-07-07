@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { AuthUser } from "../../types";
 import { getAuthProviders, getCurrentUser, login as loginApi, logout as logoutApi, register as registerApi } from "../../api/auth";
 import { isApiError } from "../../api/client";
+import { clearSwCachesOnLogout } from "../../utils/swMessages";
 
 export type AuthPhase = "loading" | "authenticated" | "unauthenticated";
 
@@ -159,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await logoutApi();
+      await clearSwCachesOnLogout().catch(() => undefined);
     } finally {
       setCurrentUser(null);
       setAuthPhase("unauthenticated");
