@@ -509,8 +509,12 @@ export default function App() {
     }
 
     const hash = location.hash.replace(/^#/, "");
-    if (hash === "project-chat" || hash === "project-tasks") {
-      setProjectSidebar(hash === "project-tasks" ? "tasks" : "chat");
+    if (hash === "project-chat" || hash === "project-tasks" || hash === "project-activity") {
+      setProjectSidebar(
+        hash === "project-tasks" ? "tasks"
+          : hash === "project-activity" ? "activity"
+            : "chat",
+      );
       setMobileTab("rightPanel");
       return;
     }

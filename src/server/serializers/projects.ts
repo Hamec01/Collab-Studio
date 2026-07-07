@@ -1,5 +1,6 @@
 import { Prisma, type LyricVersion, type Project, type ProjectMember, type User } from "@prisma/client";
 import {
+  serializeActivityEvent,
   collaborationUserSelect,
   serializeAnnotation,
   serializeChatMessage,
@@ -11,6 +12,7 @@ import {
 import { serializeLegacyCommentAsDiscussion, serializeLyricsDiscussionThread, discussionThreadInclude } from "./discussions";
 import { serializeTrackAsset } from "./trackAssets";
 import { httpsExternalAudioUrl } from "../schemas/tracks";
+import { PROJECT_ACTIVITY_LIMIT } from "../services/activity";
 import { readTrackLyrics, resolveLyricVersion } from "../services/structuredLyrics";
 import { selectTrackAssetsWithFallback } from "../services/trackAssets";
 
@@ -84,6 +86,13 @@ export const projectRelationsInclude = {
       assignedTo: { select: collaborationUserSelect },
     },
     orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+  },
+  activityEvents: {
+    include: {
+      actor: { select: collaborationUserSelect },
+    },
+    orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
+    take: PROJECT_ACTIVITY_LIMIT,
   },
 } satisfies Prisma.ProjectInclude;
 
@@ -215,6 +224,7 @@ export function serializeProject(project: ProjectWithRelations, currentUserId?: 
     members,
     chat: (project.projectChatMessages ?? []).map(serializeProjectChatMessage),
     tasks: (project.tasks ?? []).map(serializeProjectTask),
+    activity: (project.activityEvents ?? []).map(serializeActivityEvent),
     tracks: (project.tracks ?? []).map(serializeTrack),
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),

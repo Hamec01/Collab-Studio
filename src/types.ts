@@ -263,6 +263,7 @@ export interface Project {
   members: ProjectMember[];
   chat?: ChatMessage[];
   tasks?: Task[];
+  activity?: ActivityEvent[];
   tracks: Track[];
   createdAt: string;
   updatedAt: string;
@@ -282,6 +283,17 @@ export interface AppNotification {
   createdAt: string;
   timestamp: string;
   read: boolean;
+}
+
+export interface ActivityEvent {
+  id: string;
+  projectId: string;
+  actorId: string | null;
+  actor: CollaborationUser | null;
+  type: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  timestamp: string;
 }
 
 export interface RhymeResult {

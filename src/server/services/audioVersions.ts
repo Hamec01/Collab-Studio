@@ -3,6 +3,7 @@ import { promises as fsp } from "node:fs";
 import path from "node:path";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { AppError } from "../middleware/errors";
+import { recordActivityEvent } from "./activity";
 import { createProjectMemberNotifications } from "./notifications";
 import { buildTrackAssetCreateDataFromAudioVersion, resolveTrackAssetStoragePath } from "./trackAssets";
 
@@ -29,7 +30,7 @@ async function createAudioVersionWithTrackAssetTx(
 ) {
   const track = await tx.track.findFirst({
     where: { id: input.trackId, projectId: input.projectId },
-    select: { id: true, projectId: true },
+    select: { id: true, projectId: true, title: true },
   });
   if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
 
@@ -87,6 +88,18 @@ async function createAudioVersionWithTrackAssetTx(
     actorName: input.actorName,
     type: "audio_uploaded",
     message: `uploaded audio version #${versionNumber} "${input.originalFilename.slice(0, 100)}"`,
+  });
+  await recordActivityEvent(tx, {
+    projectId: track.projectId,
+    actorId: input.uploadedById,
+    type: "audio_uploaded",
+    payload: {
+      trackId: input.trackId,
+      trackTitle: track.title,
+      audioVersionId: audio.id,
+      versionNumber,
+      originalFilename: audio.originalFilename,
+    },
   });
 
   return audio;

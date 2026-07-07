@@ -54,6 +54,21 @@ const project: Project = {
     createdAt: "2026-07-07T00:00:00.000Z",
     updatedAt: "2026-07-07T00:00:00.000Z",
   }],
+  activity: [{
+    id: "activity-1",
+    projectId: "project-1",
+    actorId: "user-1",
+    actor: {
+      id: "user-1",
+      username: "owner",
+      displayName: "Owner",
+      avatarUrl: null,
+    },
+    type: "project_chat_message_created",
+    payload: { preview: "Message preview" },
+    createdAt: "2026-07-07T00:00:00.000Z",
+    timestamp: "2026-07-07T00:00:00.000Z",
+  }],
   tracks: [],
   createdAt: "2026-07-07T00:00:00.000Z",
   updatedAt: "2026-07-07T00:00:00.000Z",
@@ -111,5 +126,30 @@ describe("ProjectContextPanel", () => {
 
     expect(screen.getByText("У вас нет прав создавать проектные задачи и менять их статусы.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Добавить" })).toBeDisabled();
+  });
+
+  it("shows project activity tab", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ProjectContextPanel
+        project={project}
+        currentUser={currentUser}
+        activeSidebar="activity"
+        canSend={false}
+        canEdit={false}
+        onSelectSidebar={vi.fn()}
+        onSendMessage={vi.fn()}
+        onAddTask={vi.fn()}
+        onUpdateTaskStatus={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Активность проекта")).toBeInTheDocument();
+    expect(screen.getByText(/Owner написал в чат проекта/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Активность" }));
+
+    expect(screen.getByRole("button", { name: "Активность" })).toHaveClass("bg-indigo-600");
   });
 });

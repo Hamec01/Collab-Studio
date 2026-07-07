@@ -1,4 +1,4 @@
-import type { Annotation, ChatMessage, Comment, Notification, Project, ProjectChatMessage, ProjectTask, Task, Track, User } from "@prisma/client";
+import type { ActivityEvent, Annotation, ChatMessage, Comment, Notification, Project, ProjectChatMessage, ProjectTask, Task, Track, User } from "@prisma/client";
 
 export const collaborationUserSelect = {
   id: true,
@@ -40,6 +40,10 @@ export type NotificationWithRelations = Notification & {
   actor: CollaborationUser | null;
   project: Pick<Project, "id" | "title">;
   track: Pick<Track, "id" | "title"> | null;
+};
+
+export type ActivityEventWithActor = ActivityEvent & {
+  actor: CollaborationUser | null;
 };
 
 export function serializeCollaborationUser(user: CollaborationUser | null) {
@@ -154,5 +158,18 @@ export function serializeNotification(notification: NotificationWithRelations) {
     read: notification.read,
     timestamp: notification.createdAt.toISOString(),
     createdAt: notification.createdAt.toISOString(),
+  };
+}
+
+export function serializeActivityEvent(event: ActivityEventWithActor) {
+  return {
+    id: event.id,
+    projectId: event.projectId,
+    actorId: event.actorId,
+    actor: serializeCollaborationUser(event.actor),
+    type: event.type,
+    payload: event.payload,
+    createdAt: event.createdAt.toISOString(),
+    timestamp: event.createdAt.toISOString(),
   };
 }

@@ -31,6 +31,7 @@ import {
   serializeTask,
 } from "../serializers/collaboration";
 import { discussionThreadInclude, serializeLyricsDiscussionThread } from "../serializers/discussions";
+import { recordActivityEvent } from "../services/activity";
 import { createProjectMemberNotifications } from "../services/notifications";
 import { ensureVerifiedForProtectedWrite } from "../services/stage3Access";
 import { readTrackLyrics } from "../services/structuredLyrics";
@@ -88,9 +89,10 @@ function validateTrackParams(req: Request, _res: Response, next: NextFunction) {
 async function requireTrack(projectId: string, trackId: string) {
   const track = await prisma.track.findFirst({
     where: { id: trackId, projectId },
-    select: { id: true },
+    select: { id: true, title: true },
   });
   if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+  return track;
 }
 
 type CollaborationDb = Prisma.TransactionClient | typeof prisma;
@@ -135,7 +137,7 @@ router.post(
     const input = createCommentSchema.parse(req.body);
 
     const comment = await prisma.$transaction(async (tx) => {
-      const track = await tx.track.findFirst({ where: { id: trackId, projectId }, select: { id: true } });
+      const track = await tx.track.findFirst({ where: { id: trackId, projectId }, select: { id: true, title: true } });
       if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
 
       const created = await tx.comment.create({
@@ -156,6 +158,18 @@ router.post(
         actorName: user.displayName,
         type: "comment_created",
         message: `left a comment: \"${preview}\"`,
+      });
+      await recordActivityEvent(tx, {
+        projectId,
+        actorId: user.id,
+        type: "comment_created",
+        payload: {
+          trackId,
+          trackTitle: track.title,
+          commentId: created.id,
+          lineIndex: created.lineIndex,
+          preview,
+        },
       });
       return created;
     });
@@ -180,12 +194,12 @@ router.put(
       async (tx) => {
         const existing = await tx.comment.findFirst({
           where: { id: commentId, trackId, track: { projectId } },
-          select: { id: true, resolved: true },
+          select: { id: true, resolved: true, lineIndex: true, track: { select: { title: true } } },
         });
         if (!existing) throw new AppError(404, "COMMENT_NOT_FOUND", "Comment not found");
 
         const resolved = input.resolved ?? !existing.resolved;
-        return tx.comment.update({
+        const updated = await tx.comment.update({
           where: { id: commentId },
           data: {
             resolved,
@@ -194,6 +208,19 @@ router.put(
           },
           include: commentInclude,
         });
+        await recordActivityEvent(tx, {
+          projectId,
+          actorId: user.id,
+          type: "comment_resolved",
+          payload: {
+            trackId,
+            trackTitle: existing.track.title,
+            commentId,
+            lineIndex: existing.lineIndex,
+            resolved,
+          },
+        });
+        return updated;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -410,6 +437,15 @@ router.post(
         type: "project_chat_message_created",
         message: `left a project chat message: \"${preview}\"`,
       });
+      await recordActivityEvent(tx, {
+        projectId,
+        actorId: user.id,
+        type: "project_chat_message_created",
+        payload: {
+          messageId: created.id,
+          preview,
+        },
+      });
 
       return created;
     });
@@ -427,10 +463,25 @@ router.post(
     requireCapability(req, "canChat");
     const { projectId, trackId } = trackEntityParamsSchema.parse(req.params);
     const input = createChatMessageSchema.parse(req.body);
-    await requireTrack(projectId, trackId);
-    const message = await prisma.chatMessage.create({
-      data: { trackId, authorId: user.id, text: input.text },
-      include: chatInclude,
+    const track = await requireTrack(projectId, trackId);
+    const message = await prisma.$transaction(async (tx) => {
+      const created = await tx.chatMessage.create({
+        data: { trackId, authorId: user.id, text: input.text },
+        include: chatInclude,
+      });
+      const preview = input.text.length > 80 ? `${input.text.slice(0, 80)}...` : input.text;
+      await recordActivityEvent(tx, {
+        projectId,
+        actorId: user.id,
+        type: "track_chat_message_created",
+        payload: {
+          trackId,
+          trackTitle: track.title,
+          messageId: created.id,
+          preview,
+        },
+      });
+      return created;
     });
     res.status(201).json(serializeChatMessage(message));
   }),
@@ -454,7 +505,7 @@ router.post(
         const project = await tx.project.findUnique({ where: { id: projectId }, select: { id: true } });
         if (!project) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
         const assignedToId = await resolveAssignee(tx, projectId, input.assignedToId, input.assignedTo);
-        return tx.projectTask.create({
+        const created = await tx.projectTask.create({
           data: {
             projectId,
             createdById: user.id,
@@ -464,6 +515,17 @@ router.post(
           },
           include: taskInclude,
         });
+        await recordActivityEvent(tx, {
+          projectId,
+          actorId: user.id,
+          type: "project_task_created",
+          payload: {
+            taskId: created.id,
+            taskTitle: created.title,
+            assignedToId: created.assignedToId,
+          },
+        });
+        return created;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -480,7 +542,7 @@ router.put(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    requireVerifiedWriter(req);
+    const user = requireVerifiedWriter(req);
     requireCapability(req, "canCreateTask");
     const { projectId, taskId } = projectTaskParamsSchema.parse(req.params);
     const input = updateTaskSchema.parse(req.body);
@@ -494,7 +556,7 @@ router.put(
         if (!existing) throw new AppError(404, "TASK_NOT_FOUND", "Task not found");
 
         const assignedToId = await resolveAssignee(tx, projectId, input.assignedToId, input.assignedTo);
-        return tx.projectTask.update({
+        const updated = await tx.projectTask.update({
           where: { id: taskId },
           data: {
             title: input.title,
@@ -504,6 +566,18 @@ router.put(
           },
           include: taskInclude,
         });
+        await recordActivityEvent(tx, {
+          projectId,
+          actorId: user.id,
+          type: "project_task_updated",
+          payload: {
+            taskId: updated.id,
+            taskTitle: updated.title,
+            status: updated.status,
+            assignedToId: updated.assignedToId,
+          },
+        });
+        return updated;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -523,10 +597,10 @@ router.post(
     const input = createTaskSchema.parse(req.body);
     const task = await prisma.$transaction(
       async (tx) => {
-        const track = await tx.track.findFirst({ where: { id: trackId, projectId }, select: { id: true } });
+        const track = await tx.track.findFirst({ where: { id: trackId, projectId }, select: { id: true, title: true } });
         if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
         const assignedToId = await resolveAssignee(tx, projectId, input.assignedToId, input.assignedTo);
-        return tx.task.create({
+        const created = await tx.task.create({
           data: {
             trackId,
             createdById: user.id,
@@ -536,6 +610,19 @@ router.post(
           },
           include: taskInclude,
         });
+        await recordActivityEvent(tx, {
+          projectId,
+          actorId: user.id,
+          type: "track_task_created",
+          payload: {
+            trackId,
+            trackTitle: track.title,
+            taskId: created.id,
+            taskTitle: created.title,
+            assignedToId: created.assignedToId,
+          },
+        });
+        return created;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -551,7 +638,7 @@ router.put(
   },
   requireProjectEditor,
   asyncHandler(async (req, res) => {
-    requireVerifiedWriter(req);
+    const user = requireVerifiedWriter(req);
     requireCapability(req, "canCreateTask");
     const { projectId, trackId, taskId } = taskParamsSchema.parse(req.params);
     const input = updateTaskSchema.parse(req.body);
@@ -559,12 +646,12 @@ router.put(
       async (tx) => {
         const existing = await tx.task.findFirst({
           where: { id: taskId, trackId, track: { projectId } },
-          select: { id: true },
+          select: { id: true, track: { select: { title: true } } },
         });
         if (!existing) throw new AppError(404, "TASK_NOT_FOUND", "Task not found");
 
         const assignedToId = await resolveAssignee(tx, projectId, input.assignedToId, input.assignedTo);
-        return tx.task.update({
+        const updated = await tx.task.update({
           where: { id: taskId },
           data: {
             title: input.title,
@@ -574,6 +661,20 @@ router.put(
           },
           include: taskInclude,
         });
+        await recordActivityEvent(tx, {
+          projectId,
+          actorId: user.id,
+          type: "track_task_updated",
+          payload: {
+            trackId,
+            trackTitle: existing.track.title,
+            taskId: updated.id,
+            taskTitle: updated.title,
+            status: updated.status,
+            assignedToId: updated.assignedToId,
+          },
+        });
+        return updated;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

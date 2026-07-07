@@ -1,8 +1,9 @@
 import type { AuthUser, Project, Task } from "../../types";
+import { ProjectActivityPanel } from "./ProjectActivityPanel";
 import { ProjectChatPanel } from "./ProjectChatPanel";
 import { ProjectTasksPanel } from "./ProjectTasksPanel";
 
-export type ProjectSidebar = "chat" | "tasks";
+export type ProjectSidebar = "chat" | "tasks" | "activity";
 
 type ProjectContextPanelProps = {
   project: Project;
@@ -19,6 +20,7 @@ type ProjectContextPanelProps = {
 const tabs: Array<{ key: ProjectSidebar; label: string }> = [
   { key: "chat", label: "Чат" },
   { key: "tasks", label: "Задачи" },
+  { key: "activity", label: "Активность" },
 ];
 
 export function ProjectContextPanel({
@@ -55,13 +57,15 @@ export function ProjectContextPanel({
             canSend={canSend}
             onSendMessage={onSendMessage}
           />
-        ) : (
+        ) : activeSidebar === "tasks" ? (
           <ProjectTasksPanel
             project={project}
             canEdit={canEdit}
             onAddTask={onAddTask}
             onUpdateTaskStatus={onUpdateTaskStatus}
           />
+        ) : (
+          <ProjectActivityPanel project={project} />
         )}
       </div>
     </div>
