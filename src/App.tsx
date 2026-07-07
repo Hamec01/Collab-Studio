@@ -111,6 +111,8 @@ export default function App() {
   const [activeSidebar, setActiveSidebar] = useState<TrackSidebar>("comments");
   const [projectSidebar, setProjectSidebar] = useState<ProjectSidebar>("chat");
   const [mobileTab, setMobileTab] = useState<MobileTab>("projects");
+  const [pendingNotificationId, setPendingNotificationId] = useState<string | null>(null);
+  const [readAllNotificationsPending, setReadAllNotificationsPending] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -146,6 +148,7 @@ export default function App() {
     setProjects,
     notifications,
     setNotifications,
+    notificationsSyncing,
     workspaceReady,
     workspaceError,
     refreshActiveProject,
@@ -982,24 +985,51 @@ export default function App() {
   };
 
   const handleReadNotification = async (id: string) => {
-    await withAuth(() => markNotificationRead(id));
-    setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
+    if (pendingNotificationId || readAllNotificationsPending) return;
+    setPendingNotificationId(id);
+    try {
+      await withAuth(() => markNotificationRead(id));
+      setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
+      await refreshNotifications().catch(() => undefined);
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : "Не удалось отметить уведомление как прочитанное");
+    } finally {
+      setPendingNotificationId(null);
+    }
   };
 
   const handleOpenNotification = async (notification: AppNotification) => {
+    if (pendingNotificationId || readAllNotificationsPending) return;
     const target = resolveNotificationTarget(notification);
-    if (!notification.read) {
-      await withAuth(() => markNotificationRead(notification.id));
-      setNotifications((prev) => prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item)));
+    try {
+      if (!notification.read) {
+        setPendingNotificationId(notification.id);
+        await withAuth(() => markNotificationRead(notification.id));
+        setNotifications((prev) => prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item)));
+        await refreshNotifications().catch(() => undefined);
+      }
+      if (target.trackSidebar) setActiveSidebar(target.trackSidebar);
+      if (target.projectSidebar) setProjectSidebar(target.projectSidebar);
+      navigate(target.href);
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : "Не удалось открыть уведомление");
+    } finally {
+      setPendingNotificationId(null);
     }
-    if (target.trackSidebar) setActiveSidebar(target.trackSidebar);
-    if (target.projectSidebar) setProjectSidebar(target.projectSidebar);
-    navigate(target.href);
   };
 
   const handleReadAllNotifications = async () => {
-    await withAuth(() => markAllNotificationsRead());
-    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+    if (pendingNotificationId || readAllNotificationsPending) return;
+    setReadAllNotificationsPending(true);
+    try {
+      await withAuth(() => markAllNotificationsRead());
+      setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+      await refreshNotifications().catch(() => undefined);
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : "Не удалось отметить все уведомления как прочитанные");
+    } finally {
+      setReadAllNotificationsPending(false);
+    }
   };
 
   const lyricsWorkspaceStatusMessage = lyricsLease.editState === "locked"
@@ -1192,6 +1222,9 @@ export default function App() {
                 onMarkAsRead={handleReadNotification}
                 onReadAll={handleReadAllNotifications}
                 onOpenNotification={handleOpenNotification}
+                isRefreshing={notificationsSyncing}
+                pendingNotificationId={pendingNotificationId}
+                readAllPending={readAllNotificationsPending}
               />
             </div>
           </div>

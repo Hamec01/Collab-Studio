@@ -33,6 +33,15 @@ function deferred<T>() {
 describe("useWorkspaceQuery abort behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
   });
 
   it("aborts stale workspace requests on auth transition", async () => {
@@ -187,5 +196,77 @@ describe("useWorkspaceQuery abort behavior", () => {
     await waitFor(() => expect(firstSignal?.aborted).toBe(true));
 
     firstProject.reject(new DOMException("Aborted", "AbortError"));
+  });
+
+  it("polls notifications on interval and focus when workspace is ready", async () => {
+    vi.useFakeTimers();
+    listProjectsMock.mockResolvedValue([]);
+    listNotificationsMock.mockResolvedValue([]);
+
+    const withAuth = async <T,>(op: () => Promise<T>) => op();
+
+    renderHook(() =>
+      useWorkspaceQuery({
+        authPhase: "authenticated",
+        currentUserId: "u1",
+        withAuth,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listNotificationsMock).toHaveBeenCalledTimes(1);
+    listNotificationsMock.mockClear();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+      await Promise.resolve();
+    });
+
+    expect(listNotificationsMock).toHaveBeenCalledTimes(1);
+
+    listNotificationsMock.mockClear();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await Promise.resolve();
+    });
+
+    expect(listNotificationsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips polling while hidden or offline", async () => {
+    vi.useFakeTimers();
+    listProjectsMock.mockResolvedValue([]);
+    listNotificationsMock.mockResolvedValue([]);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+
+    const withAuth = async <T,>(op: () => Promise<T>) => op();
+
+    renderHook(() =>
+      useWorkspaceQuery({
+        authPhase: "authenticated",
+        currentUserId: "u1",
+        withAuth,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listNotificationsMock).toHaveBeenCalledTimes(1);
+    listNotificationsMock.mockClear();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(listNotificationsMock).not.toHaveBeenCalled();
   });
 });

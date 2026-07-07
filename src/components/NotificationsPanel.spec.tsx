@@ -59,4 +59,35 @@ describe("NotificationsPanel", () => {
     expect(onMarkAsRead).toHaveBeenCalledWith("notification-1");
     expect(onOpenNotification).not.toHaveBeenCalled();
   });
+
+  it("disables notification actions while the same notification is pending", () => {
+    render(
+      <NotificationsPanel
+        notifications={notifications}
+        onMarkAsRead={vi.fn()}
+        onReadAll={vi.fn()}
+        onOpenNotification={vi.fn()}
+        pendingNotificationId="notification-1"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Writer/i })).toBeDisabled();
+    expect(screen.getByTitle("Отметить как прочитанное")).toBeDisabled();
+  });
+
+  it("shows syncing state and disables read-all while batch read is pending", () => {
+    render(
+      <NotificationsPanel
+        notifications={notifications}
+        onMarkAsRead={vi.fn()}
+        onReadAll={vi.fn()}
+        onOpenNotification={vi.fn()}
+        isRefreshing
+        readAllPending
+      />,
+    );
+
+    expect(screen.getByText("Синхронизация уведомлений…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обновление…" })).toBeDisabled();
+  });
 });

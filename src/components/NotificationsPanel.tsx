@@ -7,6 +7,9 @@ interface NotificationsPanelProps {
   onMarkAsRead: (id: string) => void;
   onReadAll: () => void;
   onOpenNotification: (notification: AppNotification) => void;
+  isRefreshing?: boolean;
+  pendingNotificationId?: string | null;
+  readAllPending?: boolean;
 }
 
 export default function NotificationsPanel({
@@ -14,6 +17,9 @@ export default function NotificationsPanel({
   onMarkAsRead,
   onReadAll,
   onOpenNotification,
+  isRefreshing = false,
+  pendingNotificationId = null,
+  readAllPending = false,
 }: NotificationsPanelProps) {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -45,13 +51,18 @@ export default function NotificationsPanel({
         {unreadCount > 0 && (
           <button
             onClick={onReadAll}
+            disabled={readAllPending}
             className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer transition-colors"
           >
             <Check className="w-3 h-3" />
-            Прочесть все
+            {readAllPending ? "Обновление…" : "Прочесть все"}
           </button>
         )}
       </div>
+
+      {isRefreshing && (
+        <div className="mb-2 text-[10px] text-neutral-500 font-mono">Синхронизация уведомлений…</div>
+      )}
 
       {/* List of Notifications */}
       <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[360px]">
@@ -70,6 +81,7 @@ export default function NotificationsPanel({
               <button
                 type="button"
                 onClick={() => onOpenNotification(not)}
+                disabled={readAllPending || pendingNotificationId === not.id}
                 className="block w-full text-left pr-16"
               >
                 {/* Author Name */}
@@ -103,6 +115,7 @@ export default function NotificationsPanel({
                     event.stopPropagation();
                     onMarkAsRead(not.id);
                   }}
+                  disabled={readAllPending || pendingNotificationId === not.id}
                   className="absolute right-2 top-2.5 p-1 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-indigo-400 hover:text-white rounded-md transition-all cursor-pointer"
                   title="Отметить как прочитанное"
                 >
