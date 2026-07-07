@@ -84,6 +84,17 @@ enum TrackAssetStatus {
   DELETED
 }
 
+enum DeliveryChannel {
+  EMAIL
+  PUSH
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
   id                String    @id @default(uuid()) @db.Uuid
   username          String    @unique
@@ -127,6 +138,7 @@ model User {
   resolvedDiscussionThreads   DiscussionThread[]       @relation("DiscussionThreadResolver")
   discussionMessages          DiscussionMessage[]
   uploadedTrackAssets         TrackAsset[]             @relation("TrackAssetUploader")
+  notificationDeliveries      NotificationDelivery[]
 
   @@index([role])
   @@index([createdAt])
@@ -684,10 +696,11 @@ model Notification {
   actorName String?
   createdAt DateTime @default(now())
 
-  user    User    @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
-  actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  track   Track?  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user       User                   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor      User?                  @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  project    Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  track      Track?                 @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
 
   @@index([userId])
   @@index([actorId])
@@ -696,4 +709,23 @@ model Notification {
   @@index([userId, read])
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
+}
+
+model NotificationDelivery {
+  id             String          @id @default(uuid()) @db.Uuid
+  notificationId String          @db.Uuid
+  userId         String          @db.Uuid
+  channel        DeliveryChannel
+  status         DeliveryStatus  @default(PENDING)
+  deliveredAt    DateTime?
+  error          String?
+  createdAt      DateTime        @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([notificationId])
+  @@index([userId, status])
+  @@index([createdAt])
 }
