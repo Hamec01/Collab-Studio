@@ -23,7 +23,7 @@ export const inviteRateLimit = rateLimit({
   limit: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.session.userId ?? req.ip ?? "unknown",
+  keyGenerator: (req) => req.session.userId ?? "unauthenticated",
   handler: (req, res) => sendError(res, 429, "INVITE_RATE_LIMITED", "Too many invite attempts", req.requestId),
 });
 

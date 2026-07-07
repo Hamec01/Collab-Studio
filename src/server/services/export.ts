@@ -1,6 +1,4 @@
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const archiver = require("archiver");
+import * as archiver from "archiver";
 import { Writable } from "stream";
 import { prisma } from "../db";
 import { ReviewStatus } from "@prisma/client";
