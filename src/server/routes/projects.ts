@@ -53,6 +53,7 @@ import {
 } from "../services/audioDelivery";
 import { assertTrackAssetBelongsToTrackProject, canReadTrackAsset } from "../services/trackAssets";
 import { invalidateTrackReviews, createTrackSnapshot, createTrackReview, addReviewApprovers, submitApprovalResponse, removeReviewApprover } from "../services/reviews";
+import { isProjectReady, generateProjectExportStream } from "../services/export";
 
 const router = Router();
 
@@ -1419,6 +1420,23 @@ router.delete(
       await removeReviewApprover(tx, reviewId, userId, reason);
     });
     res.json({ success: true });
+  }),
+);
+
+router.get(
+  "/:projectId/export",
+  requireProjectMember,
+  asyncHandler(async (req, res) => {
+    const { projectId } = req.params;
+    const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+    
+    // Optional: block export if not ready, but usually we allow draft export or enforce it depending on policy
+    // For now, allow any member to export the project.
+    
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${project.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_export.zip"`);
+    
+    await generateProjectExportStream(projectId, res);
   }),
 );
 
