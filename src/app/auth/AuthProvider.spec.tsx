@@ -6,6 +6,8 @@ import { ApiError } from "../../api/client";
 import { AuthProvider, useAuth } from "./AuthProvider";
 
 vi.mock("../../api/auth", () => ({
+  acknowledgeAge: vi.fn(),
+  confirmEmailVerification: vi.fn(),
   getAuthProviders: vi.fn(),
   getCurrentUser: vi.fn(),
   login: vi.fn(),
@@ -13,8 +15,10 @@ vi.mock("../../api/auth", () => ({
   logout: vi.fn(),
 }));
 
-import { getAuthProviders, getCurrentUser, login, logout, register } from "../../api/auth";
+import { acknowledgeAge, confirmEmailVerification, getAuthProviders, getCurrentUser, login, logout, register } from "../../api/auth";
 
+const acknowledgeAgeMock = vi.mocked(acknowledgeAge);
+const confirmEmailVerificationMock = vi.mocked(confirmEmailVerification);
 const getAuthProvidersMock = vi.mocked(getAuthProviders);
 const getCurrentUserMock = vi.mocked(getCurrentUser);
 const loginMock = vi.mocked(login);
@@ -52,13 +56,9 @@ function AuthProbe() {
       >
         trigger-401
       </button>
-      <button
-        onClick={() => {
-          void auth.logout();
-        }}
-      >
-        logout
-      </button>
+      <button onClick={() => { void auth.logout(); }}>logout</button>
+      <button onClick={() => { void auth.register({ username: "new-user", displayName: "New User", email: "new@example.com", password: "123456789012", ageAcknowledged: true }); }}>register</button>
+      <button onClick={() => { void auth.acknowledgeAge(); }}>ack-age</button>
     </div>
   );
 }
@@ -66,9 +66,11 @@ function AuthProbe() {
 describe("AuthProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getAuthProvidersMock.mockResolvedValue({ googleOAuthEnabled: true });
+    getAuthProvidersMock.mockResolvedValue({ googleOAuthEnabled: true, publicRegistrationEnabled: true });
     loginMock.mockResolvedValue({ user: makeUser("u-login") });
-    registerMock.mockResolvedValue({ user: makeUser("u-reg") });
+    registerMock.mockResolvedValue({ user: makeUser("u-reg"), verificationToken: "token-12345678901234567890" });
+    confirmEmailVerificationMock.mockResolvedValue({ success: true });
+    acknowledgeAgeMock.mockResolvedValue({ success: true, user: makeUser("u-age") });
     logoutMock.mockResolvedValue({ success: true });
     window.history.replaceState({}, "", "/app");
   });
@@ -118,6 +120,39 @@ describe("AuthProvider", () => {
     await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("unauthenticated"));
     expect(screen.getByTestId("expired").textContent).toBe("true");
     expect(screen.getByTestId("user").textContent).toBe("none");
+  });
+
+  it("register auto-confirms email and refreshes current user", async () => {
+    const user = userEvent.setup();
+    getCurrentUserMock
+      .mockResolvedValueOnce({ user: makeUser("bootstrap") })
+      .mockResolvedValueOnce({ user: { ...makeUser("u-reg"), emailVerifiedAt: "2026-07-07T00:00:00.000Z" } });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("authenticated"));
+    await user.click(screen.getByRole("button", { name: "register" }));
+    await waitFor(() => expect(screen.getByTestId("user").textContent).toBe("u-reg"));
+    expect(confirmEmailVerificationMock).toHaveBeenCalledWith("token-12345678901234567890");
+  });
+
+  it("acknowledges age and refreshes current user", async () => {
+    const user = userEvent.setup();
+    getCurrentUserMock.mockResolvedValue({ user: makeUser("u1") });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("phase").textContent).toBe("authenticated"));
+    await user.click(screen.getByRole("button", { name: "ack-age" }));
+    await waitFor(() => expect(acknowledgeAgeMock).toHaveBeenCalled());
   });
 
   it("logout clears auth state", async () => {

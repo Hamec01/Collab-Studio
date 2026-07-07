@@ -5,7 +5,7 @@ import { AuthUser } from "../types";
 
 interface AuthModalProps {
   onLogin: (payload: { login: string; password: string }) => Promise<void>;
-  onRegister: (payload: { username: string; displayName: string; password: string; email?: string }) => Promise<void>;
+  onRegister: (payload: { username: string; displayName: string; password: string; email?: string; ageAcknowledged: true }) => Promise<void>;
   onGoogleAuth: () => void;
   currentUser: AuthUser | null;
   onLogout: () => Promise<void> | void;
@@ -14,6 +14,7 @@ interface AuthModalProps {
   sessionExpired?: boolean;
   authMessage?: string;
   googleOAuthEnabled?: boolean;
+  publicRegistrationEnabled?: boolean;
 }
 
 export default function AuthModal({
@@ -27,6 +28,7 @@ export default function AuthModal({
   sessionExpired = false,
   authMessage = "",
   googleOAuthEnabled = false,
+  publicRegistrationEnabled = false,
 }: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [login, setLogin] = useState("");
@@ -34,6 +36,7 @@ export default function AuthModal({
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
+  const [ageAcknowledged, setAgeAcknowledged] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
@@ -42,6 +45,7 @@ export default function AuthModal({
     if (!(err instanceof ApiError)) return "Сервер недоступен. Попробуйте позже.";
     if (err.status === 0 || err.code === "NETWORK_ERROR") return "Сервер недоступен. Попробуйте позже.";
     if (err.status === 401) return "Неверный логин или пароль.";
+    if (err.status === 400) return "Проверьте поля формы и подтвердите 18+.";
     if (err.status === 403 && err.code === "REGISTRATION_DISABLED") return "Публичная регистрация отключена.";
     if (err.status === 409) return "Логин или email уже заняты.";
     if (err.status === 429) return "Слишком много попыток. Повторите позже.";
@@ -61,9 +65,11 @@ export default function AuthModal({
           displayName: displayName.trim(),
           password,
           email: email.trim() || undefined,
+          ageAcknowledged: true,
         });
       }
       setPassword("");
+      setAgeAcknowledged(false);
     } catch (err) {
       setError(mapError(err));
     } finally {
@@ -152,12 +158,13 @@ export default function AuthModal({
         {error && <div className="bg-red-950/50 border border-red-900/30 text-red-400 text-xs p-3 rounded-lg mb-4 text-center">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isLogin ? (
+          {isLogin || !publicRegistrationEnabled ? (
             <div>
-              <label className="block text-xs font-mono text-neutral-400 mb-1">ЛОГИН ИЛИ EMAIL</label>
+              <label htmlFor="auth_login" className="block text-xs font-mono text-neutral-400 mb-1">ЛОГИН ИЛИ EMAIL</label>
               <input
                 type="text"
                 required
+                id="auth_login"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
                 placeholder="username или email"
@@ -167,43 +174,58 @@ export default function AuthModal({
           ) : (
             <>
               <div>
-                <label className="block text-xs font-mono text-neutral-400 mb-1">ЛОГИН</label>
+                <label htmlFor="auth_username" className="block text-xs font-mono text-neutral-400 mb-1">ЛОГИН</label>
                 <input
                   type="text"
                   required
+                  id="auth_username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full bg-neutral-900 border border-neutral-800 focus:border-indigo-500 rounded-lg p-2.5 text-sm text-white focus:outline-none transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-xs font-mono text-neutral-400 mb-1">DISPLAY NAME</label>
+                <label htmlFor="auth_display_name" className="block text-xs font-mono text-neutral-400 mb-1">DISPLAY NAME</label>
                 <input
                   type="text"
                   required
+                  id="auth_display_name"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="w-full bg-neutral-900 border border-neutral-800 focus:border-indigo-500 rounded-lg p-2.5 text-sm text-white focus:outline-none transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-xs font-mono text-neutral-400 mb-1">EMAIL (опционально)</label>
+                <label htmlFor="auth_email" className="block text-xs font-mono text-neutral-400 mb-1">EMAIL</label>
                 <input
                   type="email"
+                  required
+                  id="auth_email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-neutral-900 border border-neutral-800 focus:border-indigo-500 rounded-lg p-2.5 text-sm text-white focus:outline-none transition-colors"
                 />
               </div>
+              <label className="flex items-start gap-3 rounded-lg border border-neutral-800 bg-neutral-900/80 p-3 text-sm text-neutral-200">
+                <input
+                  type="checkbox"
+                  required
+                  checked={ageAcknowledged}
+                  onChange={(e) => setAgeAcknowledged(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-700 bg-neutral-950 text-indigo-500"
+                />
+                <span>Подтверждаю, что мне 18+ и я понимаю, что аккаунт используется для публикации и совместной работы.</span>
+              </label>
             </>
           )}
 
           <div>
-            <label className="block text-xs font-mono text-neutral-400 mb-1">ПАРОЛЬ</label>
+            <label htmlFor="auth_password" className="block text-xs font-mono text-neutral-400 mb-1">ПАРОЛЬ</label>
             <input
               type="password"
               required
               minLength={12}
+              id="auth_password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Минимум 12 символов"
@@ -216,7 +238,7 @@ export default function AuthModal({
             disabled={loading || authLoading}
             className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white font-medium p-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer mt-2"
           >
-            {isLogin ? (
+            {isLogin || !publicRegistrationEnabled ? (
               <>
                 <LogIn className="w-4 h-4" />
                 {loading ? "Вход..." : "Войти"}
@@ -249,6 +271,7 @@ export default function AuthModal({
         )}
 
         <div className="mt-4 text-center">
+          {publicRegistrationEnabled ? (
           <button
             type="button"
             onClick={() => {
@@ -259,6 +282,9 @@ export default function AuthModal({
           >
             {isLogin ? "Создать новый аккаунт" : "Уже есть аккаунт? Войти"}
           </button>
+        ) : (
+          <div className="text-xs text-neutral-500">Публичная регистрация сейчас закрыта. Используйте существующий аккаунт или вход через Google.</div>
+        )}
         </div>
       </div>
     </div>

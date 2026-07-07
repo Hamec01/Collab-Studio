@@ -23,16 +23,16 @@ export default function AppShell({ title, headerRight, showMobileNav, mobileNavI
   return (
     <div className="app-shell min-h-dvh flex flex-col bg-[var(--cs-color-bg)] text-[var(--cs-color-text)]">
       <header className="app-shell-header border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-[var(--cs-color-bg-elevated)]/90 border-[var(--cs-color-border)]">
-        <div className="flex items-center gap-3 select-none">
+        <div className="flex items-center gap-3 select-none rounded-2xl border border-white/10 bg-black/25 px-3 py-2 shadow-[0_0_32px_rgba(99,102,241,0.18)]">
           <img
             src="/logo.png"
             alt="CollabStudio"
-            className="h-12 w-auto object-contain"
-            style={{ filter: "drop-shadow(0 0 8px rgba(255,255,255,0.7)) drop-shadow(0 0 20px rgba(220,200,255,0.4)) brightness(1.25)" }}
+            className="h-14 sm:h-16 w-auto object-contain"
+            style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.85)) drop-shadow(0 0 28px rgba(129,140,248,0.55)) brightness(1.38) contrast(1.08)" }}
           />
           <span
             className="hidden sm:block text-sm font-semibold tracking-widest uppercase"
-            style={{ color: "rgba(255,255,255,0.9)", letterSpacing: "0.18em", fontFamily: "system-ui, sans-serif" }}
+            style={{ color: "rgba(255,255,255,0.98)", letterSpacing: "0.18em", fontFamily: "system-ui, sans-serif", textShadow: "0 0 18px rgba(255,255,255,0.18)" }}
           >
             CollabStudio
           </span>

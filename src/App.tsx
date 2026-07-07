@@ -10,6 +10,7 @@ import AuthModal from "./components/AuthModal";
 import ProjectList from "./components/ProjectList";
 import { type LyricsSaveStatus, type RestoreDraftSnapshot } from "./components/LyricsEditor";
 import NotificationsPanel from "./components/NotificationsPanel";
+import AgeAcknowledgementModal from "./components/AgeAcknowledgementModal";
 import { FolderOpen, MessageSquare, Music } from "lucide-react";
 import { ApiError, isApiError } from "./api/client";
 import { useAuth } from "./app/auth/AuthProvider";
@@ -94,10 +95,12 @@ export default function App() {
     authMessage,
     authSystemError,
     googleOAuthEnabled,
+    publicRegistrationEnabled,
     login,
     register,
     logout,
     startGoogleAuth,
+    acknowledgeAge,
     expireSession,
     withAuth,
   } = useAuth();
@@ -1065,6 +1068,7 @@ export default function App() {
             currentUser={currentUser}
             onLogout={logout}
             googleOAuthEnabled={googleOAuthEnabled}
+            publicRegistrationEnabled={publicRegistrationEnabled}
           />
         ) : undefined
       }
@@ -1086,7 +1090,13 @@ export default function App() {
           sessionExpired={sessionExpired}
           authMessage={authMessage}
           googleOAuthEnabled={googleOAuthEnabled}
+          publicRegistrationEnabled={publicRegistrationEnabled}
         />
+      )}
+
+
+      {currentUser && !currentUser.ageAcknowledgedAt && (
+        <AgeAcknowledgementModal onConfirm={acknowledgeAge} />
       )}
 
       {globalError && (

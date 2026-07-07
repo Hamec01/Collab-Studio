@@ -1,13 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { AuthUser } from "../../types";
-import { getAuthProviders, getCurrentUser, login as loginApi, logout as logoutApi, register as registerApi } from "../../api/auth";
+import { acknowledgeAge as acknowledgeAgeApi, confirmEmailVerification, getAuthProviders, getCurrentUser, login as loginApi, logout as logoutApi, register as registerApi } from "../../api/auth";
 import { isApiError } from "../../api/client";
 import { clearSwCachesOnLogout } from "../../utils/swMessages";
 
 export type AuthPhase = "loading" | "authenticated" | "unauthenticated";
 
 type LoginPayload = { login: string; password: string };
-type RegisterPayload = { username: string; displayName: string; password: string; email?: string };
+type RegisterPayload = { username: string; displayName: string; password: string; email?: string; ageAcknowledged: true };
 
 type AuthContextValue = {
   authPhase: AuthPhase;
@@ -17,10 +17,12 @@ type AuthContextValue = {
   authMessage: string;
   authSystemError: string;
   googleOAuthEnabled: boolean;
+  publicRegistrationEnabled: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   startGoogleAuth: () => void;
+  acknowledgeAge: () => Promise<void>;
   expireSession: () => void;
   withAuth: <T>(operation: () => Promise<T>) => Promise<T>;
 };
@@ -60,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authMessage, setAuthMessage] = useState("");
   const [authSystemError, setAuthSystemError] = useState("");
   const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
+  const [publicRegistrationEnabled, setPublicRegistrationEnabled] = useState(false);
 
   const expireSession = useCallback(() => {
     setCurrentUser(null);
@@ -101,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (controller.signal.aborted) return;
 
         setGoogleOAuthEnabled(providersResult.status === "fulfilled" ? providersResult.value.googleOAuthEnabled : false);
+        setPublicRegistrationEnabled(providersResult.status === "fulfilled" ? providersResult.value.publicRegistrationEnabled : false);
 
         if (userResult.status === "fulfilled") {
           setCurrentUser(userResult.value.user);
@@ -150,7 +154,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(async (payload: RegisterPayload) => {
     const response = await registerApi(payload);
-    setCurrentUser(response.user);
+    if (response.verificationToken) {
+      await confirmEmailVerification(response.verificationToken);
+    }
+    const current = await getCurrentUser();
+    setCurrentUser(current.user);
     setAuthPhase("authenticated");
     setSessionExpired(false);
     setAuthMessage("");
@@ -174,6 +182,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.assign("/api/auth/google");
   }, []);
 
+  const acknowledgeAge = useCallback(async () => {
+    const response = await acknowledgeAgeApi();
+    setCurrentUser(response.user);
+    setAuthMessage("");
+    setAuthSystemError("");
+  }, []);
+
+
   const value = useMemo<AuthContextValue>(
     () => ({
       authPhase,
@@ -183,10 +199,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authMessage,
       authSystemError,
       googleOAuthEnabled,
+      publicRegistrationEnabled,
       login,
       register,
       logout,
       startGoogleAuth,
+      acknowledgeAge,
       expireSession,
       withAuth,
     }),
@@ -198,10 +216,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authMessage,
       authSystemError,
       googleOAuthEnabled,
+      publicRegistrationEnabled,
       login,
       register,
       logout,
       startGoogleAuth,
+      acknowledgeAge,
       expireSession,
       withAuth,
     ],

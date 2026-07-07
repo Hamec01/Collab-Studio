@@ -144,7 +144,11 @@ async function clearGoogleSessionState(req: Request) {
 router.get(
   "/providers",
   asyncHandler(async (_req, res) => {
-    res.json({ googleOAuthEnabled: isGoogleOAuthConfigured() });
+    const config = getConfig();
+    res.json({
+      googleOAuthEnabled: isGoogleOAuthConfigured(config),
+      publicRegistrationEnabled: config.ALLOW_PUBLIC_REGISTRATION,
+    });
   }),
 );
 
@@ -453,6 +457,24 @@ router.get(
 
       redirectAuthError(res, "google_auth_failed");
     }
+  }),
+);
+
+router.post(
+  "/acknowledge-age",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.user) {
+      throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
+    }
+
+    const safeUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { ageAcknowledgedAt: req.user.ageAcknowledgedAt ?? new Date() },
+      select: safeUserSelect,
+    });
+
+    res.json({ success: true, user: serializeUser(safeUser) });
   }),
 );
 
