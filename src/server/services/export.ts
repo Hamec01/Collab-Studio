@@ -1,4 +1,6 @@
-import * as archiver from "archiver";
+import type { Archiver, ArchiverOptions } from "archiver";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const archiverFactory = require("archiver") as (format: string, options?: ArchiverOptions) => Archiver;
 import { Writable } from "stream";
 import { prisma } from "../db";
 import { ReviewStatus } from "@prisma/client";
@@ -48,7 +50,7 @@ export async function generateProjectExportStream(projectId: string, outputStrea
     },
   });
 
-  const archive = archiver("zip", { zlib: { level: 9 } });
+  const archive = archiverFactory("zip", { zlib: { level: 9 } });
 
   archive.on("error", (err) => {
     throw err;
