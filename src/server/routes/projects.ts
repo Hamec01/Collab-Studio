@@ -52,6 +52,7 @@ import {
   sendLocalAudioResponse,
 } from "../services/audioDelivery";
 import { assertTrackAssetBelongsToTrackProject, canReadTrackAsset } from "../services/trackAssets";
+import { invalidateTrackReviews, createTrackSnapshot, createTrackReview, addReviewApprovers, submitApprovalResponse, removeReviewApprover } from "../services/reviews";
 
 const router = Router();
 
@@ -1097,13 +1098,17 @@ router.post(
     const preparedLyrics = "document" in input
       ? prepareLyricsWrite({ document: input.document, baseRevision: 0, leaseToken: "" })
       : prepareLyricsWrite({ content: input.lyrics, baseRevision: 0, leaseToken: "" });
-    const version = await prisma.lyricVersion.create({
-      data: {
-        trackId,
-        ...structuredVersionWriteData(preparedLyrics),
-        label: input.label,
-        authorId: user.id,
-      },
+    const version = await prisma.$transaction(async (tx) => {
+      const v = await tx.lyricVersion.create({
+        data: {
+          trackId,
+          ...structuredVersionWriteData(preparedLyrics),
+          label: input.label,
+          authorId: user.id,
+        },
+      });
+      await invalidateTrackReviews(tx, trackId);
+      return v;
     });
     res.status(201).json(serializeLyricVersion(version));
   }),
@@ -1365,6 +1370,56 @@ router.get(
     next();
   }),
   streamTrackAssetHandler,
+);
+
+router.post(
+  "/:projectId/tracks/:trackId/reviews",
+  requireProjectMember,
+  asyncHandler(async (req, res) => {
+    const { projectId, trackId } = trackParamsSchema.parse(req.params);
+    const { title, approverIds } = req.body;
+    const user = req.user!;
+    await getTrackOrThrow(projectId, trackId);
+    
+    const review = await prisma.$transaction(async (tx) => {
+      const snapshot = await createTrackSnapshot(tx, trackId, title || "");
+      const newReview = await createTrackReview(tx, trackId, snapshot.id, user.id);
+      if (approverIds && Array.isArray(approverIds)) {
+        await addReviewApprovers(tx, newReview.id, approverIds);
+      }
+      return newReview;
+    });
+    res.status(201).json(review);
+  }),
+);
+
+router.post(
+  "/:projectId/tracks/:trackId/reviews/:reviewId/approvals",
+  requireProjectMember,
+  asyncHandler(async (req, res) => {
+    const { reviewId } = req.params;
+    const { status, note } = req.body;
+    const user = req.user!;
+    
+    await prisma.$transaction(async (tx) => {
+      await submitApprovalResponse(tx, reviewId, user.id, status, note);
+    });
+    res.json({ success: true });
+  }),
+);
+
+router.delete(
+  "/:projectId/tracks/:trackId/reviews/:reviewId/approvers/:userId",
+  requireProjectOwner,
+  asyncHandler(async (req, res) => {
+    const { reviewId, userId } = req.params;
+    const { reason } = req.body;
+    
+    await prisma.$transaction(async (tx) => {
+      await removeReviewApprover(tx, reviewId, userId, reason);
+    });
+    res.json({ success: true });
+  }),
 );
 
 export default router;

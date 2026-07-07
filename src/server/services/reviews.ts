@@ -73,5 +73,59 @@ export async function submitApprovalResponse(
     },
   });
 
-  // Future slice: evaluate if review status transitions to READY or INVALIDATED
+  await evaluateReviewReadyStatus(tx, reviewId);
+}
+
+export async function evaluateReviewReadyStatus(tx: Prisma.TransactionClient, reviewId: string) {
+  const approvers = await tx.trackReviewApprover.findMany({
+    where: { reviewId },
+  });
+
+  const activeApprovers = approvers.filter((a) => a.status !== ApproverStatus.REMOVED);
+  const allApproved = activeApprovers.length > 0 && activeApprovers.every((a) => a.status === ApproverStatus.APPROVED);
+
+  const review = await tx.trackReview.findUniqueOrThrow({ where: { id: reviewId } });
+  
+  if (review.status === ReviewStatus.INVALIDATED) {
+    return; // Don't change status if already invalidated
+  }
+
+  if (allApproved && review.status !== ReviewStatus.READY) {
+    await tx.trackReview.update({
+      where: { id: reviewId },
+      data: { status: ReviewStatus.READY },
+    });
+  } else if (!allApproved && review.status === ReviewStatus.READY) {
+    await tx.trackReview.update({
+      where: { id: reviewId },
+      data: { status: ReviewStatus.PENDING },
+    });
+  }
+}
+
+export async function removeReviewApprover(tx: Prisma.TransactionClient, reviewId: string, userId: string, reason?: string) {
+  const approver = await tx.trackReviewApprover.findUniqueOrThrow({
+    where: { reviewId_userId: { reviewId, userId } },
+  });
+
+  await tx.trackReviewApprover.update({
+    where: { id: approver.id },
+    data: {
+      status: ApproverStatus.REMOVED,
+      note: reason,
+      respondedAt: new Date(),
+    },
+  });
+
+  await evaluateReviewReadyStatus(tx, reviewId);
+}
+
+export async function invalidateTrackReviews(tx: Prisma.TransactionClient, trackId: string) {
+  await tx.trackReview.updateMany({
+    where: {
+      trackId,
+      status: { in: [ReviewStatus.PENDING, ReviewStatus.READY] },
+    },
+    data: { status: ReviewStatus.INVALIDATED },
+  });
 }

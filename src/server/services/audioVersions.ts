@@ -5,6 +5,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { AppError } from "../middleware/errors";
 import { recordActivityEvent } from "./activity";
 import { createProjectMemberNotifications } from "./notifications";
+import { invalidateTrackReviews } from "./reviews";
 import { buildTrackAssetCreateDataFromAudioVersion, resolveTrackAssetStoragePath } from "./trackAssets";
 
 export type CreateAudioVersionWithTrackAssetInput = {
@@ -98,9 +99,13 @@ async function createAudioVersionWithTrackAssetTx(
       trackTitle: track.title,
       audioVersionId: audio.id,
       versionNumber,
-      originalFilename: audio.originalFilename,
+      originalFilename: input.originalFilename,
     },
   });
+
+  if (existingAudioCount === 0) {
+    await invalidateTrackReviews(tx, input.trackId);
+  }
 
   return audio;
 }
