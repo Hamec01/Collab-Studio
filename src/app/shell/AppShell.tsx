@@ -22,16 +22,16 @@ export default function AppShell({ title, headerRight, showMobileNav, mobileNavI
   return (
     <div className="app-shell min-h-dvh flex flex-col bg-[var(--cs-color-bg)] text-[var(--cs-color-text)]">
       <header className="app-shell-header border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-[var(--cs-color-bg-elevated)]/90 border-[var(--cs-color-border)]">
-        <div className="flex items-center gap-2.5 select-none">
+        <div className="flex items-center gap-3 select-none">
           <img
             src="/logo.png"
             alt="CollabStudio"
-            className="h-9 w-auto object-contain"
-            style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.45)) drop-shadow(0 0 12px rgba(200,180,255,0.25)) brightness(1.15)" }}
+            className="h-12 w-auto object-contain"
+            style={{ filter: "drop-shadow(0 0 8px rgba(255,255,255,0.7)) drop-shadow(0 0 20px rgba(220,200,255,0.4)) brightness(1.25)" }}
           />
           <span
             className="hidden sm:block text-sm font-semibold tracking-widest uppercase"
-            style={{ color: "rgba(255,255,255,0.85)", letterSpacing: "0.18em", fontFamily: "system-ui, sans-serif" }}
+            style={{ color: "rgba(255,255,255,0.9)", letterSpacing: "0.18em", fontFamily: "system-ui, sans-serif" }}
           >
             CollabStudio
           </span>
