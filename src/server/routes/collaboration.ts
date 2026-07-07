@@ -12,6 +12,7 @@ import {
   createLyricsDiscussionThreadSchema,
   createTaskSchema,
   discussionThreadParamsSchema,
+  projectTaskParamsSchema,
   reanchorLyricsDiscussionThreadSchema,
   resolveCommentSchema,
   resolveLyricsDiscussionThreadSchema,
@@ -26,6 +27,7 @@ import {
   serializeChatMessage,
   serializeComment,
   serializeProjectChatMessage,
+  serializeProjectTask,
   serializeTask,
 } from "../serializers/collaboration";
 import { discussionThreadInclude, serializeLyricsDiscussionThread } from "../serializers/discussions";
@@ -431,6 +433,82 @@ router.post(
       include: chatInclude,
     });
     res.status(201).json(serializeChatMessage(message));
+  }),
+);
+
+router.post(
+  "/:projectId/tasks",
+  (req, _res, next) => {
+    projectParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    requireCapability(req, "canCreateTask");
+    const { projectId } = projectParamsSchema.parse(req.params);
+    const input = createTaskSchema.parse(req.body);
+
+    const task = await prisma.$transaction(
+      async (tx) => {
+        const project = await tx.project.findUnique({ where: { id: projectId }, select: { id: true } });
+        if (!project) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+        const assignedToId = await resolveAssignee(tx, projectId, input.assignedToId, input.assignedTo);
+        return tx.projectTask.create({
+          data: {
+            projectId,
+            createdById: user.id,
+            assignedToId: assignedToId ?? null,
+            title: input.title,
+            description: input.description ?? null,
+          },
+          include: taskInclude,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    res.status(201).json(serializeProjectTask(task));
+  }),
+);
+
+router.put(
+  "/:projectId/tasks/:taskId",
+  (req, _res, next) => {
+    projectTaskParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectEditor,
+  asyncHandler(async (req, res) => {
+    requireVerifiedWriter(req);
+    requireCapability(req, "canCreateTask");
+    const { projectId, taskId } = projectTaskParamsSchema.parse(req.params);
+    const input = updateTaskSchema.parse(req.body);
+
+    const task = await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.projectTask.findFirst({
+          where: { id: taskId, projectId },
+          select: { id: true },
+        });
+        if (!existing) throw new AppError(404, "TASK_NOT_FOUND", "Task not found");
+
+        const assignedToId = await resolveAssignee(tx, projectId, input.assignedToId, input.assignedTo);
+        return tx.projectTask.update({
+          where: { id: taskId },
+          data: {
+            title: input.title,
+            description: input.description,
+            status: input.status,
+            ...(assignedToId !== undefined ? { assignedToId } : {}),
+          },
+          include: taskInclude,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    res.json(serializeProjectTask(task));
   }),
 );
 

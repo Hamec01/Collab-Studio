@@ -34,7 +34,6 @@ import {
   structuredVersionWriteData,
 } from "../services/structuredLyrics";
 import { createProjectWorkspace } from "../services/projectCreation";
-import { collaborationUserSelect } from "../serializers/collaboration";
 import {
   canAcquireLyricsLease,
   nextLyricsLeaseExpiry,

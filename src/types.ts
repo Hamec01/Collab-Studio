@@ -262,6 +262,7 @@ export interface Project {
   participants: ProjectMember[];
   members: ProjectMember[];
   chat?: ChatMessage[];
+  tasks?: Task[];
   tracks: Track[];
   createdAt: string;
   updatedAt: string;

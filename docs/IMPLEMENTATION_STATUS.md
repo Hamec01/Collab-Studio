@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 6 июля 2026 года (Stage 6 slice 4 local PASS)
+Последнее обновление: 7 июля 2026 года (Stage 6 slice 5 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 6`
-- Active slice: Stage 6 slice 4 — project chat foundation completed locally; additive project-scoped chat model/API/UI is in place, production untouched
+- Active slice: Stage 6 slice 5 — project tasks foundation completed locally; additive project-scoped tasks model/API/UI is in place, production untouched
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -43,7 +43,7 @@
 | Stage 4B — WYSIWYG и stable anchors | completed | Production completed at app commit `ca6b93e`; migrations applied, API smoke PASS, owner-confirmed authenticated mobile smoke PASS |
 | Stage 5A — TrackAsset migration | completed | Production foundation, delivery routes and asset-first frontend cutover are live; legacy fallback preserved; backfill execute NOT run |
 | Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
-| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 4 completed locally: mobile line comments sheet, hardened track chat/tasks UX, and additive project chat foundation; production deploy not performed |
+| Stage 6 — Discussions, chats, tasks, activity, Inbox | in_progress | Slice 5 completed locally: mobile line comments sheet, hardened track chat/tasks UX, additive project chat foundation, and additive project tasks foundation; production deploy not performed |
 | Stage 7 — Ready review, retention и export | pending | Не начат |
 | Stage 8 — PWA и offline lyrics | pending | Не начат |
 | Stage 9 — Public profiles и publications | pending | Не начат |
@@ -176,7 +176,14 @@ Stage 5A:
     - right panel now shows project chat when a project is selected without an active track
     - project chat reuses hardened async/read-only `ChatRoom` UX with project-specific copy
     - production migration and deploy intentionally not performed
-24. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
+24. Stage 6 slice 5 завершён локально:
+    - added additive `ProjectTask` foundation without changing existing track task storage or contracts
+    - full `Project` responses now include additive project-scoped `tasks`
+    - new `POST/PUT /api/projects/:projectId/tasks` routes use existing membership and `canCreateTask` checks
+    - right panel for project-without-track now has chat/tasks tabs instead of chat-only
+    - project tasks reuse hardened async/read-only `TaskBoard` UX with project-specific copy
+    - production migration and deploy intentionally not performed
+25. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
 
 ## Журнал slices
 

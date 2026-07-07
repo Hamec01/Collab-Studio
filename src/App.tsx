@@ -23,6 +23,7 @@ import {
   createComment,
   createLyricVersion,
   createProject,
+  createProjectTask,
   createTask,
   createTrack,
   getTrack,
@@ -33,6 +34,7 @@ import {
   removeProjectMember,
   resolveComment,
   updateProjectMemberRole,
+  updateProjectTask,
   updateTask,
   uploadTrackAudio,
   deleteProject,
@@ -72,7 +74,7 @@ import { LyricsDiscussionsSheet } from "./features/track-workspace/lyrics/Lyrics
 import { useLyricsDiscussions } from "./features/track-workspace/lyrics/useLyricsDiscussions";
 import { StickyAudioPlayer } from "./components/StickyAudioPlayer";
 import { normalizeTrackAudioSources, resolveSelectedAudioSource } from "./features/track-workspace/audio/normalizeTrackAudio";
-import { ProjectChatPanel } from "./features/project-workspace/ProjectChatPanel";
+import { ProjectContextPanel } from "./features/project-workspace/ProjectContextPanel";
 import Button from "./shared/ui/Button";
 import StateView from "./shared/ui/StateView";
 type MobileTab = "projects" | "editor" | "rightPanel";
@@ -941,6 +943,18 @@ export default function App() {
     await refreshCurrentTrack();
   };
 
+  const handleAddProjectTask = async (title: string, assignedToId?: string) => {
+    if (!activeProject) return;
+    await withAuth(() => createProjectTask(activeProject.id, { title, assignedToId: assignedToId ?? null }));
+    await refreshActiveProject(activeProject.id);
+  };
+
+  const handleUpdateProjectTaskStatus = async (taskId: string, status: Task["status"]) => {
+    if (!activeProject) return;
+    await withAuth(() => updateProjectTask(activeProject.id, taskId, { status }));
+    await refreshActiveProject(activeProject.id);
+  };
+
   const handleAddAnnotation = async (timestampSeconds: number, text: string, trackAssetId: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => createAnnotation(activeProject.id, activeTrack.id, { timestampSeconds, text, trackAssetId }));
@@ -1124,11 +1138,14 @@ export default function App() {
                   onUnauthorized={expireSession}
                 />
               ) : activeProject ? (
-                <ProjectChatPanel
+                <ProjectContextPanel
                   project={activeProject}
                   currentUser={currentUser}
                   canSend={canSendProjectChat}
+                  canEdit={projectRole === "owner" || projectRole === "editor"}
                   onSendMessage={handleSendProjectMessage}
+                  onAddTask={handleAddProjectTask}
+                  onUpdateTaskStatus={handleUpdateProjectTaskStatus}
                 />
               ) : (
                 <StateView kind="empty" message={t("state.sidebar.empty")} className="h-full min-h-[220px] flex items-center" />

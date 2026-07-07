@@ -22,6 +22,11 @@ export const taskParamsSchema = trackEntityParamsSchema.extend({
   taskId: uuidParam,
 });
 
+export const projectTaskParamsSchema = z.object({
+  projectId: uuidParam,
+  taskId: uuidParam,
+});
+
 export const createCommentSchema = z.object({
   text: nonEmptyText(5000),
   lineIndex: z.number().int().min(0).max(100000).nullable().optional(),

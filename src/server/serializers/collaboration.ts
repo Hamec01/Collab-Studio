@@ -1,4 +1,4 @@
-import type { Annotation, ChatMessage, Comment, Notification, Project, ProjectChatMessage, Task, Track, User } from "@prisma/client";
+import type { Annotation, ChatMessage, Comment, Notification, Project, ProjectChatMessage, ProjectTask, Task, Track, User } from "@prisma/client";
 
 export const collaborationUserSelect = {
   id: true,
@@ -23,6 +23,11 @@ type ProjectChatMessageWithAuthor = ProjectChatMessage & {
 };
 
 type TaskWithUsers = Task & {
+  createdBy: CollaborationUser | null;
+  assignedTo: CollaborationUser | null;
+};
+
+type ProjectTaskWithUsers = ProjectTask & {
   createdBy: CollaborationUser | null;
   assignedTo: CollaborationUser | null;
 };
@@ -85,7 +90,18 @@ export function serializeProjectChatMessage(message: ProjectChatMessageWithAutho
   return serializeChatMessageBase(message);
 }
 
-export function serializeTask(task: TaskWithUsers) {
+function serializeTaskBase(task: {
+  id: string;
+  title: string;
+  description: string | null;
+  status: "todo" | "in_progress" | "done";
+  createdById: string | null;
+  createdBy: CollaborationUser | null;
+  assignedToId: string | null;
+  assignedTo: CollaborationUser | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
   return {
     id: task.id,
     title: task.title,
@@ -100,6 +116,14 @@ export function serializeTask(task: TaskWithUsers) {
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString(),
   };
+}
+
+export function serializeTask(task: TaskWithUsers) {
+  return serializeTaskBase(task);
+}
+
+export function serializeProjectTask(task: ProjectTaskWithUsers) {
+  return serializeTaskBase(task);
 }
 
 export function serializeAnnotation(annotation: AnnotationWithAuthor) {

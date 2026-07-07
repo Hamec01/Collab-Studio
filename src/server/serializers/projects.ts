@@ -5,6 +5,7 @@ import {
   serializeChatMessage,
   serializeComment,
   serializeProjectChatMessage,
+  serializeProjectTask,
   serializeTask,
 } from "./collaboration";
 import { serializeLegacyCommentAsDiscussion, serializeLyricsDiscussionThread, discussionThreadInclude } from "./discussions";
@@ -75,6 +76,13 @@ export const projectRelationsInclude = {
   },
   projectChatMessages: {
     include: { author: { select: collaborationUserSelect } },
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+  },
+  tasks: {
+    include: {
+      createdBy: { select: collaborationUserSelect },
+      assignedTo: { select: collaborationUserSelect },
+    },
     orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
   },
 } satisfies Prisma.ProjectInclude;
@@ -206,6 +214,7 @@ export function serializeProject(project: ProjectWithRelations, currentUserId?: 
     participants: members,
     members,
     chat: (project.projectChatMessages ?? []).map(serializeProjectChatMessage),
+    tasks: (project.tasks ?? []).map(serializeProjectTask),
     tracks: (project.tracks ?? []).map(serializeTrack),
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),

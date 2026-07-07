@@ -209,6 +209,27 @@ export function postProjectChatMessage(projectId: string, payload: { text: strin
   });
 }
 
+export function createProjectTask(
+  projectId: string,
+  payload: { title: string; description?: string; assignedToId?: string | null },
+) {
+  return apiRequest<Task>(`/api/projects/${projectId}/tasks`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function updateProjectTask(
+  projectId: string,
+  taskId: string,
+  payload: { title?: string; description?: string | null; status?: "todo" | "in-progress" | "done"; assignedToId?: string | null },
+) {
+  return apiRequest<Task>(`/api/projects/${projectId}/tasks/${taskId}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
 export function createTask(
   projectId: string,
   trackId: string,

@@ -12,9 +12,29 @@ interface TaskBoardProps {
   onUpdateTaskStatus: (taskId: string, status: "todo" | "in-progress" | "done") => Promise<void> | void;
   participants: ProjectMember[];
   canEdit: boolean;
+  boardTitle?: string;
+  description?: string;
+  emptyTodoLabel?: string;
+  emptyProgressLabel?: string;
+  emptyDoneLabel?: string;
+  taskPlaceholder?: string;
+  readOnlyMessage?: string;
 }
 
-export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, participants, canEdit }: TaskBoardProps) {
+export default function TaskBoard({
+  tasks,
+  onAddTask,
+  onUpdateTaskStatus,
+  participants,
+  canEdit,
+  boardTitle = "ЗАДАЧИ И СТАТУСЫ",
+  description = "Трекинг процесса работы над треком",
+  emptyTodoLabel = "Задач нет",
+  emptyProgressLabel = "Нет текущих задач",
+  emptyDoneLabel = "Нет готовых задач",
+  taskPlaceholder = "Например: Переписать бэк-вокал припева",
+  readOnlyMessage = "У вас нет прав создавать задачи и менять их статусы.",
+}: TaskBoardProps) {
   const [title, setTitle] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -91,8 +111,8 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
     <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 h-full flex flex-col">
       <div className="flex items-center justify-between border-b border-neutral-900 pb-2 mb-3">
         <div>
-          <h3 className="text-xs font-mono text-neutral-400 font-semibold uppercase tracking-wider">ЗАДАЧИ И СТАТУСЫ</h3>
-          <p className="text-[10px] text-neutral-500 mt-0.5">Трекинг процесса работы над треком</p>
+          <h3 className="text-xs font-mono text-neutral-400 font-semibold uppercase tracking-wider">{boardTitle}</h3>
+          <p className="text-[10px] text-neutral-500 mt-0.5">{description}</p>
         </div>
         <button
           onClick={() => setShowAdd(!showAdd)}
@@ -119,7 +139,7 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Например: Переписать бэк-вокал припева"
+              placeholder={taskPlaceholder}
               className="w-full bg-neutral-950 border border-neutral-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
               disabled={isSubmitting}
             />
@@ -162,7 +182,7 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
 
       {!canEdit && (
         <p className="mb-3 text-[11px] text-neutral-500">
-          У вас нет прав создавать задачи и менять их статусы.
+          {readOnlyMessage}
         </p>
       )}
 
@@ -176,7 +196,7 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
           </div>
           <div className="space-y-2">
             {todoTasks.length === 0 ? (
-              <p className="text-[10px] text-neutral-500 italic px-1">Задач нет</p>
+              <p className="text-[10px] text-neutral-500 italic px-1">{emptyTodoLabel}</p>
             ) : (
               todoTasks.map(renderTaskCard)
             )}
@@ -191,7 +211,7 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
           </div>
           <div className="space-y-2">
             {progressTasks.length === 0 ? (
-              <p className="text-[10px] text-neutral-500 italic px-1">Нет текущих задач</p>
+              <p className="text-[10px] text-neutral-500 italic px-1">{emptyProgressLabel}</p>
             ) : (
               progressTasks.map(renderTaskCard)
             )}
@@ -206,7 +226,7 @@ export default function TaskBoard({ tasks, onAddTask, onUpdateTaskStatus, partic
           </div>
           <div className="space-y-2">
             {doneTasks.length === 0 ? (
-              <p className="text-[10px] text-neutral-500 italic px-1">Нет готовых задач</p>
+              <p className="text-[10px] text-neutral-500 italic px-1">{emptyDoneLabel}</p>
             ) : (
               doneTasks.map(renderTaskCard)
             )}
