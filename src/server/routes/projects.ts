@@ -253,7 +253,7 @@ async function resolveOwnedDirectory(root: string, segments: string[]) {
   return current;
 }
 
-async function removeProjectUploadsTree(projectId: string) {
+export async function removeProjectUploadsTree(projectId: string) {
   const projectUploadRoot = await resolveOwnedDirectory(UPLOADS_ROOT, [projectId]);
   await fsp.rm(projectUploadRoot, { recursive: true, force: true });
   console.info("Removed project uploads tree", { projectId });

@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import { removeProjectUploadsTree } from "../services/audioVersions";
+import { removeProjectUploadsTree } from "../routes/projects";
 
 async function purgeTrash() {
   const force = process.argv.includes("--force-final");
@@ -15,7 +15,7 @@ async function purgeTrash() {
     include: {
       tracks: {
         include: {
-          assets: { where: { isPrimary: true, status: "READY" } },
+          trackAssets: { where: { isPrimary: true, status: "READY" } },
         },
       },
     },
@@ -27,7 +27,7 @@ async function purgeTrash() {
   }
 
   for (const project of projectsToPurge) {
-    const hasFinalAssets = project.tracks.some((t) => t.assets.length > 0);
+    const hasFinalAssets = project.tracks.some((t) => t.trackAssets.length > 0);
 
     if (hasFinalAssets && !force) {
       console.warn(`[SKIP] Project ${project.id} (${project.title}) contains final assets and was skipped. Use --force-final to override.`);

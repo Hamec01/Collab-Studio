@@ -15,7 +15,7 @@ describe("Export Service", () => {
     const project = await prisma.project.create({
       data: {
         title: "Test Project",
-        type: "original",
+        type: "single",
       },
     });
 

@@ -22,7 +22,9 @@ export default function AppShell({ title, headerRight, showMobileNav, mobileNavI
   return (
     <div className="app-shell min-h-dvh flex flex-col bg-[var(--cs-color-bg)] text-[var(--cs-color-text)]">
       <header className="app-shell-header border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-[var(--cs-color-bg-elevated)]/90 border-[var(--cs-color-border)]">
-        <div className="flex items-center gap-2 select-none text-white font-bold tracking-wide">{title}</div>
+        <div className="flex items-center gap-2 select-none text-white font-bold tracking-wide">
+          <img src="/logo.png" alt={title} className="h-6 w-auto object-contain" />
+        </div>
         {headerRight}
       </header>
 

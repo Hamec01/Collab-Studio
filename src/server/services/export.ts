@@ -40,7 +40,7 @@ export async function generateProjectExportStream(projectId: string, outputStrea
     include: {
       tracks: {
         include: {
-          assets: { where: { isPrimary: true, status: "READY" }, take: 1 },
+          trackAssets: { where: { isPrimary: true, status: "READY" }, take: 1 },
         },
         orderBy: { createdAt: "asc" }
       },
@@ -80,7 +80,7 @@ export async function generateProjectExportStream(projectId: string, outputStrea
     const trackNumber = String(i + 1).padStart(2, "0");
     const trackFolderName = `${trackNumber} - ${sanitizeFilename(track.title)}`;
 
-    const primaryAsset = track.assets[0];
+    const primaryAsset = track.trackAssets[0];
     if (primaryAsset) {
       if (primaryAsset.storageProvider === "local" && primaryAsset.storageKey) {
         const filePath = resolveTrackAssetStoragePath(config.UPLOADS_DIR, primaryAsset.storageKey);
@@ -101,8 +101,8 @@ export async function generateProjectExportStream(projectId: string, outputStrea
       orderBy: { createdAt: "desc" },
     });
 
-    if (latestLyricVersion && latestLyricVersion.content) {
-      archive.append(latestLyricVersion.content, { name: `lyrics/${trackFolderName}.txt` });
+    if (latestLyricVersion && latestLyricVersion.plainText) {
+      archive.append(latestLyricVersion.plainText, { name: `lyrics/${trackFolderName}.txt` });
     }
   }
 
