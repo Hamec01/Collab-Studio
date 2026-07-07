@@ -205,7 +205,8 @@ Stage 5A:
     - activity entries now deep-link into exact track/project context where deterministically available
     - existing notifications remain the source for messages/requests and unread controls
     - production deploy intentionally not performed
-29. Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения.
+
+## 29. Следующий шаг — только следующий Stage 7 slice после отдельного подтверждения.
 
 ## Журнал slices
 
@@ -237,6 +238,12 @@ Stage 5A:
 | 2026-07-07 | Stage 6 slice 7 | Локально добавлены controlled notification polling и unread consistency: notifications revalidate on interval/focus/visibility/online, duplicate read actions are blocked while pending, and unread state is reconciled after mutations | `main`, local diff | focused lint + Vitest PASS; production untouched | Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения |
 | 2026-07-07 | Stage 6 slice 8 | Локально добавлен project activity foundation: additive `Project.activity`, compact activity tab in project workspace, and append-only activity writes for comments/chat/tasks/audio uploads on top of existing `ActivityEvent`; production untouched | `main`, local diff | focused Vitest + isolated API integration PASS; production untouched | Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения |
 | 2026-07-07 | Stage 6 slice 9 | Локально добавлен inbox split foundation: global activity aggregated from `projects[].activity`, deterministic activity deep-links, and existing notifications retained as messages/requests within a two-tab inbox panel; production untouched | `main`, local diff | focused lint + Vitest PASS; production untouched | Следующий шаг — только следующий Stage 6 slice после отдельного подтверждения |
+
+| 2026-07-07 | Stage 6 slice 10 | Локально добавлен mentions foundation: '@' mentions parser, notification target resolution logic, testing suite. | `main`, local diff | tests PASS |
+| 2026-07-07 | Stage 6 slice 11 | Локально реализована политика email/push: NotificationDelivery model, DeliveryChannel enums, central email router eval, mock email sender. Stage 6 завершён. | `main`, local diff | tests PASS |
+| 2026-07-07 | Stage 7 slice 1 | Локально заложен фундамент для Ready review: TrackSnapshot, TrackReview, TrackReviewApprover models & enums, core creation services. | `main`, local diff | tests PASS |
+
+## 29. Следующий шаг — только следующий Stage 7 slice после отдельного подтверждения.
 
 ## Blockers
 

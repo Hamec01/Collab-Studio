@@ -95,6 +95,19 @@ enum DeliveryStatus {
   FAILED
 }
 
+enum ReviewStatus {
+  PENDING
+  READY
+  INVALIDATED
+}
+
+enum ApproverStatus {
+  PENDING
+  APPROVED
+  REQUESTED_CHANGES
+  REMOVED
+}
+
 model User {
   id                String    @id @default(uuid()) @db.Uuid
   username          String    @unique
@@ -139,6 +152,8 @@ model User {
   discussionMessages          DiscussionMessage[]
   uploadedTrackAssets         TrackAsset[]             @relation("TrackAssetUploader")
   notificationDeliveries      NotificationDelivery[]
+  createdTrackReviews         TrackReview[]            @relation("TrackReviewCreator")
+  trackReviewApprovals        TrackReviewApprover[]    @relation("TrackReviewApproverUser")
 
   @@index([role])
   @@index([createdAt])
@@ -395,6 +410,8 @@ model Track {
   lyricsEditLease   LyricsEditLease?
   discussionThreads DiscussionThread[]
   trackAssets       TrackAsset[]
+  snapshots         TrackSnapshot[]
+  reviews           TrackReview[]
 
   @@index([projectId])
   @@index([projectId, updatedAt])
@@ -431,6 +448,7 @@ model LyricVersion {
   track                   Track              @relation(fields: [trackId], references: [id], onDelete: Cascade)
   author                  User?              @relation(fields: [authorId], references: [id], onDelete: SetNull)
   sourceDiscussionThreads DiscussionThread[]
+  trackSnapshots          TrackSnapshot[]
 
   @@index([trackId])
   @@index([authorId])
@@ -492,13 +510,14 @@ model TrackAsset {
   updatedAt            DateTime          @updatedAt
   deletedAt            DateTime?
 
-  track              Track         @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploadedBy         User?         @relation("TrackAssetUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
-  sourceAsset        TrackAsset?   @relation("TrackAssetDerivation", fields: [sourceAssetId], references: [id], onDelete: SetNull)
-  derivedAssets      TrackAsset[]  @relation("TrackAssetDerivation")
-  legacyAudioVersion AudioVersion? @relation("TrackAssetLegacyAudioVersion", fields: [legacyAudioVersionId], references: [id], onDelete: SetNull)
-  annotations        Annotation[]
+  track               Track                @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy          User?                @relation("TrackAssetUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  sourceAsset         TrackAsset?          @relation("TrackAssetDerivation", fields: [sourceAssetId], references: [id], onDelete: SetNull)
+  derivedAssets       TrackAsset[]         @relation("TrackAssetDerivation")
+  legacyAudioVersion  AudioVersion?        @relation("TrackAssetLegacyAudioVersion", fields: [legacyAudioVersionId], references: [id], onDelete: SetNull)
+  annotations         Annotation[]
+  trackSnapshotAssets TrackSnapshotAsset[]
 
   @@unique([legacyAudioVersionId])
   @@index([trackId, kind, createdAt])
@@ -728,4 +747,68 @@ model NotificationDelivery {
   @@index([notificationId])
   @@index([userId, status])
   @@index([createdAt])
+}
+
+model TrackSnapshot {
+  id             String   @id @default(uuid()) @db.Uuid
+  trackId        String   @db.Uuid
+  lyricVersionId String?  @db.Uuid
+  title          String
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  track        Track                @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  lyricVersion LyricVersion?        @relation(fields: [lyricVersionId], references: [id], onDelete: SetNull)
+  assets       TrackSnapshotAsset[]
+  reviews      TrackReview[]
+
+  @@index([trackId])
+}
+
+model TrackSnapshotAsset {
+  snapshotId   String @db.Uuid
+  trackAssetId String @db.Uuid
+
+  snapshot   TrackSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  trackAsset TrackAsset    @relation(fields: [trackAssetId], references: [id], onDelete: Restrict)
+
+  @@id([snapshotId, trackAssetId])
+  @@index([trackAssetId])
+}
+
+model TrackReview {
+  id          String       @id @default(uuid()) @db.Uuid
+  trackId     String       @db.Uuid
+  snapshotId  String       @db.Uuid
+  status      ReviewStatus @default(PENDING)
+  createdById String?      @db.Uuid
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  track     Track                 @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  snapshot  TrackSnapshot         @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  createdBy User?                 @relation("TrackReviewCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  approvers TrackReviewApprover[]
+
+  @@index([trackId, status])
+  @@index([snapshotId])
+  @@index([createdById])
+}
+
+model TrackReviewApprover {
+  id          String         @id @default(uuid()) @db.Uuid
+  reviewId    String         @db.Uuid
+  userId      String         @db.Uuid
+  status      ApproverStatus @default(PENDING)
+  respondedAt DateTime?
+  note        String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  review TrackReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User        @relation("TrackReviewApproverUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, userId])
+  @@index([reviewId, status])
+  @@index([userId])
 }
