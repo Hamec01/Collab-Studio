@@ -211,6 +211,7 @@ export function serializeProject(project: ProjectWithRelations, currentUserId?: 
     type: project.type,
     coverUrl: project.coverUrl,
     tags: project.tags,
+    deletedAt: project.deletedAt ? project.deletedAt.toISOString() : null,
     currentUserRole,
     owner: owner
       ? {

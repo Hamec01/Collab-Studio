@@ -120,6 +120,7 @@ model User {
   ageAcknowledgedAt DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
 
   authAccounts                AuthAccount[]
   emailVerificationTokens     EmailVerificationToken[]
@@ -221,6 +222,7 @@ model Project {
   entitlements Json        @default("{}")
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
 
   members             ProjectMember[]
   invites             ProjectInvite[]

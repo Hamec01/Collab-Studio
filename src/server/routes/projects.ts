@@ -314,9 +314,30 @@ router.get(
         members: {
           some: { userId: user.id },
         },
+        deletedAt: null,
       },
       include: projectRelationsInclude,
       orderBy: { updatedAt: "desc" },
+    });
+
+    res.json(projects.map((project) => serializeProject(project, user.id)));
+  }),
+);
+
+router.get(
+  "/trash",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const projects = await prisma.project.findMany({
+      where: {
+        members: {
+          some: { userId: user.id },
+        },
+        deletedAt: { not: null },
+      },
+      include: projectRelationsInclude,
+      orderBy: { deletedAt: "desc" },
     });
 
     res.json(projects.map((project) => serializeProject(project, user.id)));
@@ -392,13 +413,42 @@ router.delete(
   requireProjectOwner,
   asyncHandler(async (req, res) => {
     const { projectId } = projectParamsSchema.parse(req.params);
+    const force = req.query.force === "true";
+
     await prisma.$transaction(async (tx) => {
-      const existing = await tx.project.findUnique({ where: { id: projectId }, select: { id: true } });
-      if (!existing) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
-      await tx.project.delete({ where: { id: projectId } });
+      const existing = await tx.project.findUnique({ where: { id: projectId } });
+      if (!existing || existing.deletedAt) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+
+      const readyAssets = await tx.trackAsset.count({
+        where: { projectId, isPrimary: true, status: "READY" },
+      });
+
+      if (readyAssets > 0 && !force) {
+        throw new AppError(400, "FINAL_ASSETS_PRESENT", "Project contains final assets and cannot be deleted silently. Use ?force=true to override.");
+      }
+
+      await tx.project.update({ where: { id: projectId }, data: { deletedAt: new Date() } });
     });
-    await removeProjectUploadsTree(projectId);
-    res.json({ success: true });
+    
+    res.json({ success: true, message: "Project moved to trash" });
+  }),
+);
+
+router.post(
+  "/:projectId/restore",
+  (req, _res, next) => {
+    projectParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectOwner,
+  asyncHandler(async (req, res) => {
+    const { projectId } = projectParamsSchema.parse(req.params);
+    const existing = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!existing) throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
+    if (!existing.deletedAt) throw new AppError(400, "PROJECT_NOT_DELETED", "Project is not in trash");
+    
+    await prisma.project.update({ where: { id: projectId }, data: { deletedAt: null } });
+    res.json({ success: true, message: "Project restored from trash" });
   }),
 );
 
