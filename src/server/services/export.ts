@@ -1,9 +1,5 @@
 import type { Archiver, ArchiverOptions } from "archiver";
 import { createRequire } from "node:module";
-// Works in ESM (tsx tests/dev) AND in esbuild CJS bundle (require is available there)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _req = typeof (globalThis as any).require !== "undefined" ? (globalThis as any).require : createRequire(import.meta.url);
-const archiverFactory = _req("archiver") as (format: string, options?: ArchiverOptions) => Archiver;
 import { Writable } from "stream";
 import { prisma } from "../db";
 import { ReviewStatus } from "@prisma/client";
@@ -12,7 +8,12 @@ import * as fsp from "fs/promises";
 import * as path from "path";
 import { getConfig } from "../config";
 
+const _require = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const archiverFactory = _require("archiver") as (format: string, options?: ArchiverOptions) => Archiver;
+
 const config = getConfig();
+
 
 export async function isProjectReady(projectId: string) {
   const tracks = await prisma.track.findMany({
