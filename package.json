@@ -11,6 +11,7 @@
     "prelint": "npm run prisma:generate",
     "lint": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:component",
+    "check": "npm run prisma:validate && npm run prisma:generate && npm run lint && npm test",
     "test:unit": "node --test --import tsx src/**/*.test.ts",
     "test:component": "vitest run",
     "e2e": "playwright test",
