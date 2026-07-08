@@ -45,7 +45,7 @@
 | Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | completed | Локально завершён |
 | Stage 7 — Ready review, retention и export | completed | Локально завершён |
-| Stage 8 — PWA и offline lyrics | deferred | Отложен; Stage 9 реализован первым |
+| Stage 8 — PWA и offline lyrics | completed | Завершён локально: SW + App Shell + Offline drafts + Logout SW cache clear |
 | Stage 9 — Public profiles и publications | in-progress | Slice 1-2 завершены локально (public profiles + work publications); production deploy pending |
 | Stage 10 — Discover, follows, comments, DM | pending | Не начат |
 | Stage 11 — SEO, admin, observability, hardening | pending | Не начат |
