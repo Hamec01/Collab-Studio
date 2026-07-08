@@ -12,6 +12,7 @@ import policyRouter from "./src/server/routes/policy";
 import { profileRouter, publicRouter } from "./src/server/routes/profile";
 import { publicationRouter, publicPublicationRouter } from "./src/server/routes/publications";
 import discoverRouter from "./src/server/routes/discover";
+import commentsRouter from "./src/server/routes/comments";
 import { getConfig } from "./src/server/config";
 import { createSessionMiddleware } from "./src/server/session";
 import { checkDatabaseReady } from "./src/server/db";
@@ -63,6 +64,7 @@ app.use("/api/profile", profileRouter);
 app.use("/api/public", publicRouter);
 app.use("/api/public", publicPublicationRouter);
 app.use("/api/discover", discoverRouter);
+app.use("/api", commentsRouter);
 
 
 // REST Endpoints

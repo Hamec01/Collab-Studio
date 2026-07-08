@@ -5,6 +5,8 @@ import type { PublicWork } from "../../types";
 import { useAuth } from "../../app/auth/AuthProvider";
 import Avatar from "../../shared/ui/Avatar";
 import StateView from "../../shared/ui/StateView";
+import { PublicationComments } from "../../components/PublicationComments";
+import { featureFlags } from "../../app/featureFlags";
 
 function isSafeHttpUrl(value: string | null) {
   if (!value) return false;
@@ -211,6 +213,15 @@ export default function PublicWorkPage() {
               </aside>
             </div>
           </section>
+        )}
+
+        {!loading && work && featureFlags.publicComments && (
+          <PublicationComments
+            publicationId={work.id}
+            publicationSlug={work.slug}
+            publicationAuthorId={work.authorUserId}
+            commentsClosed={work.commentsClosed}
+          />
         )}
       </div>
     </div>

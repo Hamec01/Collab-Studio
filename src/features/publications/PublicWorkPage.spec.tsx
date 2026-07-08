@@ -33,6 +33,8 @@ describe("PublicWorkPage", () => {
         likeCount: 0,
         playCount: 0,
         hasLiked: false,
+        authorUserId: "user-1",
+        commentsClosed: false,
         author: {
           displayName: "Hamilio",
           username: "hamilio",

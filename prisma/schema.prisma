@@ -173,6 +173,12 @@ model User {
   publicationLikes            PublicationLike[]
   followers                   Follow[]                 @relation("UserFollowers")
   following                   Follow[]                 @relation("UserFollowing")
+  isSuspended                 Boolean                  @default(false)
+  isBanned                    Boolean                  @default(false)
+  publicationComments         PublicationComment[]
+  blocksSent                  UserBlock[]              @relation("UserBlocksSent")
+  blocksReceived              UserBlock[]              @relation("UserBlocksReceived")
+  contentReports              ContentReport[]          @relation("ContentReporter")
 
   @@index([role])
   @@index([createdAt])
@@ -868,6 +874,8 @@ model Publication {
   snapshot      TrackSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
   selectedAsset TrackAsset        @relation("PublicationSelectedAsset", fields: [selectedAssetId], references: [id], onDelete: Restrict)
   likes         PublicationLike[] @relation("PublicationLikes")
+  commentsClosed Boolean            @default(false)
+  comments      PublicationComment[]
 
   @@index([authorUserId, status, publishedAt])
   @@index([projectId])
@@ -901,4 +909,52 @@ model Follow {
   @@unique([followerId, followingId])
   @@index([followerId])
   @@index([followingId])
+}
+
+model PublicationComment {
+  id            String   @id @default(uuid()) @db.Uuid
+  publicationId String   @db.Uuid
+  authorId      String   @db.Uuid
+  text          String
+  isHidden      Boolean  @default(false)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  author        User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([publicationId])
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model UserBlock {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @db.Uuid
+  blockedId String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  blocker User @relation("UserBlocksSent", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("UserBlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+model ContentReport {
+  id            String   @id @default(uuid()) @db.Uuid
+  reporterId    String   @db.Uuid
+  contentType   String   // "PUBLICATION" | "COMMENT"
+  contentId     String   @db.Uuid
+  reason        String
+  status        String   @default("PENDING") // "PENDING" | "RESOLVED" | "DISMISSED"
+  resolution    String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  reporter User @relation("ContentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId])
+  @@index([contentType, contentId])
 }

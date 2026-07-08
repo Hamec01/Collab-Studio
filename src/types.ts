@@ -97,6 +97,8 @@ export interface PublicWork {
   playCount: number;
   hasLiked: boolean;
   author: PublicationAuthorSummary;
+  authorUserId: string | null;
+  commentsClosed: boolean;
   collabDetails?: {
     budget: string | null;
     terms: string | null;
@@ -402,6 +404,39 @@ export interface RhymeResult {
   word: string;
   rhymes: string[];
   suggestions?: string[];
+}
+
+export interface PublicationComment {
+  id: string;
+  publicationId: string;
+  authorId: string;
+  text: string;
+  isHidden: boolean;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+}
+
+export interface ContentReport {
+  id: string;
+  reporterId: string;
+  contentType: "PUBLICATION" | "COMMENT";
+  contentId: string;
+  reason: string;
+  status: "PENDING" | "RESOLVED" | "DISMISSED";
+  resolution: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reporter?: {
+    id: string;
+    username: string;
+    displayName: string;
+  };
 }
 
 export type ApiErrorCode = string;

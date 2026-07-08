@@ -197,6 +197,8 @@ export function serializePublicWork(publication: PublicationWithRelations, hasLi
     likeCount: publication.likeCount,
     playCount: publication.playCount,
     hasLiked,
+    authorUserId: publication.authorUserId,
+    commentsClosed: publication.commentsClosed,
     author: serializeAuthor(publication.author),
     lyrics: serializePublicationLyrics(publication.snapshot),
     collabDetails: extractCollabDetails(publication),
