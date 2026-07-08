@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 7 июля 2026 года (Stage 6 slice 9 local PASS)
+Последнее обновление: 8 июля 2026 года (Stage 9 slice 1 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 9`
-- Active slice: Stage 9 slice 1 — pending approval
+- Active slice: Stage 9 slice 2 — pending approval
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -46,7 +46,7 @@
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | completed | Локально завершён |
 | Stage 7 — Ready review, retention и export | completed | Локально завершён |
 | Stage 8 — PWA и offline lyrics | completed | Пройден |
-| Stage 9 — Public profiles и publications | pending | Не начат |
+| Stage 9 — Public profiles и publications | in_progress | Slice 1 completed locally; production deploy not performed |
 | Stage 10 — Discover, follows, comments, DM | pending | Не начат |
 | Stage 11 — SEO, admin, observability, hardening | pending | Не начат |
 | Stage 12 — Pricing/payment | pending | Заблокирован до beta-метрик и отдельного решения |
@@ -247,7 +247,20 @@ Stage 5A:
 | 2026-07-07 | Stage 7 slice 4 | Локально добавлен retention & trash: soft-delete `Project` with `deletedAt`, project recovery API, protection against silent final asset purge, `purgeTrash` script, и сгенерирована Prisma migration `stage7_retention`. Stage 7 завершён. | `main`, local diff | tests PASS |
 | 2026-07-07 | Stage 8 slice 1-3 | Реализован PWA & offline support: manifest/icons, offline draft, reconnect OCC conflict resolution, secure logout SW cache storage clear, OfflineBanner component, и dynamic ESM/CJS import. Stage 8 завершён. | `main` | lint/test/build/e2e PASS |
 
-## 29. Следующий шаг — только следующий Stage 9 slice после отдельного подтверждения.
+29. Stage 9 slice 1 завершён локально:
+    - additive public-profile fields added on `User`: `isPublicProfile`, `bio`, `location`, `website`
+    - new additive migration: `20260708090000_stage9_public_profile_foundation`
+    - private authenticated profile settings API added: `GET/PUT /api/profile/me`
+    - unauthenticated public route added: `GET /api/public/users/:handle`
+    - public serializer is explicitly separate from private auth serializer; email/role/verification fields are not exposed publicly
+    - frontend foundation added:
+      - `/app/profile` private settings page
+      - `/u/:handle` public profile page
+      - current auth header now links to profile settings and public page when opt-in is enabled
+    - focused tests added for opt-in privacy boundary, invalid website rejection, case-insensitive public lookup and settings-page save
+    - production deploy intentionally not performed
+
+## 30. Следующий шаг — только следующий Stage 9 slice после отдельного подтверждения.
 
 ## Blockers
 

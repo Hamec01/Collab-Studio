@@ -102,6 +102,22 @@ export default function AuthModal({
           <div className="text-xs font-medium text-white">{currentUser.displayName}</div>
         </div>
         <button
+          type="button"
+          onClick={() => window.location.assign("/app/profile")}
+          className="text-[10px] sm:text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium px-2 sm:px-3 py-1 rounded-full border border-neutral-700 transition-colors cursor-pointer"
+        >
+          Профиль
+        </button>
+        {currentUser.isPublicProfile && (
+          <button
+            type="button"
+            onClick={() => window.open(`/u/${encodeURIComponent(currentUser.username)}`, "_blank", "noopener,noreferrer")}
+            className="text-[10px] sm:text-xs bg-indigo-950/40 hover:bg-indigo-900/40 text-indigo-300 font-medium px-2 sm:px-3 py-1 rounded-full border border-indigo-900/40 transition-colors cursor-pointer"
+          >
+            Публичная страница
+          </button>
+        )}
+        <button
           id="logout_btn"
           onClick={handleLogout}
           disabled={logoutLoading}

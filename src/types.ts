@@ -7,9 +7,25 @@ export interface AuthUser {
   displayName: string;
   avatarUrl: string | null;
   email: string | null;
+  isPublicProfile?: boolean;
+  bio?: string | null;
+  location?: string | null;
+  website?: string | null;
   role: "admin" | "user";
   emailVerifiedAt?: string | null;
   ageAcknowledgedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  location: string | null;
+  website: string | null;
   createdAt: string;
   updatedAt: string;
 }

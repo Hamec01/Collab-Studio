@@ -21,6 +21,10 @@ declare global {
       email: string | null;
       displayName: string;
       avatarUrl: string | null;
+      isPublicProfile: boolean;
+      bio: string | null;
+      location: string | null;
+      website: string | null;
       role: UserRole;
       emailVerifiedAt: Date | null;
       ageAcknowledgedAt: Date | null;

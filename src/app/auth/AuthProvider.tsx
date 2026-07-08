@@ -23,6 +23,7 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   startGoogleAuth: () => void;
   acknowledgeAge: () => Promise<void>;
+  setCurrentUserProfile: (user: AuthUser) => void;
   expireSession: () => void;
   withAuth: <T>(operation: () => Promise<T>) => Promise<T>;
 };
@@ -189,6 +190,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthSystemError("");
   }, []);
 
+  const setCurrentUserProfile = useCallback((user: AuthUser) => {
+    setCurrentUser(user);
+    setAuthSystemError("");
+  }, []);
+
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -205,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       startGoogleAuth,
       acknowledgeAge,
+      setCurrentUserProfile,
       expireSession,
       withAuth,
     }),
@@ -222,6 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       startGoogleAuth,
       acknowledgeAge,
+      setCurrentUserProfile,
       expireSession,
       withAuth,
     ],
