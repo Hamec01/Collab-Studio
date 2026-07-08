@@ -46,8 +46,8 @@
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | completed | Локально завершён |
 | Stage 7 — Ready review, retention и export | completed | Локально завершён |
 | Stage 8 — PWA и offline lyrics | completed | Завершён локально: SW + App Shell + Offline drafts + Logout SW cache clear |
-| Stage 9 — Public profiles и publications | in-progress | Slice 1-2 завершены локально (public profiles + work publications); production deploy pending |
-| Stage 10 — Discover, follows, comments, DM | pending | Не начат |
+| Stage 9 — Public profiles и publications | completed | Пройден |
+| Stage 10 — Discover, follows, comments, DM | in-progress | Slice 1-3 завершены локально (discover + trending/featured + user follows) |
 | Stage 11 — SEO, admin, observability, hardening | pending | Не начат |
 | Stage 12 — Pricing/payment | pending | Заблокирован до beta-метрик и отдельного решения |
 
@@ -250,8 +250,11 @@ Stage 5A:
 | 2026-07-08 | Stage 9 slice 2 | Work publications: `Publication` model + enums; private manager `/app/publications`; public work page `/works/:slug`; streaming/download; migration `stage9_work_publications_core`. | `main` | Production Deployed |
 | 2026-07-08 | Stage 9 slice 3 | Collab publications: `budget`, `terms`, `rolesNeeded` metadata parsing; 30-day expiration policy; `/collabs/:slug` route and `PublicCollabPage` with streaming audio capability. | `main` | Production Deployed |
 | 2026-07-08 | Stage 9 slice 4 | Social features: `likeCount` and `playCount` in DB with `PublicationLike` deduplication; Like toggle functionality; `/play` increment endpoint triggered natively; native "Share" button using Web Share API. | `main` | tests PASS |
+| 2026-07-08 | Stage 10 slice 1 | Discover search: full-text and tag-based query filters for work and collab publications. | `main` | tests PASS |
+| 2026-07-08 | Stage 10 slice 2 | Discover trending/featured: featured lists ordering and promotion flags. | `main` | tests PASS |
+| 2026-07-08 | Stage 10 slice 3 | Social engagement: User Follows (Follow table, follow/unfollow POST routes, optionalAuth public profile toggle UI). | `main` | tests PASS |
 
-## 29. Следующий шаг — переходить к оставшимся частям (если применимо) или к Stage 10.
+## 29. Следующий шаг — переходить к оставшимся частям Stage 10 (public comments, DM, etc).
 
 ## Blockers
 
