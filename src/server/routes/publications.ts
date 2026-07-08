@@ -12,6 +12,9 @@ import {
   publicationInclude,
   serializePrivatePublication,
   serializePublicWork,
+  likePublication,
+  unlikePublication,
+  incrementPublicationPlay,
 } from "../services/publications";
 import { ensureVerifiedForProtectedWrite, resolveProjectTrackAccess } from "../services/stage3Access";
 import { createWorkPublicationSchema, createCollabPublicationSchema, publicationIdParamsSchema, publicationSlugParamsSchema } from "../schemas/publications";
@@ -354,7 +357,7 @@ publicationRouter.get(
       orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
     });
 
-    res.json({ publications: publications.map(serializePrivatePublication) });
+    res.json({ publications: publications.map(p => serializePrivatePublication(p)) });
   }),
 );
 
@@ -457,7 +460,43 @@ publicPublicationRouter.get(
   asyncHandler(async (req, res) => {
     const { slug } = publicationSlugParamsSchema.parse(req.params);
     const publication = await getPublicWorkOrThrow(slug);
-    res.json({ work: serializePublicWork(publication) });
+    let hasLiked = false;
+    if (req.user) {
+      const like = await prisma.publicationLike.findUnique({
+        where: { publicationId_userId: { publicationId: publication.id, userId: req.user.id } }
+      });
+      hasLiked = !!like;
+    }
+    res.json({ work: serializePublicWork(publication, hasLiked) });
+  }),
+);
+
+publicPublicationRouter.post(
+  "/works/:slug/like",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    await likePublication(slug, req.user!.id);
+    res.json({ ok: true });
+  }),
+);
+
+publicPublicationRouter.delete(
+  "/works/:slug/like",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    await unlikePublication(slug, req.user!.id);
+    res.json({ ok: true });
+  }),
+);
+
+publicPublicationRouter.post(
+  "/works/:slug/play",
+  asyncHandler(async (req, res) => {
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    await incrementPublicationPlay(slug);
+    res.json({ ok: true });
   }),
 );
 
@@ -494,7 +533,43 @@ publicPublicationRouter.get(
   asyncHandler(async (req, res) => {
     const { slug } = publicationSlugParamsSchema.parse(req.params);
     const publication = await getPublicCollabOrThrow(slug);
-    res.json({ collab: serializePublicWork(publication) });
+    let hasLiked = false;
+    if (req.user) {
+      const like = await prisma.publicationLike.findUnique({
+        where: { publicationId_userId: { publicationId: publication.id, userId: req.user.id } }
+      });
+      hasLiked = !!like;
+    }
+    res.json({ collab: serializePublicWork(publication, hasLiked) });
+  }),
+);
+
+publicPublicationRouter.post(
+  "/collabs/:slug/like",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    await likePublication(slug, req.user!.id);
+    res.json({ ok: true });
+  }),
+);
+
+publicPublicationRouter.delete(
+  "/collabs/:slug/like",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    await unlikePublication(slug, req.user!.id);
+    res.json({ ok: true });
+  }),
+);
+
+publicPublicationRouter.post(
+  "/collabs/:slug/play",
+  asyncHandler(async (req, res) => {
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    await incrementPublicationPlay(slug);
+    res.json({ ok: true });
   }),
 );
 

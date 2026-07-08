@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getPublicCollab } from "../../api/publications";
+import { getPublicCollab, likeCollab, unlikeCollab, playCollab } from "../../api/publications";
 import type { PublicWork } from "../../types";
+import { useAuth } from "../../app/auth/AuthProvider";
 import Avatar from "../../shared/ui/Avatar";
 import StateView from "../../shared/ui/StateView";
 
@@ -20,6 +21,9 @@ export default function PublicCollabPage() {
   const [collab, setCollab] = useState<PublicWork | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { currentUser } = useAuth();
+  const [isLiking, setIsLiking] = useState(false);
+  const hasPlayedRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -36,6 +40,31 @@ export default function PublicCollabPage() {
 
     return () => controller.abort();
   }, [slug]);
+
+  const handleLikeToggle = async () => {
+    if (!collab || !currentUser || isLiking) return;
+    setIsLiking(true);
+    try {
+      if (collab.hasLiked) {
+        await unlikeCollab(slug);
+        setCollab({ ...collab, hasLiked: false, likeCount: Math.max(0, collab.likeCount - 1) });
+      } else {
+        await likeCollab(slug);
+        setCollab({ ...collab, hasLiked: true, likeCount: collab.likeCount + 1 });
+      }
+    } catch (err) {
+      console.error("Failed to toggle like:", err);
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  const handlePlay = () => {
+    if (!collab || hasPlayedRef.current) return;
+    hasPlayedRef.current = true;
+    playCollab(slug).catch(console.error);
+    setCollab({ ...collab, playCount: collab.playCount + 1 });
+  };
 
   return (
     <div className="min-h-dvh bg-[var(--cs-color-bg)] text-[var(--cs-color-text)]">
@@ -108,7 +137,7 @@ export default function PublicCollabPage() {
 
                 {collab.audio && (
                   <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-4">
-                    <audio controls preload="metadata" src={collab.audio.streamUrl} className="w-full" />
+                    <audio controls preload="metadata" src={collab.audio.streamUrl} className="w-full" onPlay={handlePlay} />
                     <div className="mt-3 flex flex-wrap gap-2">
                       <a
                         href={collab.audio.downloadUrl}
@@ -129,6 +158,32 @@ export default function PublicCollabPage() {
               </div>
 
               <aside className="grid content-start gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+                <div className="flex flex-wrap gap-4 rounded-xl border border-neutral-800/60 bg-neutral-950/40 p-4">
+                  <div className="flex-1 text-center">
+                    <div className="text-2xl font-bold text-white">{collab.playCount}</div>
+                    <div className="text-xs uppercase tracking-wider text-neutral-500">Plays</div>
+                  </div>
+                  <div className="w-[1px] bg-neutral-800/60"></div>
+                  <div className="flex-1 text-center">
+                    <div className="text-2xl font-bold text-white">{collab.likeCount}</div>
+                    <div className="text-xs uppercase tracking-wider text-neutral-500">Likes</div>
+                  </div>
+                </div>
+
+                {currentUser && (
+                  <button
+                    onClick={handleLikeToggle}
+                    disabled={isLiking}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
+                      collab.hasLiked
+                        ? "border-pink-900/40 bg-pink-950/30 text-pink-300 hover:bg-pink-900/40"
+                        : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white"
+                    }`}
+                  >
+                    {collab.hasLiked ? "Unlike" : "Like"}
+                  </button>
+                )}
+
                 <div className="flex items-center gap-3">
                   <Avatar src={collab.author.avatarUrl} name={collab.author.displayName} className="h-12 w-12 text-sm" />
                   <div>

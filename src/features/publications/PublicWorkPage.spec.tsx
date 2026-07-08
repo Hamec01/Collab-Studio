@@ -7,6 +7,13 @@ import PublicWorkPage from "./PublicWorkPage";
 
 vi.mock("../../api/publications", () => ({
   getPublicWork: vi.fn(),
+  likeWork: vi.fn(),
+  unlikeWork: vi.fn(),
+  playWork: vi.fn(),
+}));
+
+vi.mock("../../app/auth/AuthProvider", () => ({
+  useAuth: () => ({ currentUser: null }),
 }));
 
 describe("PublicWorkPage", () => {
@@ -22,6 +29,10 @@ describe("PublicWorkPage", () => {
         tags: ["pop"],
         language: "ru",
         publishedAt: "2026-07-08T00:00:00.000Z",
+        expiresAt: null,
+        likeCount: 0,
+        playCount: 0,
+        hasLiked: false,
         author: {
           displayName: "Hamilio",
           username: "hamilio",

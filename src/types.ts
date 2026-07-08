@@ -67,6 +67,9 @@ export interface PrivatePublication {
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+  likeCount: number;
+  playCount: number;
+  hasLiked: boolean;
   author: PublicationAuthorSummary;
   lyrics: PublicationLyricsSnapshot | null;
   collabDetails?: {
@@ -87,6 +90,9 @@ export interface PublicWork {
   language: string | null;
   publishedAt: string;
   expiresAt: string | null;
+  likeCount: number;
+  playCount: number;
+  hasLiked: boolean;
   author: PublicationAuthorSummary;
   collabDetails?: {
     budget: string | null;

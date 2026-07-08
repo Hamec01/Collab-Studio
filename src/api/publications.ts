@@ -52,3 +52,26 @@ export function getPublicCollab(slug: string, signal?: AbortSignal) {
   return apiRequest<{ collab: PublicWork }>(`/api/public/collabs/${encodeURIComponent(slug)}`, { signal });
 }
 
+export function likeWork(slug: string) {
+  return apiRequest<{ ok: boolean }>(`/api/public/works/${encodeURIComponent(slug)}/like`, { method: "POST" });
+}
+
+export function unlikeWork(slug: string) {
+  return apiRequest<{ ok: boolean }>(`/api/public/works/${encodeURIComponent(slug)}/like`, { method: "DELETE" });
+}
+
+export function playWork(slug: string) {
+  return apiRequest<{ ok: boolean }>(`/api/public/works/${encodeURIComponent(slug)}/play`, { method: "POST" });
+}
+
+export function likeCollab(slug: string) {
+  return apiRequest<{ ok: boolean }>(`/api/public/collabs/${encodeURIComponent(slug)}/like`, { method: "POST" });
+}
+
+export function unlikeCollab(slug: string) {
+  return apiRequest<{ ok: boolean }>(`/api/public/collabs/${encodeURIComponent(slug)}/like`, { method: "DELETE" });
+}
+
+export function playCollab(slug: string) {
+  return apiRequest<{ ok: boolean }>(`/api/public/collabs/${encodeURIComponent(slug)}/play`, { method: "POST" });
+}

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getPublicWork } from "../../api/publications";
+import { getPublicWork, likeWork, unlikeWork, playWork } from "../../api/publications";
 import type { PublicWork } from "../../types";
+import { useAuth } from "../../app/auth/AuthProvider";
 import Avatar from "../../shared/ui/Avatar";
 import StateView from "../../shared/ui/StateView";
 
@@ -20,6 +21,9 @@ export default function PublicWorkPage() {
   const [work, setWork] = useState<PublicWork | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { currentUser } = useAuth();
+  const [isLiking, setIsLiking] = useState(false);
+  const hasPlayedRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -36,6 +40,45 @@ export default function PublicWorkPage() {
 
     return () => controller.abort();
   }, [slug]);
+
+  const handleLikeToggle = async () => {
+    if (!work || !currentUser || isLiking) return;
+    setIsLiking(true);
+    try {
+      if (work.hasLiked) {
+        await unlikeWork(slug);
+        setWork({ ...work, hasLiked: false, likeCount: Math.max(0, work.likeCount - 1) });
+      } else {
+        await likeWork(slug);
+        setWork({ ...work, hasLiked: true, likeCount: work.likeCount + 1 });
+      }
+    } catch (err) {
+      console.error("Failed to toggle like:", err);
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  const handlePlay = () => {
+    if (!work || hasPlayedRef.current) return;
+    hasPlayedRef.current = true;
+    playWork(slug).catch(console.error);
+    setWork({ ...work, playCount: work.playCount + 1 });
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: work?.title,
+        text: work?.description || "",
+        url: window.location.href,
+      }).catch(console.error);
+    } else {
+      navigator.clipboard.writeText(window.location.href)
+        .then(() => alert("Ссылка скопирована в буфер обмена"))
+        .catch(console.error);
+    }
+  };
 
   return (
     <div className="min-h-dvh bg-[var(--cs-color-bg)] text-[var(--cs-color-text)]">
@@ -70,7 +113,7 @@ export default function PublicWorkPage() {
 
                 {work.audio && (
                   <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-4">
-                    <audio controls preload="metadata" src={work.audio.streamUrl} className="w-full" />
+                    <audio controls preload="metadata" src={work.audio.streamUrl} className="w-full" onPlay={handlePlay} />
                     <div className="mt-3 flex flex-wrap gap-2">
                       <a
                         href={work.audio.downloadUrl}
@@ -91,6 +134,39 @@ export default function PublicWorkPage() {
               </div>
 
               <aside className="grid content-start gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+                <div className="flex flex-wrap gap-4 rounded-xl border border-neutral-800/60 bg-neutral-950/40 p-4">
+                  <div className="flex-1 text-center">
+                    <div className="text-2xl font-bold text-white">{work.playCount}</div>
+                    <div className="text-xs uppercase tracking-wider text-neutral-500">Plays</div>
+                  </div>
+                  <div className="w-[1px] bg-neutral-800/60"></div>
+                  <div className="flex-1 text-center">
+                    <div className="text-2xl font-bold text-white">{work.likeCount}</div>
+                    <div className="text-xs uppercase tracking-wider text-neutral-500">Likes</div>
+                  </div>
+                </div>
+
+                {currentUser && (
+                  <button
+                    onClick={handleLikeToggle}
+                    disabled={isLiking}
+                    className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
+                      work.hasLiked
+                        ? "border-pink-900/40 bg-pink-950/30 text-pink-300 hover:bg-pink-900/40"
+                        : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white"
+                    }`}
+                  >
+                    {work.hasLiked ? "Unlike" : "Like"}
+                  </button>
+                )}
+
+                <button
+                  onClick={handleShare}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-sm font-semibold text-neutral-300 transition-colors hover:bg-neutral-700 hover:text-white"
+                >
+                  Share
+                </button>
+
                 <div className="flex items-center gap-3">
                   <Avatar src={work.author.avatarUrl} name={work.author.displayName} className="h-12 w-12 text-sm" />
                   <div>

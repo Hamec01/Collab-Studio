@@ -170,6 +170,7 @@ model User {
   createdTrackReviews         TrackReview[]            @relation("TrackReviewCreator")
   trackReviewApprovals        TrackReviewApprover[]    @relation("TrackReviewApproverUser")
   publications                Publication[]            @relation("PublicationAuthor")
+  publicationLikes            PublicationLike[]
 
   @@index([role])
   @@index([createdAt])
@@ -855,15 +856,32 @@ model Publication {
   expiresAt       DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  likeCount       Int               @default(0)
+  playCount       Int               @default(0)
 
-  author        User?         @relation("PublicationAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
-  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  track         Track         @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  snapshot      TrackSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
-  selectedAsset TrackAsset    @relation("PublicationSelectedAsset", fields: [selectedAssetId], references: [id], onDelete: Restrict)
+  author        User?             @relation("PublicationAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  track         Track             @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  snapshot      TrackSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  selectedAsset TrackAsset        @relation("PublicationSelectedAsset", fields: [selectedAssetId], references: [id], onDelete: Restrict)
+  likes         PublicationLike[] @relation("PublicationLikes")
 
   @@index([authorUserId, status, publishedAt])
   @@index([projectId])
   @@index([trackId])
   @@index([kind, status, publishedAt])
+}
+
+model PublicationLike {
+  id            String   @id @default(uuid()) @db.Uuid
+  publicationId String   @db.Uuid
+  userId        String   @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  publication Publication @relation("PublicationLikes", fields: [publicationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([publicationId, userId])
+  @@index([publicationId])
+  @@index([userId])
 }

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../db";
 import { AppError } from "../middleware/errors";
 import { resolveLyricVersion } from "./structuredLyrics";
 import { isTrackAssetKindDeliverable, isTrackAssetStatusDeliverable } from "./audioDelivery";
@@ -139,7 +140,7 @@ function extractCollabDetails(publication: PublicationWithRelations) {
   };
 }
 
-export function serializePrivatePublication(publication: PublicationWithRelations) {
+export function serializePrivatePublication(publication: PublicationWithRelations, hasLiked: boolean = false) {
   const isCollab = publication.kind === "COLLAB";
   const streamUrlPath = isCollab ? `/api/public/collabs/${publication.slug}/stream` : buildPublicWorkStreamPath(publication.slug);
   const downloadUrlPath = isCollab ? `/api/public/collabs/${publication.slug}/download` : buildPublicWorkDownloadPath(publication.slug);
@@ -172,13 +173,16 @@ export function serializePrivatePublication(publication: PublicationWithRelation
     expiresAt: publication.expiresAt?.toISOString() ?? null,
     createdAt: publication.createdAt.toISOString(),
     updatedAt: publication.updatedAt.toISOString(),
+    likeCount: publication.likeCount,
+    playCount: publication.playCount,
+    hasLiked,
     author: serializeAuthor(publication.author),
     lyrics: serializePublicationLyrics(publication.snapshot),
     collabDetails: extractCollabDetails(publication),
   };
 }
 
-export function serializePublicWork(publication: PublicationWithRelations) {
+export function serializePublicWork(publication: PublicationWithRelations, hasLiked: boolean = false) {
   return {
     id: publication.id,
     slug: publication.slug,
@@ -190,6 +194,9 @@ export function serializePublicWork(publication: PublicationWithRelations) {
     language: publication.language ?? null,
     publishedAt: publication.publishedAt.toISOString(),
     expiresAt: publication.expiresAt?.toISOString() ?? null,
+    likeCount: publication.likeCount,
+    playCount: publication.playCount,
+    hasLiked,
     author: serializeAuthor(publication.author),
     lyrics: serializePublicationLyrics(publication.snapshot),
     collabDetails: extractCollabDetails(publication),
@@ -204,4 +211,77 @@ export function serializePublicWork(publication: PublicationWithRelations) {
         }
       : null,
   };
+}
+
+export async function likePublication(slug: string, userId: string) {
+  const publication = await prisma.publication.findUnique({
+    where: { slug },
+  });
+  if (!publication || publication.status !== "PUBLISHED") {
+    throw new AppError(404, "PUBLICATION_NOT_FOUND", "Publication not found");
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existingLike = await tx.publicationLike.findUnique({
+        where: { publicationId_userId: { publicationId: publication.id, userId } },
+      });
+      if (existingLike) return;
+
+      await tx.publicationLike.create({
+        data: { publicationId: publication.id, userId },
+      });
+
+      await tx.publication.update({
+        where: { id: publication.id },
+        data: { likeCount: { increment: 1 } },
+      });
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      // Ignored
+    } else {
+      throw err;
+    }
+  }
+}
+
+export async function unlikePublication(slug: string, userId: string) {
+  const publication = await prisma.publication.findUnique({
+    where: { slug },
+  });
+  if (!publication || publication.status !== "PUBLISHED") {
+    throw new AppError(404, "PUBLICATION_NOT_FOUND", "Publication not found");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const existingLike = await tx.publicationLike.findUnique({
+      where: { publicationId_userId: { publicationId: publication.id, userId } },
+    });
+    if (!existingLike) return;
+
+    await tx.publicationLike.delete({
+      where: { id: existingLike.id },
+    });
+
+    await tx.publication.update({
+      where: { id: publication.id },
+      data: { likeCount: { decrement: 1 } },
+    });
+  });
+}
+
+export async function incrementPublicationPlay(slug: string) {
+  const publication = await prisma.publication.findUnique({
+    where: { slug },
+    select: { id: true, status: true },
+  });
+  if (!publication || publication.status !== "PUBLISHED") {
+    throw new AppError(404, "PUBLICATION_NOT_FOUND", "Publication not found");
+  }
+
+  await prisma.publication.update({
+    where: { id: publication.id },
+    data: { playCount: { increment: 1 } },
+  });
 }

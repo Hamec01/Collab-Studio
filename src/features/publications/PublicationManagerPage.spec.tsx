@@ -143,9 +143,13 @@ describe("PublicationManagerPage", () => {
         streamUrl: "/api/public/works/song-a-public/stream",
         downloadUrl: "/api/public/works/song-a-public/download",
         publishedAt: "2026-07-08T00:00:00.000Z",
+        expiresAt: null,
         archivedAt: null,
         createdAt: "2026-07-08T00:00:00.000Z",
         updatedAt: "2026-07-08T00:00:00.000Z",
+        likeCount: 0,
+        playCount: 0,
+        hasLiked: false,
         author: {
           displayName: "Hamilio",
           username: "hamilio",
@@ -176,9 +180,13 @@ describe("PublicationManagerPage", () => {
         streamUrl: "/api/public/works/song-a-public/stream",
         downloadUrl: "/api/public/works/song-a-public/download",
         publishedAt: "2026-07-08T00:00:00.000Z",
+        expiresAt: null,
         archivedAt: "2026-07-08T01:00:00.000Z",
         createdAt: "2026-07-08T00:00:00.000Z",
         updatedAt: "2026-07-08T01:00:00.000Z",
+        likeCount: 0,
+        playCount: 0,
+        hasLiked: false,
         author: {
           displayName: "Hamilio",
           username: "hamilio",
@@ -216,7 +224,7 @@ describe("PublicationManagerPage", () => {
       tags: [],
     }));
 
-    expect(await screen.findByText("Публикация создана.")).toBeInTheDocument();
+    expect(await screen.findByText("Публикация Work создана.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Архивировать" }));
     await waitFor(() => expect(archivePublication).toHaveBeenCalledWith("pub-1"));
     expect(await screen.findByText("Публикация архивирована.")).toBeInTheDocument();
