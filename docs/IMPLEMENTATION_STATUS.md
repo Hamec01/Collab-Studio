@@ -254,9 +254,9 @@ Stage 5A:
 | 2026-07-08 | Stage 10 slice 2 | Discover trending/featured: featured lists ordering and promotion flags. | `main` | tests PASS |
 | 2026-07-08 | Stage 10 slice 3 | Social engagement: User Follows (Follow table, follow/unfollow POST routes, optionalAuth public profile toggle UI). | `main` | tests PASS |
 | 2026-07-08 | Stage 10 slice 4 | Public comments & moderation: PublicationComment, UserBlock, ContentReport models; comments service (post, list, hide, close, block, report, admin resolve); feature-flagged behind `publicComments`; integrated in PublicWorkPage and PublicCollabPage; integration tests for auth gates, blocking, hiding, reporting and admin suspend. | `main` | 223 tests PASS, lint clean |
+| 2026-07-08 | Stage 10 slice 5 | DM / Direct Messages: DirectMessageRequest, DirectMessage models; dm service (send request, list, respond, messaging); feature-flagged behind `directMessages`; integrated DmInbox and PublicProfilePage modal; integration tests for auth gates, duplicates, block enforcement. Stage 10 complete. | `main` | 223 tests PASS, lint clean |
 
-## 29. Следующий шаг — Stage 10 Slice 5 (DM / Direct Messages) или Stage 11.
-
+## 29. Следующий шаг — Stage 11 (SEO, admin, observability).
 ## Blockers
 
 - Нет отдельного staging VPS; все изменения проверяются локально до controlled production deploy.
