@@ -246,14 +246,13 @@ Stage 5A:
 | 2026-07-07 | Stage 7 slice 3 | Локально добавлен export: `isProjectReady`, `generateProjectExportStream`, `GET /api/projects/:projectId/export` (ZIP archiver). | `main`, local diff | tests PASS |
 | 2026-07-07 | Stage 7 slice 4 | Локально добавлен retention & trash: soft-delete `Project` with `deletedAt`, project recovery API, protection against silent final asset purge, `purgeTrash` script, и сгенерирована Prisma migration `stage7_retention`. Stage 7 завершён. | `main`, local diff | tests PASS |
 
-| 2026-07-08 | Stage 9 slice 1 | Public profile opt-in: `isPublicProfile`, `bio`, `location`, `website` fields; profile settings page `/app/profile`; public profile page `/u/:handle`; migration `stage9_public_profile_foundation`. | `main` | code ready, production pending |
-| 2026-07-08 | Stage 9 slice 2 | Work publications: `Publication` model + enums; private manager `/app/publications`; public work page `/works/:slug`; streaming/download; migration `stage9_work_publications_core`. | `main` | code ready, production pending |
-| 2026-07-08 | Stage 9 slice 3 | Collab publications: `budget`, `terms`, `rolesNeeded` metadata parsing; 30-day expiration policy; `/collabs/:slug` route and `PublicCollabPage` with streaming audio capability. | `main` | tests PASS, code ready |
+| 2026-07-08 | Stage 9 slice 1 | Public profile opt-in: `isPublicProfile`, `bio`, `location`, `website` fields; profile settings page `/app/profile`; public profile page `/u/:handle`; migration `stage9_public_profile_foundation`. | `main` | Production Deployed |
+| 2026-07-08 | Stage 9 slice 2 | Work publications: `Publication` model + enums; private manager `/app/publications`; public work page `/works/:slug`; streaming/download; migration `stage9_work_publications_core`. | `main` | Production Deployed |
+| 2026-07-08 | Stage 9 slice 3 | Collab publications: `budget`, `terms`, `rolesNeeded` metadata parsing; 30-day expiration policy; `/collabs/:slug` route and `PublicCollabPage` with streaming audio capability. | `main` | Production Deployed |
 
-## 29. Следующий шаг — применить Stage 9 миграции в production и задеплоить, затем переходить к оставшимся частям Stage 9 (комментарии/лайки) или к Stage 10.
+## 29. Следующий шаг — переходить к оставшимся частям Stage 9 (комментарии/лайки/репосты) или к Stage 10.
 
 ## Blockers
 
 - Нет отдельного staging VPS; все изменения проверяются локально до controlled production deploy.
 - Payment intentionally deferred.
-- Stage 9 миграции (`stage9_public_profile_foundation`, `stage9_work_publications_core`) ещё не применены в production DB.
