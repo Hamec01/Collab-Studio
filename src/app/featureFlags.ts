@@ -1,4 +1,4 @@
-export const FEATURE_FLAG_KEYS = ["internalDiagnostics", "lyricsStructuredEditor", "publicComments"] as const;
+export const FEATURE_FLAG_KEYS = ["internalDiagnostics", "lyricsStructuredEditor", "publicComments", "directMessages"] as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
@@ -8,6 +8,7 @@ export type PublicFeatureFlagEnv = {
   VITE_FLAG_INTERNAL_DIAGNOSTICS?: string;
   VITE_FLAG_LYRICS_STRUCTURED_EDITOR?: string;
   VITE_FLAG_PUBLIC_COMMENTS?: string;
+  VITE_FLAG_DIRECT_MESSAGES?: string;
 };
 
 const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled"]);
@@ -16,6 +17,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   internalDiagnostics: false,
   lyricsStructuredEditor: false,
   publicComments: false,
+  directMessages: false,
 };
 
 function parseBoolean(raw: string | undefined): boolean | null {
@@ -65,6 +67,16 @@ export function resolveFeatureFlags(env: PublicFeatureFlagEnv): FeatureFlags {
   const lyricsStructuredEditorOverride = parseBoolean(env.VITE_FLAG_LYRICS_STRUCTURED_EDITOR);
   if (lyricsStructuredEditorOverride !== null) {
     flags.lyricsStructuredEditor = lyricsStructuredEditorOverride;
+  }
+
+  const publicCommentsOverride = parseBoolean(env.VITE_FLAG_PUBLIC_COMMENTS);
+  if (publicCommentsOverride !== null) {
+    flags.publicComments = publicCommentsOverride;
+  }
+
+  const directMessagesOverride = parseBoolean(env.VITE_FLAG_DIRECT_MESSAGES);
+  if (directMessagesOverride !== null) {
+    flags.directMessages = directMessagesOverride;
   }
 
   return flags;

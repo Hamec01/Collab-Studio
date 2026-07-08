@@ -440,3 +440,34 @@ export interface ContentReport {
 }
 
 export type ApiErrorCode = string;
+
+export type DmUserSummary = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+export type DmRequest = {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  text: string;
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "BLOCKED";
+  createdAt: string;
+  updatedAt: string;
+  sender: DmUserSummary;
+  recipient?: DmUserSummary;
+  /** Last message in conversation, if any */
+  messages?: DirectMessage[];
+};
+
+export type DirectMessage = {
+  id: string;
+  requestId: string;
+  senderId: string;
+  text: string;
+  isDeleted: boolean;
+  createdAt: string;
+  sender: DmUserSummary;
+};

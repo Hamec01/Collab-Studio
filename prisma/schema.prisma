@@ -118,6 +118,13 @@ enum ApproverStatus {
   REMOVED
 }
 
+enum DmRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
 model User {
   id                String    @id @default(uuid()) @db.Uuid
   username          String    @unique
@@ -179,6 +186,9 @@ model User {
   blocksSent                  UserBlock[]              @relation("UserBlocksSent")
   blocksReceived              UserBlock[]              @relation("UserBlocksReceived")
   contentReports              ContentReport[]          @relation("ContentReporter")
+  sentDmRequests              DirectMessageRequest[]   @relation("DmSender")
+  receivedDmRequests          DirectMessageRequest[]   @relation("DmRecipient")
+  directMessages              DirectMessage[]
 
   @@index([role])
   @@index([createdAt])
@@ -957,4 +967,37 @@ model ContentReport {
 
   @@index([reporterId])
   @@index([contentType, contentId])
+}
+
+model DirectMessageRequest {
+  id          String          @id @default(uuid()) @db.Uuid
+  senderId    String          @db.Uuid
+  recipientId String          @db.Uuid
+  text        String
+  status      DmRequestStatus @default(PENDING)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+
+  sender    User            @relation("DmSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User            @relation("DmRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  messages  DirectMessage[]
+
+  @@unique([senderId, recipientId])
+  @@index([recipientId, status])
+  @@index([senderId])
+}
+
+model DirectMessage {
+  id          String   @id @default(uuid()) @db.Uuid
+  requestId   String   @db.Uuid
+  senderId    String   @db.Uuid
+  text        String
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  request DirectMessageRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sender  User                 @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@index([senderId])
 }
