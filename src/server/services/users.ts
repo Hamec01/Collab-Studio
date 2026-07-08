@@ -22,7 +22,10 @@ export function serializeUser(user: SafeUser) {
   };
 }
 
-export function serializePublicProfile(user: PublicProfileUser) {
+export function serializePublicProfile(
+  user: PublicProfileUser,
+  meta?: { followersCount: number; followingCount: number; isFollowing?: boolean }
+) {
   return {
     id: user.id,
     username: user.username,
@@ -31,6 +34,9 @@ export function serializePublicProfile(user: PublicProfileUser) {
     bio: user.bio ?? null,
     location: user.location ?? null,
     website: user.website ?? null,
+    followersCount: meta?.followersCount ?? 0,
+    followingCount: meta?.followingCount ?? 0,
+    isFollowing: meta?.isFollowing ?? false,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };

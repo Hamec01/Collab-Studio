@@ -7,6 +7,16 @@ import PublicProfilePage from "./PublicProfilePage";
 
 vi.mock("../../api/profile", () => ({
   getPublicProfile: vi.fn(),
+  followUser: vi.fn(),
+  unfollowUser: vi.fn(),
+}));
+
+vi.mock("../../app/auth/AuthProvider", () => ({
+  useAuth: () => ({ currentUser: { id: "user-1", username: "hamilio" } }),
+}));
+
+vi.mock("../../app/i18n/I18nProvider", () => ({
+  useI18n: () => ({ t: (key: string) => key }),
 }));
 
 describe("PublicProfilePage", () => {
@@ -20,6 +30,9 @@ describe("PublicProfilePage", () => {
         bio: "Автор и артист.",
         location: "Berlin",
         website: "https://example.com",
+        followersCount: 0,
+        followingCount: 0,
+        isFollowing: false,
         createdAt: "2026-07-08T00:00:00.000Z",
         updatedAt: "2026-07-08T00:00:00.000Z",
       },

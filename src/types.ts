@@ -26,6 +26,9 @@ export interface PublicProfile {
   bio: string | null;
   location: string | null;
   website: string | null;
+  followersCount: number;
+  followingCount: number;
+  isFollowing?: boolean;
   createdAt: string;
   updatedAt: string;
 }

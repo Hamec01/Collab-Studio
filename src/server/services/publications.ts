@@ -285,3 +285,51 @@ export async function incrementPublicationPlay(slug: string) {
     data: { playCount: { increment: 1 } },
   });
 }
+
+export async function searchPublications(params: {
+  query?: string;
+  kind?: "WORK" | "COLLAB";
+  isFeatured?: boolean;
+  tags?: string[];
+  limit?: number;
+  offset?: number;
+}) {
+  const { query, kind, isFeatured, tags, limit = 20, offset = 0 } = params;
+
+  const where: Prisma.PublicationWhereInput = {
+    status: "PUBLISHED",
+  };
+
+  if (kind) {
+    where.kind = kind;
+  }
+
+  if (typeof isFeatured === "boolean") {
+    where.isFeatured = isFeatured;
+  }
+
+  if (query) {
+    where.OR = [
+      { title: { contains: query, mode: "insensitive" } },
+      { description: { contains: query, mode: "insensitive" } },
+    ];
+  }
+
+  if (tags && tags.length > 0) {
+    where.tags = { hasSome: tags };
+  }
+
+  const [total, publications] = await Promise.all([
+    prisma.publication.count({ where }),
+    prisma.publication.findMany({
+      where,
+      include: publicationInclude,
+      orderBy: isFeatured ? [{ publishedAt: "desc" }, { id: "desc" }] : [{ publishedAt: "desc" }, { id: "desc" }],
+      take: Math.min(limit, 50),
+      skip: offset,
+    }),
+  ]);
+
+  return { total, publications };
+}
+

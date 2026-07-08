@@ -1,10 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { prisma } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, optionalAuth } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
 import { publicProfileParamsSchema, updateProfileSchema } from "../schemas/profile";
 import { publicProfileSelect, safeUserSelect, serializePublicProfile, serializeUser } from "../services/users";
+import { followUser, unfollowUser, getFollowsData } from "../services/follows";
 
 const privateRouter = Router();
 const publicRouter = Router();
@@ -57,6 +58,7 @@ privateRouter.put(
 
 publicRouter.get(
   "/users/:handle",
+  optionalAuth,
   asyncHandler(async (req, res) => {
     const { handle } = publicProfileParamsSchema.parse(req.params);
 
@@ -73,7 +75,34 @@ publicRouter.get(
       throw new AppError(404, "PUBLIC_PROFILE_NOT_FOUND", "Public profile not found");
     }
 
-    res.json({ profile: serializePublicProfile(user) });
+    const currentUserId = req.user?.id ?? null;
+    const followsMeta = await getFollowsData(currentUserId, user.id);
+
+    res.json({ profile: serializePublicProfile(user, followsMeta) });
+  }),
+);
+
+privateRouter.post(
+  "/users/:handle/follow",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
+    const { handle } = publicProfileParamsSchema.parse(req.params);
+
+    await followUser(req.user.id, handle);
+    res.json({ status: "ok" });
+  }),
+);
+
+privateRouter.post(
+  "/users/:handle/unfollow",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
+    const { handle } = publicProfileParamsSchema.parse(req.params);
+
+    await unfollowUser(req.user.id, handle);
+    res.json({ status: "ok" });
   }),
 );
 

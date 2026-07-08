@@ -171,6 +171,8 @@ model User {
   trackReviewApprovals        TrackReviewApprover[]    @relation("TrackReviewApproverUser")
   publications                Publication[]            @relation("PublicationAuthor")
   publicationLikes            PublicationLike[]
+  followers                   Follow[]                 @relation("UserFollowers")
+  following                   Follow[]                 @relation("UserFollowing")
 
   @@index([role])
   @@index([createdAt])
@@ -856,6 +858,7 @@ model Publication {
   expiresAt       DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  isFeatured      Boolean           @default(false)
   likeCount       Int               @default(0)
   playCount       Int               @default(0)
 
@@ -884,4 +887,18 @@ model PublicationLike {
   @@unique([publicationId, userId])
   @@index([publicationId])
   @@index([userId])
+}
+
+model Follow {
+  id          String   @id @default(uuid()) @db.Uuid
+  followerId  String   @db.Uuid
+  followingId String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
 }
