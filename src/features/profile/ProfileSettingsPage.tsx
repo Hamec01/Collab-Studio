@@ -83,7 +83,7 @@ export default function ProfileSettingsPage() {
               <div className="mb-6">
                 <h1 className="text-2xl font-semibold text-white">Публичный профиль</h1>
                 <p className="mt-2 text-sm text-neutral-400">
-                  В этом slice включается только opt-in профиль. Публикации и discover будут добавлены позже.
+                  Здесь включается opt-in публичный профиль. Work publications уже доступны отдельно, discover будет добавлен позже.
                 </p>
               </div>
 

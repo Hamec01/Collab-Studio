@@ -10,6 +10,7 @@ import notificationsRouter from "./src/server/routes/notifications";
 import geminiRouter from "./src/server/routes/gemini";
 import policyRouter from "./src/server/routes/policy";
 import { profileRouter, publicRouter } from "./src/server/routes/profile";
+import { publicationRouter, publicPublicationRouter } from "./src/server/routes/publications";
 import { getConfig } from "./src/server/config";
 import { createSessionMiddleware } from "./src/server/session";
 import { checkDatabaseReady } from "./src/server/db";
@@ -55,9 +56,11 @@ app.use("/api/projects", projectsRouter);
 app.use("/api/projects", collaborationRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/gemini", geminiRouter);
+app.use("/api/publications", publicationRouter);
 app.use("/api", policyRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/public", publicRouter);
+app.use("/api/public", publicPublicationRouter);
 
 
 // REST Endpoints

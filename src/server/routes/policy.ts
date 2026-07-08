@@ -23,17 +23,4 @@ router.post("/dm", requireAuth, (req, _res, next) => {
   }
 });
 
-router.post("/publications", requireAuth, (req, _res, next) => {
-  try {
-    const user = requireCurrentUser(req);
-    ensureVerifiedForProtectedWrite({
-      emailVerifiedAt: user.emailVerifiedAt,
-      ageAcknowledgedAt: user.ageAcknowledgedAt,
-    });
-    throw new AppError(403, "FEATURE_NOT_AVAILABLE", "Publications are not available in this stage");
-  } catch (error) {
-    next(error);
-  }
-});
-
 export default router;

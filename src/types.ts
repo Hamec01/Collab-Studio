@@ -30,6 +30,68 @@ export interface PublicProfile {
   updatedAt: string;
 }
 
+export interface PublicationAuthorSummary {
+  displayName: string;
+  username: string | null;
+  avatarUrl: string | null;
+  publicProfileUrl: string | null;
+}
+
+export interface PublicationLyricsSnapshot {
+  snapshotId: string;
+  title: string;
+  plainText: string;
+}
+
+export interface PrivatePublication {
+  id: string;
+  kind: "WORK" | "COLLAB";
+  status: "PUBLISHED" | "ARCHIVED";
+  slug: string;
+  title: string;
+  description: string | null;
+  coverImageUrl: string | null;
+  tags: string[];
+  language: string | null;
+  projectId: string;
+  projectTitle: string;
+  trackId: string;
+  trackTitle: string;
+  snapshotId: string;
+  selectedAssetId: string;
+  publicUrl: string;
+  streamUrl: string | null;
+  downloadUrl: string | null;
+  publishedAt: string;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  author: PublicationAuthorSummary;
+  lyrics: PublicationLyricsSnapshot | null;
+}
+
+export interface PublicWork {
+  id: string;
+  slug: string;
+  kind: "WORK" | "COLLAB";
+  title: string;
+  description: string | null;
+  coverImageUrl: string | null;
+  tags: string[];
+  language: string | null;
+  publishedAt: string;
+  author: PublicationAuthorSummary;
+  lyrics: PublicationLyricsSnapshot | null;
+  audio: {
+    originalFilename: string;
+    mimeType: string | null;
+    sizeBytes: number | null;
+    durationMs: number | null;
+    streamUrl: string;
+    downloadUrl: string;
+  } | null;
+}
+
 export interface ProjectMember {
   userId: string;
   username: string;

@@ -108,6 +108,13 @@ export default function AuthModal({
         >
           Профиль
         </button>
+        <button
+          type="button"
+          onClick={() => window.location.assign("/app/publications")}
+          className="text-[10px] sm:text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium px-2 sm:px-3 py-1 rounded-full border border-neutral-700 transition-colors cursor-pointer"
+        >
+          Публикации
+        </button>
         {currentUser.isPublicProfile && (
           <button
             type="button"

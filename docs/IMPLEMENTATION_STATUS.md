@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 8 июля 2026 года (Stage 9 slice 1 local PASS)
+Последнее обновление: 8 июля 2026 года (Stage 9 slice 2 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 9`
-- Active slice: Stage 9 slice 2 — pending approval
+- Active slice: Stage 9 slice 3 — pending approval
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -46,7 +46,7 @@
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | completed | Локально завершён |
 | Stage 7 — Ready review, retention и export | completed | Локально завершён |
 | Stage 8 — PWA и offline lyrics | completed | Пройден |
-| Stage 9 — Public profiles и publications | in_progress | Slice 1 completed locally; production deploy not performed |
+| Stage 9 — Public profiles и publications | in_progress | Slices 1-2 completed locally; production deploy not performed |
 | Stage 10 — Discover, follows, comments, DM | pending | Не начат |
 | Stage 11 — SEO, admin, observability, hardening | pending | Не начат |
 | Stage 12 — Pricing/payment | pending | Заблокирован до beta-метрик и отдельного решения |
@@ -260,7 +260,25 @@ Stage 5A:
     - focused tests added for opt-in privacy boundary, invalid website rejection, case-insensitive public lookup and settings-page save
     - production deploy intentionally not performed
 
-## 30. Следующий шаг — только следующий Stage 9 slice после отдельного подтверждения.
+30. Stage 9 slice 2 завершён локально:
+    - additive `Publication` model added with enums `PublicationKind` and `PublicationStatus`
+    - new additive migration: `20260708113000_stage9_work_publications_core`
+    - implemented private work-publication routes:
+      - `GET /api/publications/mine`
+      - `POST /api/publications/works`
+      - `POST /api/publications/:publicationId/archive`
+    - implemented unauthenticated public work routes:
+      - `GET /api/public/works/:slug`
+      - `GET|HEAD /api/public/works/:slug/stream`
+      - `GET /api/public/works/:slug/download`
+    - publication create snapshots current lyrics state at publish time and binds exactly one ready local `TrackAsset`
+    - frontend foundation added:
+      - `/app/publications` private publication manager
+      - `/works/:slug` unauthenticated public work page
+    - public serializer exposes only selected work metadata, safe author summary, snapshot lyrics and selected audio URLs
+    - collab publications, discover, likes/favorites/plays and production deploy intentionally not performed
+
+## 31. Следующий шаг — только следующий Stage 9 slice после отдельного подтверждения.
 
 ## Blockers
 

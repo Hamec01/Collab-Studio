@@ -88,7 +88,7 @@ export default function PublicProfilePage() {
 
               <div>
                 <h2 className="mb-2 text-xs font-mono uppercase tracking-[0.2em] text-neutral-500">Статус</h2>
-                <p className="text-sm text-neutral-400">Публичный профиль активен. Публикации и discover появятся на следующих slices.</p>
+                <p className="text-sm text-neutral-400">Публичный профиль активен. Public works уже можно открывать по прямому slug, discover появится на следующих slices.</p>
               </div>
             </div>
           </section>
