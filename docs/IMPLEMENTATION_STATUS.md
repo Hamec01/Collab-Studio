@@ -253,8 +253,9 @@ Stage 5A:
 | 2026-07-08 | Stage 10 slice 1 | Discover search: full-text and tag-based query filters for work and collab publications. | `main` | tests PASS |
 | 2026-07-08 | Stage 10 slice 2 | Discover trending/featured: featured lists ordering and promotion flags. | `main` | tests PASS |
 | 2026-07-08 | Stage 10 slice 3 | Social engagement: User Follows (Follow table, follow/unfollow POST routes, optionalAuth public profile toggle UI). | `main` | tests PASS |
+| 2026-07-08 | Stage 10 slice 4 | Public comments & moderation: PublicationComment, UserBlock, ContentReport models; comments service (post, list, hide, close, block, report, admin resolve); feature-flagged behind `publicComments`; integrated in PublicWorkPage and PublicCollabPage; integration tests for auth gates, blocking, hiding, reporting and admin suspend. | `main` | 223 tests PASS, lint clean |
 
-## 29. Следующий шаг — переходить к оставшимся частям Stage 10 (public comments, DM, etc).
+## 29. Следующий шаг — Stage 10 Slice 5 (DM / Direct Messages) или Stage 11.
 
 ## Blockers
 
