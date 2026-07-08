@@ -255,8 +255,9 @@ Stage 5A:
 | 2026-07-08 | Stage 10 slice 3 | Social engagement: User Follows (Follow table, follow/unfollow POST routes, optionalAuth public profile toggle UI). | `main` | tests PASS |
 | 2026-07-08 | Stage 10 slice 4 | Public comments & moderation: PublicationComment, UserBlock, ContentReport models; comments service (post, list, hide, close, block, report, admin resolve); feature-flagged behind `publicComments`; integrated in PublicWorkPage and PublicCollabPage; integration tests for auth gates, blocking, hiding, reporting and admin suspend. | `main` | 223 tests PASS, lint clean |
 | 2026-07-08 | Stage 10 slice 5 | DM / Direct Messages: DirectMessageRequest, DirectMessage models; dm service (send request, list, respond, messaging); feature-flagged behind `directMessages`; integrated DmInbox and PublicProfilePage modal; integration tests for auth gates, duplicates, block enforcement. Stage 10 complete. | `main` | 223 tests PASS, lint clean |
+| 2026-07-08 | Stage 11 slice 1 | SEO & Public Metadata Shell: SSR dynamic HTML injection for Open Graph tags, Twitter Cards, and JSON-LD (`/u/:handle`, `/works/:slug`, `/collabs/:slug`); dynamic `/sitemap.xml`; `/robots.txt`. | `main` | tests PASS |
 
-## 29. Следующий шаг — Stage 11 (SEO, admin, observability).
+## 29. Следующий шаг — Stage 11 Slice 2 (Admin panel & Moderation workflows).
 ## Blockers
 
 - Нет отдельного staging VPS; все изменения проверяются локально до controlled production deploy.
