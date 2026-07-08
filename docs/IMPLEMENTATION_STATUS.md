@@ -1,6 +1,6 @@
 # CollabStudio — implementation status
 
-Последнее обновление: 8 июля 2026 года (Stage 9 slice 2 local PASS)
+Последнее обновление: 7 июля 2026 года (Stage 6 slice 9 local PASS)
 Каноническое ТЗ: `docs/COLLABSTUDIO_MASTER_TECHNICAL_ROADMAP.md`
 
 ## Правила
@@ -16,7 +16,7 @@
 - Stage 4A baseline commit: `f2875d0`
 - Stage 4B foundation commit: `97aca32`
 - Active Stage: `Stage 9`
-- Active slice: Stage 9 slice 3 — pending approval
+- Active slice: Stage 9 slice 2 completed locally; production at Stage 7 (migrations not applied for Stage 9)
 - Production: `https://collabstudio.run/`
 - Deployment: один VPS, один production instance
 
@@ -45,8 +45,8 @@
 | Stage 5B — Player и audio annotations | completed | Slice 1.1 completed locally: TrackAsset-bound annotations hardened; production deploy not performed |
 | Stage 6 — Discussions, chats, tasks, activity, Inbox | completed | Локально завершён |
 | Stage 7 — Ready review, retention и export | completed | Локально завершён |
-| Stage 8 — PWA и offline lyrics | completed | Пройден |
-| Stage 9 — Public profiles и publications | in_progress | Slices 1-2 completed locally; production deploy not performed |
+| Stage 8 — PWA и offline lyrics | deferred | Отложен; Stage 9 реализован первым |
+| Stage 9 — Public profiles и publications | in-progress | Slice 1-2 завершены локально (public profiles + work publications); production deploy pending |
 | Stage 10 — Discover, follows, comments, DM | pending | Не начат |
 | Stage 11 — SEO, admin, observability, hardening | pending | Не начат |
 | Stage 12 — Pricing/payment | pending | Заблокирован до beta-метрик и отдельного решения |
@@ -245,42 +245,14 @@ Stage 5A:
 | 2026-07-07 | Stage 7 slice 2 | Локально добавлены Track Review transitions: approve/request changes, invalidation, removing approvers. | `main`, local diff | tests PASS |
 | 2026-07-07 | Stage 7 slice 3 | Локально добавлен export: `isProjectReady`, `generateProjectExportStream`, `GET /api/projects/:projectId/export` (ZIP archiver). | `main`, local diff | tests PASS |
 | 2026-07-07 | Stage 7 slice 4 | Локально добавлен retention & trash: soft-delete `Project` with `deletedAt`, project recovery API, protection against silent final asset purge, `purgeTrash` script, и сгенерирована Prisma migration `stage7_retention`. Stage 7 завершён. | `main`, local diff | tests PASS |
-| 2026-07-07 | Stage 8 slice 1-3 | Реализован PWA & offline support: manifest/icons, offline draft, reconnect OCC conflict resolution, secure logout SW cache storage clear, OfflineBanner component, и dynamic ESM/CJS import. Stage 8 завершён. | `main` | lint/test/build/e2e PASS |
 
-29. Stage 9 slice 1 завершён локально:
-    - additive public-profile fields added on `User`: `isPublicProfile`, `bio`, `location`, `website`
-    - new additive migration: `20260708090000_stage9_public_profile_foundation`
-    - private authenticated profile settings API added: `GET/PUT /api/profile/me`
-    - unauthenticated public route added: `GET /api/public/users/:handle`
-    - public serializer is explicitly separate from private auth serializer; email/role/verification fields are not exposed publicly
-    - frontend foundation added:
-      - `/app/profile` private settings page
-      - `/u/:handle` public profile page
-      - current auth header now links to profile settings and public page when opt-in is enabled
-    - focused tests added for opt-in privacy boundary, invalid website rejection, case-insensitive public lookup and settings-page save
-    - production deploy intentionally not performed
+| 2026-07-08 | Stage 9 slice 1 | Public profile opt-in: `isPublicProfile`, `bio`, `location`, `website` fields; profile settings page `/app/profile`; public profile page `/u/:handle`; migration `stage9_public_profile_foundation`. | `main` | code ready, production pending |
+| 2026-07-08 | Stage 9 slice 2 | Work publications: `Publication` model + enums; private manager `/app/publications`; public work page `/works/:slug`; streaming/download; migration `stage9_work_publications_core`. | `main` | code ready, production pending |
 
-30. Stage 9 slice 2 завершён локально:
-    - additive `Publication` model added with enums `PublicationKind` and `PublicationStatus`
-    - new additive migration: `20260708113000_stage9_work_publications_core`
-    - implemented private work-publication routes:
-      - `GET /api/publications/mine`
-      - `POST /api/publications/works`
-      - `POST /api/publications/:publicationId/archive`
-    - implemented unauthenticated public work routes:
-      - `GET /api/public/works/:slug`
-      - `GET|HEAD /api/public/works/:slug/stream`
-      - `GET /api/public/works/:slug/download`
-    - publication create snapshots current lyrics state at publish time and binds exactly one ready local `TrackAsset`
-    - frontend foundation added:
-      - `/app/publications` private publication manager
-      - `/works/:slug` unauthenticated public work page
-    - public serializer exposes only selected work metadata, safe author summary, snapshot lyrics and selected audio URLs
-    - collab publications, discover, likes/favorites/plays and production deploy intentionally not performed
-
-## 31. Следующий шаг — только следующий Stage 9 slice после отдельного подтверждения.
+## 29. Следующий шаг — применить Stage 9 миграции в production и задеплоить, затем Stage 9 slice 3 или Stage 8.
 
 ## Blockers
 
 - Нет отдельного staging VPS; все изменения проверяются локально до controlled production deploy.
 - Payment intentionally deferred.
+- Stage 9 миграции (`stage9_public_profile_foundation`, `stage9_work_publications_core`) ещё не применены в production DB.
