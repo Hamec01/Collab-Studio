@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
+import fs from "fs/promises";
+import { createServer as createViteServer, type ViteDevServer } from "vite";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import authRouter from "./src/server/routes/auth";
@@ -14,6 +15,8 @@ import { publicationRouter, publicPublicationRouter } from "./src/server/routes/
 import discoverRouter from "./src/server/routes/discover";
 import commentsRouter from "./src/server/routes/comments";
 import dmRouter from "./src/server/routes/dm";
+import seoRouter from "./src/server/routes/seo";
+import { getProfileMeta, getPublicationMeta } from "./src/server/services/seo";
 import { getConfig } from "./src/server/config";
 import { createSessionMiddleware } from "./src/server/session";
 import { checkDatabaseReady } from "./src/server/db";
@@ -67,6 +70,7 @@ app.use("/api/public", publicPublicationRouter);
 app.use("/api/discover", discoverRouter);
 app.use("/api", commentsRouter);
 app.use("/api", dmRouter);
+app.use("/", seoRouter);
 
 
 // REST Endpoints
@@ -87,19 +91,49 @@ app.use("/api", notFound);
 
 // Start Server and mount Vite middleware
 async function startServer() {
+  let vite: ViteDevServer | undefined;
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
+    vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: "custom",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    app.use(express.static(path.join(process.cwd(), "dist"), { index: false }));
   }
+
+  // Intercept routes for SSR SEO injection
+  app.get("*", async (req, res, next) => {
+    try {
+      let metaTags: string | null = null;
+      
+      const uMatch = req.path.match(/^\/u\/([^/]+)$/);
+      if (uMatch) metaTags = await getProfileMeta(uMatch[1]);
+      
+      const worksMatch = req.path.match(/^\/works\/([^/]+)$/);
+      if (worksMatch) metaTags = await getPublicationMeta(worksMatch[1], "WORK");
+      
+      const collabsMatch = req.path.match(/^\/collabs\/([^/]+)$/);
+      if (collabsMatch) metaTags = await getPublicationMeta(collabsMatch[1], "COLLAB");
+
+      let html: string;
+      if (vite) {
+        html = await fs.readFile(path.join(process.cwd(), "index.html"), "utf-8");
+        html = await vite.transformIndexHtml(req.originalUrl, html);
+      } else {
+        html = await fs.readFile(path.join(process.cwd(), "dist/index.html"), "utf-8");
+      }
+
+      if (metaTags) {
+        html = html.replace("<!-- SSR_META -->", metaTags);
+      }
+
+      res.status(200).set({ "Content-Type": "text/html" }).end(html);
+    } catch (e) {
+      if (vite) vite.ssrFixStacktrace(e as Error);
+      next(e);
+    }
+  });
 
   app.use(errorHandler);
 
