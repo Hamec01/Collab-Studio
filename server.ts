@@ -15,6 +15,7 @@ import { publicationRouter, publicPublicationRouter } from "./src/server/routes/
 import discoverRouter from "./src/server/routes/discover";
 import commentsRouter from "./src/server/routes/comments";
 import dmRouter from "./src/server/routes/dm";
+import adminRouter from "./src/server/routes/admin";
 import seoRouter from "./src/server/routes/seo";
 import { getProfileMeta, getPublicationMeta } from "./src/server/services/seo";
 import { getConfig } from "./src/server/config";
@@ -68,6 +69,7 @@ app.use("/api/profile", profileRouter);
 app.use("/api/public", publicRouter);
 app.use("/api/public", publicPublicationRouter);
 app.use("/api/discover", discoverRouter);
+app.use("/api/admin", adminRouter);
 app.use("/api", commentsRouter);
 app.use("/api", dmRouter);
 app.use("/", seoRouter);
