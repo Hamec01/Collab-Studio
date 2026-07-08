@@ -249,8 +249,9 @@ Stage 5A:
 | 2026-07-08 | Stage 9 slice 1 | Public profile opt-in: `isPublicProfile`, `bio`, `location`, `website` fields; profile settings page `/app/profile`; public profile page `/u/:handle`; migration `stage9_public_profile_foundation`. | `main` | Production Deployed |
 | 2026-07-08 | Stage 9 slice 2 | Work publications: `Publication` model + enums; private manager `/app/publications`; public work page `/works/:slug`; streaming/download; migration `stage9_work_publications_core`. | `main` | Production Deployed |
 | 2026-07-08 | Stage 9 slice 3 | Collab publications: `budget`, `terms`, `rolesNeeded` metadata parsing; 30-day expiration policy; `/collabs/:slug` route and `PublicCollabPage` with streaming audio capability. | `main` | Production Deployed |
+| 2026-07-08 | Stage 9 slice 4 | Social features: `likeCount` and `playCount` in DB with `PublicationLike` deduplication; Like toggle functionality; `/play` increment endpoint triggered natively; native "Share" button using Web Share API. | `main` | tests PASS |
 
-## 29. Следующий шаг — переходить к оставшимся частям Stage 9 (комментарии/лайки/репосты) или к Stage 10.
+## 29. Следующий шаг — переходить к оставшимся частям (если применимо) или к Stage 10.
 
 ## Blockers
 
