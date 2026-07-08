@@ -128,13 +128,25 @@ function serializePublicationLyrics(snapshot: PublicationWithRelations["snapshot
   };
 }
 
+function extractCollabDetails(publication: PublicationWithRelations) {
+  if (publication.kind !== "COLLAB") return undefined;
+  const metadata = publication.metadata as Record<string, any> | null;
+  if (!metadata || !metadata.collabDetails) return undefined;
+  return {
+    budget: typeof metadata.collabDetails.budget === "string" ? metadata.collabDetails.budget : null,
+    terms: typeof metadata.collabDetails.terms === "string" ? metadata.collabDetails.terms : null,
+    rolesNeeded: Array.isArray(metadata.collabDetails.rolesNeeded) ? metadata.collabDetails.rolesNeeded : [],
+  };
+}
+
 export function serializePrivatePublication(publication: PublicationWithRelations) {
-  const streamUrl = canExposePublicWorkAsset(publication.selectedAsset)
-    ? buildPublicWorkStreamPath(publication.slug)
-    : null;
-  const downloadUrl = canExposePublicWorkAsset(publication.selectedAsset)
-    ? buildPublicWorkDownloadPath(publication.slug)
-    : null;
+  const isCollab = publication.kind === "COLLAB";
+  const streamUrlPath = isCollab ? `/api/public/collabs/${publication.slug}/stream` : buildPublicWorkStreamPath(publication.slug);
+  const downloadUrlPath = isCollab ? `/api/public/collabs/${publication.slug}/download` : buildPublicWorkDownloadPath(publication.slug);
+  const publicUrlPath = isCollab ? `/collabs/${publication.slug}` : buildPublicWorkPath(publication.slug);
+
+  const streamUrl = canExposePublicWorkAsset(publication.selectedAsset) ? streamUrlPath : null;
+  const downloadUrl = canExposePublicWorkAsset(publication.selectedAsset) ? downloadUrlPath : null;
 
   return {
     id: publication.id,
@@ -152,15 +164,17 @@ export function serializePrivatePublication(publication: PublicationWithRelation
     trackTitle: publication.track.title,
     snapshotId: publication.snapshotId,
     selectedAssetId: publication.selectedAssetId,
-    publicUrl: buildPublicWorkPath(publication.slug),
+    publicUrl: publicUrlPath,
     streamUrl,
     downloadUrl,
     publishedAt: publication.publishedAt.toISOString(),
     archivedAt: publication.archivedAt?.toISOString() ?? null,
+    expiresAt: publication.expiresAt?.toISOString() ?? null,
     createdAt: publication.createdAt.toISOString(),
     updatedAt: publication.updatedAt.toISOString(),
     author: serializeAuthor(publication.author),
     lyrics: serializePublicationLyrics(publication.snapshot),
+    collabDetails: extractCollabDetails(publication),
   };
 }
 
@@ -175,16 +189,18 @@ export function serializePublicWork(publication: PublicationWithRelations) {
     tags: publication.tags,
     language: publication.language ?? null,
     publishedAt: publication.publishedAt.toISOString(),
+    expiresAt: publication.expiresAt?.toISOString() ?? null,
     author: serializeAuthor(publication.author),
     lyrics: serializePublicationLyrics(publication.snapshot),
+    collabDetails: extractCollabDetails(publication),
     audio: canExposePublicWorkAsset(publication.selectedAsset)
       ? {
           originalFilename: publication.selectedAsset.originalFilename,
           mimeType: publication.selectedAsset.mimeType,
           sizeBytes: publication.selectedAsset.sizeBytes,
           durationMs: publication.selectedAsset.durationMs,
-          streamUrl: buildPublicWorkStreamPath(publication.slug),
-          downloadUrl: buildPublicWorkDownloadPath(publication.slug),
+          streamUrl: publication.kind === "COLLAB" ? `/api/public/collabs/${publication.slug}/stream` : buildPublicWorkStreamPath(publication.slug),
+          downloadUrl: publication.kind === "COLLAB" ? `/api/public/collabs/${publication.slug}/download` : buildPublicWorkDownloadPath(publication.slug),
         }
       : null,
   };

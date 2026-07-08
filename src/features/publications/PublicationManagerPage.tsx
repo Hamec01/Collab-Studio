@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { createWorkPublication, archivePublication, getMyPublications } from "../../api/publications";
+import { createWorkPublication, createCollabPublication, archivePublication, getMyPublications } from "../../api/publications";
 import { listProjects } from "../../api/projects";
 import { isApiError } from "../../api/client";
 import { useAuth } from "../../app/auth/AuthProvider";
@@ -37,12 +37,16 @@ export default function PublicationManagerPage() {
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [kind, setKind] = useState<"WORK" | "COLLAB">("WORK");
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [language, setLanguage] = useState("");
   const [tags, setTags] = useState("");
+  const [budget, setBudget] = useState("");
+  const [terms, setTerms] = useState("");
+  const [rolesNeeded, setRolesNeeded] = useState("");
 
   useEffect(() => {
     if (authPhase !== "authenticated") {
@@ -104,22 +108,39 @@ export default function PublicationManagerPage() {
     setMessage("");
 
     try {
-      const response = await withAuth(() => createWorkPublication({
+      const parsedTags = tags.split(",").map((item) => item.trim()).filter(Boolean);
+      const payload = {
         projectId: selectedTrack.projectId,
         trackId: selectedTrack.trackId,
         title: title.trim() || undefined,
         description: description.trim() || undefined,
         coverImageUrl: coverImageUrl.trim() || undefined,
         language: language.trim() || undefined,
-        tags: tags.split(",").map((item) => item.trim()).filter(Boolean),
-      }));
+        tags: parsedTags,
+      };
+
+      let response;
+      if (kind === "WORK") {
+        response = await withAuth(() => createWorkPublication(payload));
+      } else {
+        response = await withAuth(() => createCollabPublication({
+          ...payload,
+          budget: budget.trim() || undefined,
+          terms: terms.trim() || undefined,
+          rolesNeeded: rolesNeeded.split(",").map((r) => r.trim()).filter(Boolean),
+        }));
+      }
+
       setPublications((current) => [response.publication, ...current.filter((item) => item.id !== response.publication.id)]);
-      setMessage("Публикация создана.");
+      setMessage(`Публикация ${kind === "WORK" ? "Work" : "Collab"} создана.`);
       setTitle("");
       setDescription("");
       setCoverImageUrl("");
       setLanguage("");
       setTags("");
+      setBudget("");
+      setTerms("");
+      setRolesNeeded("");
     } catch (nextError) {
       setError(mapPublicationError(nextError));
     } finally {
@@ -166,13 +187,39 @@ export default function PublicationManagerPage() {
 
             <section className="rounded-3xl border border-neutral-800 bg-neutral-950/80 p-6 shadow-2xl">
               <div className="mb-6">
-                <h1 className="text-2xl font-semibold text-white">WORK publication</h1>
+                <h1 className="text-2xl font-semibold text-white">Новая публикация</h1>
                 <p className="mt-2 text-sm text-neutral-400">
-                  Этот slice публикует только selected work snapshot с одним готовым локальным audio asset.
+                  Этот slice публикует выбранный track snapshot как Work или Collab.
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="grid gap-4">
+
+                <div className="mb-4 flex gap-4 border-b border-neutral-800 pb-2">
+                  <label className="flex items-center gap-2 text-sm text-white">
+                    <input
+                      type="radio"
+                      name="publicationKind"
+                      value="WORK"
+                      checked={kind === "WORK"}
+                      onChange={() => setKind("WORK")}
+                      className="accent-indigo-500"
+                    />
+                    Work
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-white">
+                    <input
+                      type="radio"
+                      name="publicationKind"
+                      value="COLLAB"
+                      checked={kind === "COLLAB"}
+                      onChange={() => setKind("COLLAB")}
+                      className="accent-indigo-500"
+                    />
+                    Collab
+                  </label>
+                </div>
+
                 <label className="grid gap-1 text-sm">
                   <span className="text-neutral-300">Трек</span>
                   <select
@@ -215,6 +262,47 @@ export default function PublicationManagerPage() {
                   />
                 </label>
 
+                {kind === "COLLAB" && (
+                  <div className="grid gap-4 sm:grid-cols-2 rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-4">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-indigo-200">Бюджет</span>
+                      <input
+                        aria-label="Budget"
+                        value={budget}
+                        onChange={(event) => setBudget(event.target.value)}
+                        placeholder="Например: $500 или RevShare"
+                        maxLength={100}
+                        className="rounded-xl border border-indigo-900/50 bg-neutral-900 px-3 py-2.5 text-white outline-none focus:border-indigo-500"
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-indigo-200">Необходимые роли (через запятую)</span>
+                      <input
+                        aria-label="Roles Needed"
+                        value={rolesNeeded}
+                        onChange={(event) => setRolesNeeded(event.target.value)}
+                        placeholder="Vocalist, Producer, Mix Engineer"
+                        className="rounded-xl border border-indigo-900/50 bg-neutral-900 px-3 py-2.5 text-white outline-none focus:border-indigo-500"
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-sm sm:col-span-2">
+                      <span className="text-indigo-200">Условия (Terms)</span>
+                      <textarea
+                        aria-label="Terms"
+                        value={terms}
+                        onChange={(event) => setTerms(event.target.value)}
+                        rows={3}
+                        maxLength={1000}
+                        placeholder="Укажите права, роялти и другие условия."
+                        className="rounded-xl border border-indigo-900/50 bg-neutral-900 px-3 py-2.5 text-white outline-none focus:border-indigo-500"
+                      />
+                    </label>
+                    <p className="text-xs text-indigo-300 sm:col-span-2">Коллаб будет автоматически закрыт (expired) через 30 дней.</p>
+                  </div>
+                )}
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="grid gap-1 text-sm">
                     <span className="text-neutral-300">Cover URL</span>
@@ -250,9 +338,9 @@ export default function PublicationManagerPage() {
                   />
                 </label>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3 mt-2">
                   <Button type="submit" disabled={submitting || !selectedTrackId}>
-                    {submitting ? "Публикуем..." : "Создать work publication"}
+                    {submitting ? "Публикуем..." : `Создать ${kind === "WORK" ? "work" : "collab"} publication`}
                   </Button>
                   <span className="self-center text-xs text-neutral-500">
                     Публикуется только snapshot, собранный в момент создания.

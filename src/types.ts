@@ -64,10 +64,16 @@ export interface PrivatePublication {
   downloadUrl: string | null;
   publishedAt: string;
   archivedAt: string | null;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
   author: PublicationAuthorSummary;
   lyrics: PublicationLyricsSnapshot | null;
+  collabDetails?: {
+    budget: string | null;
+    terms: string | null;
+    rolesNeeded: string[];
+  };
 }
 
 export interface PublicWork {
@@ -80,7 +86,13 @@ export interface PublicWork {
   tags: string[];
   language: string | null;
   publishedAt: string;
+  expiresAt: string | null;
   author: PublicationAuthorSummary;
+  collabDetails?: {
+    budget: string | null;
+    terms: string | null;
+    rolesNeeded: string[];
+  };
   lyrics: PublicationLyricsSnapshot | null;
   audio: {
     originalFilename: string;

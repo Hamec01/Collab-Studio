@@ -30,3 +30,25 @@ export function getPublicWork(slug: string, signal?: AbortSignal) {
   return apiRequest<{ work: PublicWork }>(`/api/public/works/${encodeURIComponent(slug)}`, { signal });
 }
 
+export function createCollabPublication(payload: {
+  projectId: string;
+  trackId: string;
+  title?: string;
+  description?: string;
+  coverImageUrl?: string;
+  tags?: string[];
+  language?: string;
+  budget?: string;
+  terms?: string;
+  rolesNeeded?: string[];
+}) {
+  return apiRequest<{ publication: PrivatePublication }>("/api/publications/collabs", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function getPublicCollab(slug: string, signal?: AbortSignal) {
+  return apiRequest<{ collab: PublicWork }>(`/api/public/collabs/${encodeURIComponent(slug)}`, { signal });
+}
+

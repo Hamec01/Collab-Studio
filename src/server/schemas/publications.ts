@@ -34,3 +34,17 @@ export const createWorkPublicationSchema = z.object({
 
 export type CreateWorkPublicationInput = z.infer<typeof createWorkPublicationSchema>;
 
+export const createCollabPublicationSchema = z.object({
+  projectId: z.string().uuid(),
+  trackId: z.string().uuid(),
+  title: z.string().trim().min(1).max(160).optional(),
+  description: z.string().trim().max(3000).optional().or(z.literal("")),
+  coverImageUrl: optionalHttpUrlSchema.optional().or(z.literal("")),
+  tags: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
+  language: z.string().trim().min(1).max(40).optional().or(z.literal("")),
+  budget: z.string().trim().max(100).optional().or(z.literal("")),
+  terms: z.string().trim().max(1000).optional().or(z.literal("")),
+  rolesNeeded: z.array(z.string().trim().min(1).max(40)).max(10).optional(),
+});
+
+export type CreateCollabPublicationInput = z.infer<typeof createCollabPublicationSchema>;

@@ -14,7 +14,7 @@ import {
   serializePublicWork,
 } from "../services/publications";
 import { ensureVerifiedForProtectedWrite, resolveProjectTrackAccess } from "../services/stage3Access";
-import { createWorkPublicationSchema, publicationIdParamsSchema, publicationSlugParamsSchema } from "../schemas/publications";
+import { createWorkPublicationSchema, createCollabPublicationSchema, publicationIdParamsSchema, publicationSlugParamsSchema } from "../schemas/publications";
 
 const publicationRouter = Router();
 const publicPublicationRouter = Router();
@@ -146,6 +146,108 @@ async function createPublishedWork(payload: {
   throw new AppError(409, "PUBLICATION_CONFLICT", "Could not allocate a unique publication slug");
 }
 
+async function createPublishedCollab(payload: {
+  authorUserId: string;
+  projectId: string;
+  trackId: string;
+  title?: string;
+  description?: string;
+  coverImageUrl?: string;
+  tags?: string[];
+  language?: string;
+  budget?: string;
+  terms?: string;
+  rolesNeeded?: string[];
+}) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const track = await tx.track.findFirst({
+          where: { id: payload.trackId, projectId: payload.projectId },
+          select: { id: true, title: true, projectId: true },
+        });
+        if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
+
+        const asset = await tx.trackAsset.findFirst({
+          where: {
+            trackId: track.id,
+            projectId: payload.projectId,
+            deletedAt: null,
+            status: "READY",
+            storageProvider: "local",
+            storageKey: { not: null },
+            mimeType: { startsWith: "audio/" },
+            externalUrl: null,
+            kind: { in: ["MASTER", "AUDIO_VERSION", "INSTRUMENTAL", "ACAPELLA", "STEM", "DEMO", "REFERENCE"] },
+          },
+          orderBy: [
+            { isPrimary: "desc" },
+            { versionNumber: "desc" },
+            { createdAt: "desc" },
+            { id: "asc" },
+          ],
+        });
+        if (!asset) {
+          throw new AppError(409, "PUBLICATION_ASSET_REQUIRED", "A ready local TrackAsset is required for a public collab");
+        }
+
+        const latestLyricVersion = await tx.lyricVersion.findFirst({
+          where: { trackId: track.id },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+
+        const publicationTitle = payload.title?.trim() || track.title;
+        const snapshot = await tx.trackSnapshot.create({
+          data: {
+            trackId: track.id,
+            title: publicationTitle,
+            lyricVersionId: latestLyricVersion?.id ?? null,
+            metadata: { publication: true },
+            assets: {
+              create: [{ trackAssetId: asset.id }],
+            },
+          },
+        });
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days expiration
+
+        const collabDetails = {
+          budget: payload.budget?.trim() || null,
+          terms: payload.terms?.trim() || null,
+          rolesNeeded: payload.rolesNeeded ?? [],
+        };
+
+        return await tx.publication.create({
+          data: {
+            kind: "COLLAB",
+            status: "PUBLISHED",
+            slug: buildPublicationSlug(publicationTitle),
+            authorUserId: payload.authorUserId,
+            projectId: payload.projectId,
+            trackId: track.id,
+            snapshotId: snapshot.id,
+            selectedAssetId: asset.id,
+            title: publicationTitle,
+            description: payload.description?.trim() ? payload.description.trim() : null,
+            coverImageUrl: payload.coverImageUrl?.trim() ? payload.coverImageUrl.trim() : null,
+            tags: payload.tags ?? [],
+            language: payload.language?.trim() ? payload.language.trim() : null,
+            expiresAt,
+            metadata: { collabDetails },
+          },
+          include: publicationInclude,
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") continue;
+      throw error;
+    }
+  }
+
+  throw new AppError(409, "PUBLICATION_CONFLICT", "Could not allocate a unique publication slug");
+}
+
 async function getPublicWorkOrThrow(slug: string) {
   const publication = await prisma.publication.findFirst({
     where: {
@@ -159,6 +261,27 @@ async function getPublicWorkOrThrow(slug: string) {
 
   if (!publication) {
     throw new AppError(404, "PUBLICATION_NOT_FOUND", "Public work not found");
+  }
+
+  return publication;
+}
+
+async function getPublicCollabOrThrow(slug: string) {
+  const publication = await prisma.publication.findFirst({
+    where: {
+      slug,
+      kind: "COLLAB",
+      status: "PUBLISHED",
+      archivedAt: null,
+      expiresAt: {
+        gt: new Date(),
+      },
+    },
+    include: publicationInclude,
+  });
+
+  if (!publication) {
+    throw new AppError(404, "PUBLICATION_NOT_FOUND", "Public collab not found or expired");
   }
 
   return publication;
@@ -185,6 +308,31 @@ const streamPublicWorkHandler = asyncHandler(async (req, res, next) => {
     missingErrorMessage: "Published work audio file not found",
     streamErrorCode: "PUBLICATION_AUDIO_STREAM_FAILED",
     streamErrorMessage: "Published work audio stream failed",
+    logContext: { slug: publication.slug, publicationId: publication.id, assetId: asset.id },
+  });
+});
+
+const streamPublicCollabHandler = asyncHandler(async (req, res, next) => {
+  const { slug } = publicationSlugParamsSchema.parse(req.params);
+  const publication = await getPublicCollabOrThrow(slug);
+  const asset = publication.selectedAsset;
+  if (!canExposePublicWorkAsset(asset)) {
+    throw new AppError(409, "PUBLICATION_AUDIO_UNAVAILABLE", "Published collab audio is unavailable");
+  }
+
+  await sendLocalAudioResponse({
+    req,
+    res,
+    next,
+    uploadsRoot: UPLOADS_ROOT,
+    storageKey: asset.storageKey!,
+    mimeType: asset.mimeType!,
+    originalFilename: asset.originalFilename,
+    disposition: req.query.download === "1" ? "attachment" : "inline",
+    missingErrorCode: "PUBLICATION_AUDIO_NOT_FOUND",
+    missingErrorMessage: "Published collab audio file not found",
+    streamErrorCode: "PUBLICATION_AUDIO_STREAM_FAILED",
+    streamErrorMessage: "Published collab audio stream failed",
     logContext: { slug: publication.slug, publicationId: publication.id, assetId: asset.id },
   });
 });
@@ -233,6 +381,38 @@ publicationRouter.post(
       coverImageUrl: input.coverImageUrl,
       tags: input.tags,
       language: input.language,
+    });
+
+    res.status(201).json({ publication: serializePrivatePublication(publication) });
+  }),
+);
+
+publicationRouter.post(
+  "/collabs",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = requireVerifiedWriter(req);
+    const input = createCollabPublicationSchema.parse(req.body);
+    await requirePublicationEditorAccess({
+      userId: user.id,
+      role: user.role,
+      projectId: input.projectId,
+      trackId: input.trackId,
+      breakGlassProjectId: req.session.breakGlassProjectId,
+    });
+
+    const publication = await createPublishedCollab({
+      authorUserId: user.id,
+      projectId: input.projectId,
+      trackId: input.trackId,
+      title: input.title,
+      description: input.description,
+      coverImageUrl: input.coverImageUrl,
+      tags: input.tags,
+      language: input.language,
+      budget: input.budget,
+      terms: input.terms,
+      rolesNeeded: input.rolesNeeded,
     });
 
     res.status(201).json({ publication: serializePrivatePublication(publication) });
@@ -307,6 +487,43 @@ publicPublicationRouter.get(
     next();
   },
   streamPublicWorkHandler,
+);
+
+publicPublicationRouter.get(
+  "/collabs/:slug",
+  asyncHandler(async (req, res) => {
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    const publication = await getPublicCollabOrThrow(slug);
+    res.json({ collab: serializePublicWork(publication) });
+  }),
+);
+
+publicPublicationRouter.head(
+  "/collabs/:slug/stream",
+  (req, _res, next) => {
+    publicationSlugParamsSchema.parse(req.params);
+    next();
+  },
+  streamPublicCollabHandler,
+);
+
+publicPublicationRouter.get(
+  "/collabs/:slug/stream",
+  (req, _res, next) => {
+    publicationSlugParamsSchema.parse(req.params);
+    next();
+  },
+  streamPublicCollabHandler,
+);
+
+publicPublicationRouter.get(
+  "/collabs/:slug/download",
+  (req, _res, next) => {
+    publicationSlugParamsSchema.parse(req.params);
+    req.query.download = "1";
+    next();
+  },
+  streamPublicCollabHandler,
 );
 
 export { publicationRouter, publicPublicationRouter };
