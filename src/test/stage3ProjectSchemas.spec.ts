@@ -8,12 +8,12 @@ import {
 } from "../server/schemas/projects";
 
 describe("stage3 project schemas", () => {
-  it("createInviteSchema requires email or userId", () => {
-    expect(() =>
-      createInviteSchema.parse({
-        role: "viewer",
-      }),
-    ).toThrow(/email or userId is required/);
+  it("createInviteSchema allows email and userId to be optional", () => {
+    const parsedGeneric = createInviteSchema.parse({
+      role: "viewer",
+    });
+    expect(parsedGeneric.email).toBeUndefined();
+    expect(parsedGeneric.userId).toBeUndefined();
 
     const parsed = createInviteSchema.parse({
       email: "member@example.com",

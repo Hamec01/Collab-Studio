@@ -279,3 +279,29 @@ export function attachExternalAudio(
     body: payload,
   });
 }
+
+export interface ProjectInvite {
+  id: string;
+  projectId: string;
+  role: "viewer" | "editor";
+  scope: "project" | "track";
+  trackId?: string | null;
+  invitedEmail?: string | null;
+  invitedUserId?: string | null;
+  expiresAt: string;
+  token?: string;
+}
+
+export function createProjectInvite(projectId: string, payload: { email?: string; userId?: string; role: "viewer" | "editor" }) {
+  return apiRequest<{ invite: ProjectInvite }>(`/api/projects/${projectId}/invites`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function acceptProjectInvite(projectId: string, payload: { token: string }) {
+  return apiRequest<{ success: boolean }>(`/api/projects/${projectId}/invites/accept`, {
+    method: "POST",
+    body: payload,
+  });
+}

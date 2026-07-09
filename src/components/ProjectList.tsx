@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FolderPlus, Disc, Layers, Music, Users, Plus, Tag, ArrowRight, Trash2, UserPlus } from "lucide-react";
+import { FolderPlus, Disc, Layers, Music, Users, Plus, Tag, ArrowRight, Trash2, UserPlus, Link, Copy, Check } from "lucide-react";
 import { AuthUser, Project, Track } from "../types";
 import { ApiError } from "../api/client";
+import { createProjectInvite } from "../api/projects";
 import CoverImage from "../shared/ui/CoverImage";
 import Avatar from "../shared/ui/Avatar";
 
@@ -48,6 +49,9 @@ export default function ProjectList({
   const [trackSubmitLoading, setTrackSubmitLoading] = useState(false);
   const [trackSubmitError, setTrackSubmitError] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteMode, setInviteMode] = useState<"direct" | "link">("direct");
+  const [generatedLink, setGeneratedLink] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
   const [inviteLogin, setInviteLogin] = useState("");
   const [inviteRole, setInviteRole] = useState<"viewer" | "editor">("viewer");
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -70,6 +74,9 @@ export default function ProjectList({
     setInviteRole("viewer");
     setInviteError("");
     setInviteLoading(false);
+    setInviteMode("direct");
+    setGeneratedLink("");
+    setLinkCopied(false);
   };
 
   useEffect(() => {
@@ -149,6 +156,29 @@ export default function ProjectList({
     } finally {
       setInviteLoading(false);
     }
+  };
+
+  const handleGenerateInviteLink = async () => {
+    if (!activeProject || !canInvite || inviteLoading) return;
+    setInviteError("");
+    setInviteLoading(true);
+    try {
+      const response = await createProjectInvite(activeProject.id, { role: inviteRole });
+      const token = response.invite.token;
+      const link = `${window.location.origin}/app?inviteToken=${token}&projectId=${activeProject.id}`;
+      setGeneratedLink(link);
+    } catch (error) {
+      setInviteError(mapInviteError(error));
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (!generatedLink) return;
+    navigator.clipboard.writeText(generatedLink);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   const handleChangeMemberRole = async (userId: string, role: "viewer" | "editor") => {
@@ -614,65 +644,163 @@ export default function ProjectList({
           className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={() => resetInviteState()}
         >
-          <form
-            onSubmit={handleInviteSubmit}
+          <div
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-4"
+            className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-4 shadow-2xl"
           >
-            <div className="text-left">
-              <h4 className="text-sm font-semibold text-white">Добавить участника</h4>
-              <p className="text-[11px] text-neutral-400 mt-1">Укажите точный username или email существующего пользователя.</p>
+            <div className="text-left border-b border-neutral-900 pb-3">
+              <h4 className="text-sm font-semibold text-white">Добавить участников</h4>
+              <p className="text-[11px] text-neutral-400 mt-1">Пригласите коллег в проект "{activeProject.title}"</p>
             </div>
 
-            <div className="text-left">
-              <label className="block text-[10px] font-mono text-neutral-400 mb-1">USERNAME ИЛИ EMAIL</label>
-              <input
-                ref={inviteInputRef}
-                type="text"
-                value={inviteLogin}
-                onChange={(event) => setInviteLogin(event.target.value)}
-                placeholder="username или email"
-                className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                required
-              />
-            </div>
-
-            <div className="text-left">
-              <label className="block text-[10px] font-mono text-neutral-400 mb-1">РОЛЬ</label>
-              <select
-                value={inviteRole}
-                onChange={(event) => setInviteRole(event.target.value as "viewer" | "editor")}
-                className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="viewer">Viewer</option>
-                <option value="editor">Editor</option>
-              </select>
-            </div>
-
-            {inviteError && (
-              <div className="text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded p-2 text-left">
-                {inviteError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2">
+            {/* Mode Switcher */}
+            <div className="flex border-b border-neutral-900 p-0.5 rounded bg-neutral-900/50">
               <button
                 type="button"
-                onClick={() => resetInviteState()}
-                disabled={inviteLoading}
-                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs disabled:opacity-60"
+                onClick={() => { setInviteMode("direct"); setInviteError(""); }}
+                className={`flex-1 text-center py-1.5 text-xs font-medium rounded transition-colors ${
+                  inviteMode === "direct"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
               >
-                Отмена
+                По имени / почте
               </button>
               <button
-                type="submit"
-                disabled={inviteLoading || !inviteLogin.trim()}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium disabled:opacity-60"
+                type="button"
+                onClick={() => { setInviteMode("link"); setInviteError(""); }}
+                className={`flex-1 text-center py-1.5 text-xs font-medium rounded transition-colors ${
+                  inviteMode === "link"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
               >
-                {inviteLoading ? "Добавляем..." : "Добавить участника"}
+                Ссылка-приглашение
               </button>
             </div>
-          </form>
+
+            {inviteMode === "direct" ? (
+              <form onSubmit={handleInviteSubmit} className="space-y-4">
+                <div className="text-left">
+                  <label className="block text-[10px] font-mono text-neutral-400 mb-1">USERNAME ИЛИ EMAIL</label>
+                  <input
+                    ref={inviteInputRef}
+                    type="text"
+                    value={inviteLogin}
+                    onChange={(event) => setInviteLogin(event.target.value)}
+                    placeholder="username или email"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    required
+                  />
+                </div>
+
+                <div className="text-left">
+                  <label className="block text-[10px] font-mono text-neutral-400 mb-1">РОЛЬ</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(event) => setInviteRole(event.target.value as "viewer" | "editor")}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="editor">Editor</option>
+                  </select>
+                </div>
+
+                {inviteError && (
+                  <div className="text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded p-2 text-left font-mono">
+                    {inviteError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-900">
+                  <button
+                    type="button"
+                    onClick={() => resetInviteState()}
+                    disabled={inviteLoading}
+                    className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs disabled:opacity-60"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={inviteLoading || !inviteLogin.trim()}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium disabled:opacity-60"
+                  >
+                    {inviteLoading ? "Добавляем..." : "Добавить участника"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-left">
+                  <label className="block text-[10px] font-mono text-neutral-400 mb-1">РОЛЬ ДЛЯ ССЫЛКИ</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(event) => {
+                      setInviteRole(event.target.value as "viewer" | "editor");
+                      setGeneratedLink("");
+                    }}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value="viewer">Viewer (Только чтение)</option>
+                    <option value="editor">Editor (Редактирование)</option>
+                  </select>
+                </div>
+
+                {!generatedLink ? (
+                  <button
+                    type="button"
+                    onClick={handleGenerateInviteLink}
+                    disabled={inviteLoading}
+                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium flex items-center justify-center gap-1.5 disabled:opacity-60 transition-colors cursor-pointer"
+                  >
+                    <Link className="w-3.5 h-3.5" />
+                    <span>{inviteLoading ? "Создание ссылки..." : "Создать ссылку-приглашение"}</span>
+                  </button>
+                ) : (
+                  <div className="space-y-2 text-left">
+                    <label className="block text-[10px] font-mono text-neutral-400">СКОПИРУЙТЕ ССЫЛКУ</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={generatedLink}
+                        className="flex-1 bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-neutral-300 focus:outline-none font-mono selection:bg-indigo-500/30"
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="p-2 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-indigo-400 hover:text-indigo-300 transition-colors flex items-center justify-center cursor-pointer"
+                        title="Скопировать в буфер обмена"
+                      >
+                        {linkCopied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-green-400/90 mt-1 font-mono">
+                      {linkCopied ? "Ссылка скопирована!" : "Любой пользователь с этой ссылкой сможет войти в проект."}
+                    </p>
+                  </div>
+                )}
+
+                {inviteError && (
+                  <div className="text-xs text-red-400 bg-red-950/30 border border-red-900/40 rounded p-2 text-left font-mono">
+                    {inviteError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-900">
+                  <button
+                    type="button"
+                    onClick={() => resetInviteState()}
+                    className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded text-xs"
+                  >
+                    Закрыть
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

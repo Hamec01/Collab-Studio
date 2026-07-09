@@ -77,6 +77,7 @@ before(async () => {
 
   serverProcess = spawn("npx", ["tsx", "server.ts"], {
     cwd: projectRoot,
+    detached: true,
     env: {
       ...process.env,
       DATABASE_URL: databaseUrl,
@@ -94,20 +95,28 @@ before(async () => {
   try {
     await waitForHttp(`http://127.0.0.1:${appPort}/api/ready`);
   } catch (error) {
-    serverProcess?.kill("SIGTERM");
+    if (serverProcess && serverProcess.pid) {
+      try {
+        process.kill(-serverProcess.pid, "SIGTERM");
+      } catch (e) {}
+    }
     throw error;
   }
 });
 
 after(async () => {
   await prisma?.$disconnect();
-  if (serverProcess) {
-    serverProcess.kill("SIGTERM");
+  if (serverProcess && serverProcess.pid) {
+    try {
+      process.kill(-serverProcess.pid, "SIGTERM");
+    } catch (e) {}
     await Promise.race([
       new Promise((resolve) => serverProcess?.once("close", resolve)),
       new Promise((resolve) => setTimeout(resolve, 2000)),
     ]);
-    if (!serverProcess.killed) serverProcess.kill("SIGKILL");
+    try {
+      process.kill(-serverProcess.pid, "SIGKILL");
+    } catch (e) {}
   }
   await runCommand("docker", ["rm", "-f", pgContainer]).catch(() => undefined);
   if (uploadsDir) await rm(uploadsDir, { recursive: true, force: true });

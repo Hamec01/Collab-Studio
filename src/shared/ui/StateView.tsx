@@ -1,7 +1,6 @@
-import React from "react";
-import { AlertTriangle, Lock, LoaderCircle, SearchX } from "lucide-react";
+import { AlertTriangle, Lock, LoaderCircle, SearchX, CheckCircle } from "lucide-react";
 
-type StateKind = "loading" | "empty" | "error" | "readOnly";
+type StateKind = "loading" | "empty" | "error" | "readOnly" | "success";
 
 type StateViewProps = {
   kind: StateKind;
@@ -15,6 +14,7 @@ const iconMap = {
   empty: SearchX,
   error: AlertTriangle,
   readOnly: Lock,
+  success: CheckCircle,
 } as const;
 
 const toneMap = {
@@ -22,6 +22,7 @@ const toneMap = {
   empty: "text-neutral-400 border-neutral-800 bg-neutral-900/20",
   error: "text-red-300 border-red-900/40 bg-red-950/40",
   readOnly: "text-amber-200 border-amber-800/50 bg-amber-950/30",
+  success: "text-green-300 border-green-900/40 bg-green-950/30",
 } as const;
 
 export default function StateView({ kind, message, className = "", compact = false }: StateViewProps) {

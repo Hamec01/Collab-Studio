@@ -65,8 +65,7 @@ export const createInviteSchema = z
     scope: z.enum(["project", "track"]).default("project"),
     trackId: uuidParam.optional(),
     expiresInHours: z.number().int().min(1).max(24 * 30).default(72),
-  })
-  .refine((value) => Boolean(value.email || value.userId), { message: "email or userId is required" });
+  });
 
 export const inviteParamsSchema = z.object({
   projectId: uuidParam,

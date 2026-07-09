@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AppNotification,
   Project,
@@ -19,6 +19,7 @@ import { useI18n } from "./app/i18n/I18nProvider";
 import AppShell from "./app/shell/AppShell";
 import {
   addProjectMember,
+  acceptProjectInvite,
   attachExternalAudio,
   createAnnotation,
   createComment,
@@ -110,6 +111,9 @@ export default function App() {
     syncSelectedAudioSource,
     loadSource,
   } = usePlayer();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [inviteSuccessMsg, setInviteSuccessMsg] = useState("");
+  const [inviteProcessing, setInviteProcessing] = useState(false);
   const [globalError, setGlobalError] = useState<string>("");
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
   const [activeSidebar, setActiveSidebar] = useState<TrackSidebar>("comments");
@@ -160,6 +164,7 @@ export default function App() {
     refreshNotifications,
     resetWorkspaceQuery,
     updateTrackInProjects,
+    invalidateWorkspace,
   } = useWorkspaceQuery({
     authPhase,
     currentUserId: currentUser?.id ?? null,
@@ -308,6 +313,49 @@ export default function App() {
       clearDraftTimers();
     };
   }, []);
+
+  useEffect(() => {
+    const inviteToken = searchParams.get("inviteToken") || sessionStorage.getItem("pending_invite_token");
+    const projectId = searchParams.get("projectId") || sessionStorage.getItem("pending_invite_projectId");
+
+    if (!inviteToken || !projectId) return;
+
+    if (authPhase === "unauthenticated") {
+      sessionStorage.setItem("pending_invite_token", inviteToken);
+      sessionStorage.setItem("pending_invite_projectId", projectId);
+      
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("inviteToken");
+      nextParams.delete("projectId");
+      setSearchParams(nextParams, { replace: true });
+      return;
+    }
+
+    if (authPhase === "authenticated" && !inviteProcessing) {
+      setInviteProcessing(true);
+      
+      sessionStorage.removeItem("pending_invite_token");
+      sessionStorage.removeItem("pending_invite_projectId");
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("inviteToken");
+      nextParams.delete("projectId");
+      setSearchParams(nextParams, { replace: true });
+
+      withAuth(() => acceptProjectInvite(projectId, { token: inviteToken }))
+        .then(() => {
+          invalidateWorkspace();
+          setInviteSuccessMsg("Вы успешно приняли приглашение и присоединились к проекту!");
+          setTimeout(() => setInviteSuccessMsg(""), 5000);
+        })
+        .catch((err) => {
+          console.error("Failed to accept invite:", err);
+          setGlobalError("Не удалось принять приглашение: ссылка недействительна или срок её действия истёк.");
+        })
+        .finally(() => {
+          setInviteProcessing(false);
+        });
+    }
+  }, [authPhase, searchParams, setSearchParams, withAuth, invalidateWorkspace, inviteProcessing]);
 
   const updateTrackDraftState = (projectId: string, trackId: string, lyrics: string, lyricsRevision: number, updatedAt: string, lyricsDocument?: LyricsDocument) => {
     updateTrackInProjects(projectId, trackId, (track) => withLyricsDraftSnapshot(track, lyrics, lyricsRevision, updatedAt, lyricsDocument));
@@ -1097,6 +1145,12 @@ export default function App() {
 
       {currentUser && !currentUser.ageAcknowledgedAt && (
         <AgeAcknowledgementModal onConfirm={acknowledgeAge} />
+      )}
+
+      {inviteSuccessMsg && (
+        <div className="max-w-7xl mx-auto w-full px-4 mt-3">
+          <StateView kind="success" message={inviteSuccessMsg} compact />
+        </div>
       )}
 
       {globalError && (

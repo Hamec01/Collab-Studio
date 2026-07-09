@@ -27,11 +27,11 @@ export default function AppShell({ title, headerRight, showMobileNav, mobileNavI
           <img
             src="/logo.png"
             alt="CollabStudio"
-            className="h-14 sm:h-16 w-auto object-contain"
+            className="h-18 sm:h-22 w-auto object-contain"
             style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.85)) drop-shadow(0 0 28px rgba(129,140,248,0.55)) brightness(1.38) contrast(1.08)" }}
           />
           <span
-            className="hidden sm:block text-sm font-semibold tracking-widest uppercase"
+            className="hidden sm:block text-lg sm:text-xl font-bold tracking-widest uppercase"
             style={{ color: "rgba(255,255,255,0.98)", letterSpacing: "0.18em", fontFamily: "system-ui, sans-serif", textShadow: "0 0 18px rgba(255,255,255,0.18)" }}
           >
             CollabStudio
