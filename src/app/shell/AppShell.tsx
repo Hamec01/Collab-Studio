@@ -22,15 +22,15 @@ type AppShellProps = {
 export default function AppShell({ title, headerRight, showMobileNav, mobileNavItems, children }: AppShellProps) {
   return (
     <div className="app-shell min-h-dvh flex flex-col bg-[var(--cs-color-bg)] text-[var(--cs-color-text)]">
-      <header className="app-shell-header border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-[var(--cs-color-bg-elevated)]/90 border-[var(--cs-color-border)]">
-        <div className="flex items-center select-none rounded-2xl border border-white/10 bg-black/25 px-3 py-1 shadow-[0_0_32px_rgba(99,102,241,0.18)]">
+      <header className="app-shell-header border-b px-4 py-2 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-[var(--cs-color-bg-elevated)]/90 border-[var(--cs-color-border)]">
+        <a href="/" className="flex items-center select-none cursor-pointer">
           <img
             src="/logo.png"
             alt="CollabStudio"
-            className="h-22 sm:h-26 w-auto object-contain"
+            className="h-26 sm:h-32 w-auto object-contain"
             style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.85)) drop-shadow(0 0 28px rgba(129,140,248,0.55)) brightness(1.38) contrast(1.08)" }}
           />
-        </div>
+        </a>
         {headerRight}
       </header>
 
