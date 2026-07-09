@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
+import os from "node:os";
+import fs from "node:fs/promises";
 
 const router = Router();
 
@@ -43,30 +45,7 @@ router.post("/users/:id/suspend", async (req: Request, res: Response) => {
   res.json({ user });
 });
 
-router.get("/reports", async (req: Request, res: Response) => {
-  const reports = await prisma.contentReport.findMany({
-    where: { status: "PENDING" },
-    include: {
-      reporter: { select: { username: true, displayName: true } },
-    },
-    orderBy: { createdAt: "asc" },
-  });
-  res.json({ reports });
-});
 
-router.post("/reports/:id/resolve", async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { action, resolution } = req.body; // action: "RESOLVED" | "DISMISSED"
-
-  const report = await prisma.contentReport.update({
-    where: { id },
-    data: {
-      status: action,
-      resolution,
-    },
-  });
-  res.json({ report });
-});
 
 router.get("/stats", async (req: Request, res: Response) => {
   const [totalUsers, totalPublications, pendingReports] = await Promise.all([
@@ -75,6 +54,36 @@ router.get("/stats", async (req: Request, res: Response) => {
     prisma.contentReport.count({ where: { status: "PENDING" } }),
   ]);
   res.json({ stats: { totalUsers, totalPublications, pendingReports } });
+});
+
+router.get("/system", async (req: Request, res: Response) => {
+  let diskUsagePercent = 0;
+  try {
+    const stat = await fs.statfs("/");
+    const total = stat.blocks * stat.bsize;
+    const free = stat.bavail * stat.bsize;
+    diskUsagePercent = ((total - free) / total) * 100;
+  } catch (e) {
+    // Ignore if not available
+  }
+  
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const memUsagePercent = ((totalMem - freeMem) / totalMem) * 100;
+
+  const alerts = [];
+  if (diskUsagePercent > 85) alerts.push("DISK_CRITICAL");
+  else if (diskUsagePercent > 70) alerts.push("DISK_WARNING");
+  
+  if (memUsagePercent > 85) alerts.push("MEMORY_WARNING");
+
+  res.json({
+    system: {
+      diskUsagePercent: Math.round(diskUsagePercent * 100) / 100,
+      memUsagePercent: Math.round(memUsagePercent * 100) / 100,
+      alerts
+    }
+  });
 });
 
 export default router;

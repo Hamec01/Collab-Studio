@@ -24,7 +24,13 @@ router.get("/sitemap.xml", async (req: Request, res: Response) => {
     });
 
     const publications = await prisma.publication.findMany({
-      where: { status: "PUBLISHED" },
+      where: {
+        status: "PUBLISHED",
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } }
+        ]
+      },
       select: { slug: true, kind: true, updatedAt: true },
     });
 

@@ -16,8 +16,8 @@ const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled"]);
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   internalDiagnostics: false,
   lyricsStructuredEditor: false,
-  publicComments: false,
-  directMessages: false,
+  publicComments: true,
+  directMessages: true,
 };
 
 function parseBoolean(raw: string | undefined): boolean | null {

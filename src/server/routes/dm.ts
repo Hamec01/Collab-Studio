@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { requireAuth } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
+import { publicDmRateLimit } from "../middleware/rateLimits";
 import { z } from "zod";
 import {
   sendDmRequest,
@@ -35,6 +36,7 @@ const respondSchema = z.object({
 router.post(
   "/dm/requests",
   requireAuth,
+  publicDmRateLimit,
   asyncHandler(async (req, res) => {
     if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
     const { handle, text } = sendRequestSchema.parse(req.body);
@@ -92,6 +94,7 @@ router.get(
 router.post(
   "/dm/conversations/:id/messages",
   requireAuth,
+  publicDmRateLimit,
   asyncHandler(async (req, res) => {
     if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
     const { text } = sendMessageSchema.parse(req.body);

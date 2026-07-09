@@ -48,7 +48,7 @@
 | Stage 8 — PWA и offline lyrics | completed | Завершён локально: SW + App Shell + Offline drafts + Logout SW cache clear |
 | Stage 9 — Public profiles и publications | completed | Пройден |
 | Stage 10 — Discover, follows, comments, DM | in-progress | Slice 1-3 завершены локально (discover + trending/featured + user follows) |
-| Stage 11 — SEO, admin, observability, hardening | pending | Не начат |
+| Stage 11 — SEO, admin, observability, hardening | completed | Пройден |
 | Stage 12 — Pricing/payment | pending | Заблокирован до beta-метрик и отдельного решения |
 
 ## Следующий разрешённый slice
@@ -258,7 +258,10 @@ Stage 5A:
 | 2026-07-08 | Stage 11 slice 1 | SEO & Public Metadata Shell: SSR dynamic HTML injection for Open Graph tags, Twitter Cards, and JSON-LD (`/u/:handle`, `/works/:slug`, `/collabs/:slug`); dynamic `/sitemap.xml`; `/robots.txt`. | `main` | tests PASS |
 | 2026-07-08 | Stage 11 slice 2 | Admin Panel & Moderation Workflows: audit logs, flagged content review, user suspension controls, content removal APIs. Stage 11 partial complete. | `main` | tests PASS |
 
-## 29. Следующий шаг — Stage 11 Slice 3 (PWA & Performance).
+| 2026-07-08 | Stage 11 slice 3 | Observability, Performance & PWA: AppRouter route-level code splitting (`React.lazy`), Web Vitals capture (LCP, INP, CLS) mapped to AnalyticsProvider, image loading optimizations (lazy loading/decoding), fixed rate limit bugs and globally tuned limits. Stage 11 partial complete. | `main` | tests PASS |
+| 2026-07-09 | Stage 11 slice 4 | System alerts and feature flags: added /api/admin/system endpoint (disk/memory stats), updated Admin UI dashboard, enabled publicComments and directMessages default feature flags. Stage 11 Complete. | `main` | tests PASS |
+
+## 29. Следующий шаг — Stage 12 (Pricing/payment) или подготовка к Beta-запуску.
 ## Blockers
 
 - Нет отдельного staging VPS; все изменения проверяются локально до controlled production deploy.

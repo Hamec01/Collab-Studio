@@ -197,4 +197,15 @@ test("SEO: Dynamic metadata injection and sitemap generation", async () => {
   const sitemapXml = await sitemapRes.text();
   assert.ok(sitemapXml.includes("<loc>http://127.0.0.1:" + appPort + "/u/seoAuthor</loc>"));
   assert.ok(sitemapXml.includes("<loc>http://127.0.0.1:" + appPort + "/works/seo-test-work</loc>"));
+
+  // Test 5: Fetch non-existent / private page and verify noindex
+  const nonExistentWorkRes = await fetch(`http://127.0.0.1:${appPort}/works/does-not-exist`);
+  assert.equal(nonExistentWorkRes.status, 200);
+  const nonExistentWorkHtml = await nonExistentWorkRes.text();
+  assert.ok(nonExistentWorkHtml.includes('<meta name="robots" content="noindex, nofollow" />'));
+
+  const appRouteRes = await fetch(`http://127.0.0.1:${appPort}/app/projects`);
+  assert.equal(appRouteRes.status, 200);
+  const appRouteHtml = await appRouteRes.text();
+  assert.ok(appRouteHtml.includes('<meta name="robots" content="noindex, nofollow" />'));
 });

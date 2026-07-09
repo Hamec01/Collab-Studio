@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { requireAuth, optionalAuth } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
+import { publicCommentRateLimit } from "../middleware/rateLimits";
 import { z } from "zod";
 import {
   addPublicationComment,
@@ -60,6 +61,7 @@ router.get(
 router.post(
   "/publications/:slug/comments",
   requireAuth,
+  publicCommentRateLimit,
   asyncHandler(async (req, res) => {
     if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
     const { text } = createCommentSchema.parse(req.body);

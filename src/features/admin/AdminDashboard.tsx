@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getAdminStats, type AdminStats } from "../../api/admin";
+import { getAdminStats, getSystemStats, type AdminStats, type SystemStats } from "../../api/admin";
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getAdminStats()
-      .then((data) => setStats(data.stats))
+    Promise.all([getAdminStats(), getSystemStats()])
+      .then(([adminData, systemData]) => {
+        setStats(adminData.stats);
+        setSystemStats(systemData.system);
+      })
       .catch((err) => setError(err.message));
   }, []);
 
@@ -36,6 +40,52 @@ export function AdminDashboard() {
           <p className="text-4xl font-light text-amber-400">{stats?.pendingReports ?? "..."}</p>
         </div>
       </div>
+
+      {systemStats && (
+        <div className="mb-8 bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
+          <div className="bg-slate-800/80 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-slate-200">System Health</h2>
+            <div className="flex gap-2">
+              {systemStats.alerts.map(alert => (
+                <span key={alert} className="text-xs font-bold px-2 py-1 bg-red-900/80 text-red-300 rounded uppercase">
+                  {alert}
+                </span>
+              ))}
+              {systemStats.alerts.length === 0 && (
+                <span className="text-xs font-bold px-2 py-1 bg-emerald-900/80 text-emerald-300 rounded uppercase">
+                  HEALTHY
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-slate-400">Disk Usage</span>
+                <span className="text-slate-200 font-mono">{systemStats.diskUsagePercent}%</span>
+              </div>
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full ${systemStats.diskUsagePercent > 85 ? 'bg-red-500' : systemStats.diskUsagePercent > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
+                  style={{ width: `${systemStats.diskUsagePercent}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-slate-400">Memory Usage</span>
+                <span className="text-slate-200 font-mono">{systemStats.memUsagePercent}%</span>
+              </div>
+              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full ${systemStats.memUsagePercent > 85 ? 'bg-red-500' : 'bg-emerald-500'}`} 
+                  style={{ width: `${systemStats.memUsagePercent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link

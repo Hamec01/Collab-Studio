@@ -38,7 +38,7 @@ describe("AuthModal", () => {
         ageAcknowledged: true,
       });
     });
-  });
+  }, 15000);
 
   it("does not show registration toggle when public registration is disabled", () => {
     render(

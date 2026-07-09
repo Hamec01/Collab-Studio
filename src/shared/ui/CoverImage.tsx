@@ -28,6 +28,8 @@ export default function CoverImage({ src, title, className = "" }: CoverImagePro
       alt={title}
       className={`w-12 h-12 rounded-lg object-cover border border-neutral-700 bg-neutral-900 ${className}`}
       referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
       onError={() => setFailed(true)}
     />
   );

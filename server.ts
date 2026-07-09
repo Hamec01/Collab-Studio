@@ -108,15 +108,29 @@ async function startServer() {
   app.get("*", async (req, res, next) => {
     try {
       let metaTags: string | null = null;
+      let forceNoIndex = false;
       
       const uMatch = req.path.match(/^\/u\/([^/]+)$/);
-      if (uMatch) metaTags = await getProfileMeta(uMatch[1]);
+      if (uMatch) {
+        metaTags = await getProfileMeta(uMatch[1]);
+        if (!metaTags) forceNoIndex = true;
+      }
       
       const worksMatch = req.path.match(/^\/works\/([^/]+)$/);
-      if (worksMatch) metaTags = await getPublicationMeta(worksMatch[1], "WORK");
+      if (worksMatch) {
+        metaTags = await getPublicationMeta(worksMatch[1], "WORK");
+        if (!metaTags) forceNoIndex = true;
+      }
       
       const collabsMatch = req.path.match(/^\/collabs\/([^/]+)$/);
-      if (collabsMatch) metaTags = await getPublicationMeta(collabsMatch[1], "COLLAB");
+      if (collabsMatch) {
+        metaTags = await getPublicationMeta(collabsMatch[1], "COLLAB");
+        if (!metaTags) forceNoIndex = true;
+      }
+
+      if (req.path.startsWith("/app") || req.path.startsWith("/admin") || req.path.startsWith("/api")) {
+        forceNoIndex = true;
+      }
 
       let html: string;
       if (vite) {
@@ -128,6 +142,10 @@ async function startServer() {
 
       if (metaTags) {
         html = html.replace("<!-- SSR_META -->", metaTags);
+      } else if (forceNoIndex) {
+        html = html.replace("<!-- SSR_META -->", '<meta name="robots" content="noindex, nofollow" />');
+      } else {
+        html = html.replace("<!-- SSR_META -->", "");
       }
 
       res.status(200).set({ "Content-Type": "text/html" }).end(html);

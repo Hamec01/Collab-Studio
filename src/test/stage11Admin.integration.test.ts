@@ -168,6 +168,21 @@ describe("Stage 11 Slice 2: Admin Panel", async () => {
     assert.ok(typeof data.stats.totalUsers === "number");
   });
 
+  it("should return system health stats for admin users", async () => {
+    const sessionCookie = await createAuthCookie("admin11@test.com", sessionSecret);
+
+    const res = await fetch(`http://127.0.0.1:${appPort}/api/admin/system`, {
+      headers: { Cookie: sessionCookie },
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as any;
+    assert.ok(data.system);
+    assert.ok(typeof data.system.diskUsagePercent === "number");
+    assert.ok(typeof data.system.memUsagePercent === "number");
+    assert.ok(Array.isArray(data.system.alerts));
+  });
+
   it("should suspend a user", async () => {
     const sessionCookie = await createAuthCookie("admin11@test.com", sessionSecret);
     const userToSuspend = await prisma.user.findUniqueOrThrow({ where: { email: "user11@test.com" } });
@@ -209,12 +224,15 @@ describe("Stage 11 Slice 2: Admin Panel", async () => {
         "Cookie": sessionCookie,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ action: "RESOLVED", resolution: "Took action" }),
+      body: JSON.stringify({ action: "DISMISS", resolution: "Took action" }),
     });
 
     assert.equal(res.status, 200);
     const data = await res.json() as any;
-    assert.equal(data.report.status, "RESOLVED");
-    assert.equal(data.report.resolution, "Took action");
+    assert.equal(data.success, true);
+    
+    const updatedReport = await prisma.contentReport.findUnique({ where: { id: report.id } });
+    assert.equal(updatedReport?.status, "RESOLVED");
+    assert.equal(updatedReport?.resolution, "Took action");
   });
 });

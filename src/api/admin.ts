@@ -31,6 +31,12 @@ export type AdminStats = {
   pendingReports: number;
 };
 
+export type SystemStats = {
+  diskUsagePercent: number;
+  memUsagePercent: number;
+  alerts: string[];
+};
+
 export function getAdminUsers() {
   return apiRequest<{ users: AdminUser[] }>("/api/admin/users");
 }
@@ -55,4 +61,8 @@ export function resolveAdminReport(id: string, action: "RESOLVED" | "DISMISSED",
 
 export function getAdminStats() {
   return apiRequest<{ stats: AdminStats }>("/api/admin/stats");
+}
+
+export function getSystemStats() {
+  return apiRequest<{ system: SystemStats }>("/api/admin/system");
 }

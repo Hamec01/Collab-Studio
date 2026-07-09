@@ -346,6 +346,26 @@ test("public comments threads, user blocking, content reporting and moderation g
   assert.equal(blockedPostComment.status, 403);
   assert.equal(blockedPostComment.body.error.code, "USER_BLOCKED");
 
+  // User B tries to fetch User A's public profile, returns 403 (USER_BLOCKED)
+  const blockedProfileFetch = await apiJson<{ error: { code: string } }>(`/api/public/users/usera`, {}, jarB);
+  assert.equal(blockedProfileFetch.status, 403);
+  assert.equal(blockedProfileFetch.body.error.code, "USER_BLOCKED");
+
+  // User B tries to fetch User A's work, returns 403 (USER_BLOCKED)
+  const blockedWorkFetch = await apiJson<{ error: { code: string } }>(`/api/public/works/${publication.slug}`, {}, jarB);
+  assert.equal(blockedWorkFetch.status, 403);
+  assert.equal(blockedWorkFetch.body.error.code, "USER_BLOCKED");
+
+  // User B tries to stream User A's work, returns 403 (USER_BLOCKED)
+  const blockedStreamFetch = await apiJson<{ error: { code: string } }>(`/api/public/works/${publication.slug}/stream`, {}, jarB);
+  assert.equal(blockedStreamFetch.status, 403);
+  assert.equal(blockedStreamFetch.body.error.code, "USER_BLOCKED");
+
+  // User B tries to download User A's work, returns 403 (USER_BLOCKED)
+  const blockedDownloadFetch = await apiJson<{ error: { code: string } }>(`/api/public/works/${publication.slug}/download`, {}, jarB);
+  assert.equal(blockedDownloadFetch.status, 403);
+  assert.equal(blockedDownloadFetch.body.error.code, "USER_BLOCKED");
+
   // Unblock User B
   await apiJson<{ success: boolean }>(`/api/users/userb/unblock`, { method: "POST" }, jarA);
 

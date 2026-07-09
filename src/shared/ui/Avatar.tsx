@@ -32,6 +32,8 @@ export default function Avatar({ src, name, size = "md", className = "" }: Avata
       alt={name}
       className={`${sizeClass} rounded-full object-cover border border-neutral-700 bg-neutral-900 ${className}`}
       referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
       onError={() => setFailed(true)}
     />
   );

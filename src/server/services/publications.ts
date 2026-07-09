@@ -300,6 +300,10 @@ export async function searchPublications(params: {
 
   const where: Prisma.PublicationWhereInput = {
     status: "PUBLISHED",
+    OR: [
+      { expiresAt: null },
+      { expiresAt: { gt: new Date() } }
+    ]
   };
 
   if (kind) {

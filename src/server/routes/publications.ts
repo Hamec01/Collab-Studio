@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { getConfig } from "../config";
 import { prisma } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, optionalAuth } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
 import { sendLocalAudioResponse } from "../services/audioDelivery";
 import {
@@ -21,6 +21,7 @@ import { createWorkPublicationSchema, createCollabPublicationSchema, publication
 
 const publicationRouter = Router();
 const publicPublicationRouter = Router();
+publicPublicationRouter.use(optionalAuth);
 
 const UPLOADS_ROOT = path.resolve(getConfig().UPLOADS_DIR);
 
@@ -251,7 +252,7 @@ async function createPublishedCollab(payload: {
   throw new AppError(409, "PUBLICATION_CONFLICT", "Could not allocate a unique publication slug");
 }
 
-async function getPublicWorkOrThrow(slug: string) {
+async function getPublicWorkOrThrow(slug: string, viewerId?: string | null) {
   const publication = await prisma.publication.findFirst({
     where: {
       slug,
@@ -266,10 +267,24 @@ async function getPublicWorkOrThrow(slug: string) {
     throw new AppError(404, "PUBLICATION_NOT_FOUND", "Public work not found");
   }
 
+  if (viewerId && publication.authorUserId) {
+    const block = await prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: viewerId, blockedId: publication.authorUserId },
+          { blockerId: publication.authorUserId, blockedId: viewerId },
+        ],
+      },
+    });
+    if (block) {
+      throw new AppError(403, "USER_BLOCKED", "Access denied due to a user block");
+    }
+  }
+
   return publication;
 }
 
-async function getPublicCollabOrThrow(slug: string) {
+async function getPublicCollabOrThrow(slug: string, viewerId?: string | null) {
   const publication = await prisma.publication.findFirst({
     where: {
       slug,
@@ -287,12 +302,26 @@ async function getPublicCollabOrThrow(slug: string) {
     throw new AppError(404, "PUBLICATION_NOT_FOUND", "Public collab not found or expired");
   }
 
+  if (viewerId && publication.authorUserId) {
+    const block = await prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: viewerId, blockedId: publication.authorUserId },
+          { blockerId: publication.authorUserId, blockedId: viewerId },
+        ],
+      },
+    });
+    if (block) {
+      throw new AppError(403, "USER_BLOCKED", "Access denied due to a user block");
+    }
+  }
+
   return publication;
 }
 
 const streamPublicWorkHandler = asyncHandler(async (req, res, next) => {
   const { slug } = publicationSlugParamsSchema.parse(req.params);
-  const publication = await getPublicWorkOrThrow(slug);
+  const publication = await getPublicWorkOrThrow(slug, req.user?.id);
   const asset = publication.selectedAsset;
   if (!canExposePublicWorkAsset(asset)) {
     throw new AppError(409, "PUBLICATION_AUDIO_UNAVAILABLE", "Published work audio is unavailable");
@@ -317,7 +346,7 @@ const streamPublicWorkHandler = asyncHandler(async (req, res, next) => {
 
 const streamPublicCollabHandler = asyncHandler(async (req, res, next) => {
   const { slug } = publicationSlugParamsSchema.parse(req.params);
-  const publication = await getPublicCollabOrThrow(slug);
+  const publication = await getPublicCollabOrThrow(slug, req.user?.id);
   const asset = publication.selectedAsset;
   if (!canExposePublicWorkAsset(asset)) {
     throw new AppError(409, "PUBLICATION_AUDIO_UNAVAILABLE", "Published collab audio is unavailable");
@@ -459,7 +488,7 @@ publicPublicationRouter.get(
   "/works/:slug",
   asyncHandler(async (req, res) => {
     const { slug } = publicationSlugParamsSchema.parse(req.params);
-    const publication = await getPublicWorkOrThrow(slug);
+    const publication = await getPublicWorkOrThrow(slug, req.user?.id);
     let hasLiked = false;
     if (req.user) {
       const like = await prisma.publicationLike.findUnique({
@@ -532,7 +561,7 @@ publicPublicationRouter.get(
   "/collabs/:slug",
   asyncHandler(async (req, res) => {
     const { slug } = publicationSlugParamsSchema.parse(req.params);
-    const publication = await getPublicCollabOrThrow(slug);
+    const publication = await getPublicCollabOrThrow(slug, req.user?.id);
     let hasLiked = false;
     if (req.user) {
       const like = await prisma.publicationLike.findUnique({

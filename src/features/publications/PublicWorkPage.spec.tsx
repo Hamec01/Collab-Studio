@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { getPublicWork } from "../../api/publications";
 import PublicWorkPage from "./PublicWorkPage";
+import { I18nProvider } from "../../app/i18n/I18nProvider";
 
 vi.mock("../../api/publications", () => ({
   getPublicWork: vi.fn(),
@@ -58,11 +59,13 @@ describe("PublicWorkPage", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/works/neon-lights"]}>
-        <Routes>
-          <Route path="/works/:slug" element={<PublicWorkPage />} />
-        </Routes>
-      </MemoryRouter>,
+      <I18nProvider>
+        <MemoryRouter initialEntries={["/works/neon-lights"]}>
+          <Routes>
+            <Route path="/works/:slug" element={<PublicWorkPage />} />
+          </Routes>
+        </MemoryRouter>
+      </I18nProvider>,
     );
 
     await waitFor(() => expect(getPublicWork).toHaveBeenCalledWith("neon-lights", expect.any(AbortSignal)));

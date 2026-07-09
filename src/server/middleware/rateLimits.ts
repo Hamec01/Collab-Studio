@@ -43,3 +43,21 @@ export const geminiUserRateLimit = rateLimit({
   keyGenerator: (req) => req.user?.id ?? "unauthenticated",
   handler: (req, res) => sendError(res, 429, "GEMINI_RATE_LIMITED", "Too many Gemini requests", req.requestId),
 });
+
+export const publicCommentRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.session?.userId ?? "unauthenticated",
+  handler: (req, res) => sendError(res, 429, "COMMENT_RATE_LIMITED", "Too many comments submitted", req.requestId),
+});
+
+export const publicDmRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.session?.userId ?? "unauthenticated",
+  handler: (req, res) => sendError(res, 429, "DM_RATE_LIMITED", "Too many direct message requests", req.requestId),
+});

@@ -76,6 +76,20 @@ publicRouter.get(
     }
 
     const currentUserId = req.user?.id ?? null;
+    if (currentUserId && user.id !== currentUserId) {
+      const block = await prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: currentUserId, blockedId: user.id },
+            { blockerId: user.id, blockedId: currentUserId },
+          ],
+        },
+      });
+      if (block) {
+        throw new AppError(403, "USER_BLOCKED", "Access denied due to a user block");
+      }
+    }
+
     const followsMeta = await getFollowsData(currentUserId, user.id);
 
     res.json({ profile: serializePublicProfile(user, followsMeta) });

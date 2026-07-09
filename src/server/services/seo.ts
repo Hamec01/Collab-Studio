@@ -68,7 +68,12 @@ export async function getPublicationMeta(slug: string, kind: "WORK" | "COLLAB"):
     },
   });
 
-  if (!publication || publication.kind !== kind || publication.status !== "PUBLISHED") {
+  if (
+    !publication || 
+    publication.kind !== kind || 
+    publication.status !== "PUBLISHED" ||
+    (publication.kind === "COLLAB" && publication.expiresAt && publication.expiresAt < new Date())
+  ) {
     return null;
   }
 
