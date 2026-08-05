@@ -25,7 +25,7 @@ export function PublicationComments({
   publicationAuthorId,
   commentsClosed: initialCommentsClosed,
 }: PublicationCommentsProps) {
-  const { user } = useAuth();
+  const { currentUser: user } = useAuth();
   const { t } = useI18n();
 
   const [comments, setComments] = useState<PublicationComment[]>([]);

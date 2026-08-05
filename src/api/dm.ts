@@ -8,6 +8,13 @@ export function sendDmRequest(handle: string, text: string) {
   });
 }
 
+export function sendDmRequestByUserId(userId: string, text: string) {
+  return apiRequest<{ request: DmRequest }>("/api/dm/requests/by-user", {
+    method: "POST",
+    body: { userId, text },
+  });
+}
+
 export function getDmRequests() {
   return apiRequest<{ requests: DmRequest[] }>("/api/dm/requests");
 }

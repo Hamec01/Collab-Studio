@@ -37,7 +37,9 @@ export function resolveNotificationTarget(notification: Pick<AppNotification, "p
   }
 
   const projectSidebar: ProjectSidebar =
-    notification.type.includes("task") ? "tasks" : "chat";
+    notification.type === "project_join_request" ? "activity"
+      : notification.type.includes("task") ? "tasks"
+        : "chat";
 
   return {
     href: withHash(buildPrivatePath({ projectId: notification.projectId, trackId: null }), `#project-${projectSidebar}`),

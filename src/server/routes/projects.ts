@@ -19,7 +19,9 @@ import {
   inviteParamsSchema,
   createProjectSchema,
   memberParamsSchema,
+  projectJoinRequestParamsSchema,
   projectParamsSchema,
+  reviewProjectJoinRequestSchema,
   trackGrantParamsSchema,
   transferOwnershipSchema,
   updateMemberRoleSchema,
@@ -539,6 +541,116 @@ router.delete(
   }),
 );
 
+router.patch(
+  "/:projectId/join-requests/:requestId",
+  (req, _res, next) => {
+    projectJoinRequestParamsSchema.parse(req.params);
+    next();
+  },
+  requireProjectOwner,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { projectId, requestId } = projectJoinRequestParamsSchema.parse(req.params);
+    const input = reviewProjectJoinRequestSchema.parse(req.body ?? {});
+
+    const result = await prisma.$transaction(async (tx) => {
+      const request = await tx.projectJoinRequest.findFirst({
+        where: { id: requestId, projectId },
+        include: {
+          requester: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      });
+
+      if (!request) {
+        throw new AppError(404, "JOIN_REQUEST_NOT_FOUND", "Project join request not found");
+      }
+      if (request.status !== "PENDING") {
+        throw new AppError(409, "JOIN_REQUEST_ALREADY_REVIEWED", "Join request is already reviewed");
+      }
+
+      let member: ReturnType<typeof serializeProjectMember> | null = null;
+      if (input.action === "approve") {
+        const createdMember = await tx.projectMember.upsert({
+          where: { projectId_userId: { projectId, userId: request.requesterId } },
+          update: { role: input.role },
+          create: { projectId, userId: request.requesterId, role: input.role },
+          include: memberInclude,
+        });
+        member = serializeProjectMember(createdMember);
+      }
+
+      const nextStatus = input.action === "approve" ? "APPROVED" : "REJECTED";
+      const reviewed = await tx.projectJoinRequest.update({
+        where: { id: request.id },
+        data: {
+          status: nextStatus,
+          reviewedById: user.id,
+          reviewedAt: new Date(),
+          decisionReason: input.reason?.trim() ? input.reason.trim() : null,
+        },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: request.requesterId,
+          actorId: user.id,
+          actorName: user.displayName,
+          projectId,
+          trackId: null,
+          type: input.action === "approve" ? "project_join_approved" : "project_join_rejected",
+          message: input.action === "approve"
+            ? `одобрил ваш запрос в проект (${input.role === "editor" ? "editor" : "viewer"})`
+            : "отклонил ваш запрос в проект",
+        },
+      });
+
+      await tx.activityEvent.create({
+        data: {
+          projectId,
+          actorId: user.id,
+          type: input.action === "approve" ? "project_join_approved" : "project_join_rejected",
+          payload: {
+            requestId: request.id,
+            requesterId: request.requesterId,
+            role: input.action === "approve" ? input.role : null,
+          },
+        },
+      });
+
+      return {
+        request: reviewed,
+        requester: request.requester,
+        member,
+      };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    res.json({
+      request: {
+        id: result.request.id,
+        projectId: result.request.projectId,
+        requesterId: result.request.requesterId,
+        requester: result.requester,
+        requestedRole: result.request.requestedRole,
+        message: result.request.message,
+        status: result.request.status,
+        reviewedById: result.request.reviewedById,
+        reviewedAt: result.request.reviewedAt?.toISOString() ?? null,
+        decisionReason: result.request.decisionReason,
+        createdAt: result.request.createdAt.toISOString(),
+        updatedAt: result.request.updatedAt.toISOString(),
+      },
+      member: result.member,
+    });
+  }),
+);
+
 router.post(
   "/:projectId/invites",
   (req, _res, next) => {
@@ -886,6 +998,7 @@ router.post(
         data: {
           projectId,
           title: input.title,
+          coverUrl: input.coverUrl || null,
           ...structuredTrackWriteData(preparedLyrics),
           tags: input.tags ?? [],
         },
@@ -945,6 +1058,7 @@ router.patch(
         data: {
           ...(input.title !== undefined ? { title: input.title } : {}),
           ...(input.tags !== undefined ? { tags: input.tags } : {}),
+          ...(input.coverUrl !== undefined ? { coverUrl: input.coverUrl || null } : {}),
         },
       });
 

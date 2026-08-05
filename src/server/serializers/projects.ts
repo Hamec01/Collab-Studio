@@ -94,6 +94,17 @@ export const projectRelationsInclude = {
     orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
     take: PROJECT_ACTIVITY_LIMIT,
   },
+  joinRequests: {
+    include: {
+      requester: {
+        select: collaborationUserSelect,
+      },
+    },
+    where: {
+      status: "PENDING" as const,
+    },
+    orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
+  },
 } satisfies Prisma.ProjectInclude;
 
 export type MemberWithUser = ProjectMember & {
@@ -177,6 +188,7 @@ export function serializeTrack(track: TrackWithRelations) {
   return {
     id: track.id,
     title: track.title,
+    coverUrl: track.coverUrl,
     lyrics: lyrics.plainText,
     lyricsDocument: lyrics.document,
     lyricsPlainText: lyrics.plainText,
@@ -204,6 +216,27 @@ export function serializeProject(project: ProjectWithRelations, currentUserId?: 
   const currentUserRole = currentUserId
     ? (members.find((member) => member.userId === currentUserId)?.role ?? null)
     : null;
+  const joinRequests = currentUserRole === "owner"
+    ? (project.joinRequests ?? []).map((request) => ({
+      id: request.id,
+      projectId: request.projectId,
+      requesterId: request.requesterId,
+      requester: {
+        id: request.requester.id,
+        username: request.requester.username,
+        displayName: request.requester.displayName,
+        avatarUrl: request.requester.avatarUrl,
+      },
+      requestedRole: request.requestedRole,
+      message: request.message,
+      status: request.status,
+      reviewedById: request.reviewedById,
+      reviewedAt: request.reviewedAt?.toISOString() ?? null,
+      decisionReason: request.decisionReason,
+      createdAt: request.createdAt.toISOString(),
+      updatedAt: request.updatedAt.toISOString(),
+    }))
+    : [];
 
   return {
     id: project.id,
@@ -226,6 +259,7 @@ export function serializeProject(project: ProjectWithRelations, currentUserId?: 
     chat: (project.projectChatMessages ?? []).map(serializeProjectChatMessage),
     tasks: (project.tasks ?? []).map(serializeProjectTask),
     activity: (project.activityEvents ?? []).map(serializeActivityEvent),
+    joinRequests,
     tracks: (project.tracks ?? []).map(serializeTrack),
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),

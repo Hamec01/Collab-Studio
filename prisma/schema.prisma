@@ -125,6 +125,13 @@ enum DmRequestStatus {
   BLOCKED
 }
 
+enum ProjectJoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 model User {
   id                String    @id @default(uuid()) @db.Uuid
   username          String    @unique
@@ -189,6 +196,8 @@ model User {
   sentDmRequests              DirectMessageRequest[]   @relation("DmSender")
   receivedDmRequests          DirectMessageRequest[]   @relation("DmRecipient")
   directMessages              DirectMessage[]
+  sentProjectJoinRequests     ProjectJoinRequest[]     @relation("ProjectJoinRequester")
+  reviewedProjectJoinRequests ProjectJoinRequest[]     @relation("ProjectJoinReviewer")
 
   @@index([role])
   @@index([createdAt])
@@ -272,6 +281,7 @@ model Project {
   projectChatMessages ProjectChatMessage[]
   tasks               ProjectTask[]
   publications        Publication[]
+  joinRequests        ProjectJoinRequest[]
 
   @@index([updatedAt])
   @@index([createdAt])
@@ -324,6 +334,31 @@ model ProjectInvite {
   @@index([invitedEmail])
   @@index([status])
   @@index([expiresAt])
+}
+
+model ProjectJoinRequest {
+  id             String                   @id @default(uuid()) @db.Uuid
+  projectId      String                   @db.Uuid
+  requesterId    String                   @db.Uuid
+  publicationId  String?                  @db.Uuid
+  requestedRole  ProjectRole              @default(viewer)
+  message        String?
+  status         ProjectJoinRequestStatus @default(PENDING)
+  reviewedById   String?                  @db.Uuid
+  reviewedAt     DateTime?
+  decisionReason String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requester   User         @relation("ProjectJoinRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  publication Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  reviewedBy  User?        @relation("ProjectJoinReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, requesterId])
+  @@index([projectId, status])
+  @@index([requesterId, status])
+  @@index([createdAt])
 }
 
 model TrackAccessGrant {
@@ -430,6 +465,7 @@ model Track {
   lyricsPlainText String?
   lyricsRevision  Int      @default(0)
   tags            String[] @default([])
+  coverUrl        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -884,8 +920,10 @@ model Publication {
   snapshot      TrackSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
   selectedAsset TrackAsset        @relation("PublicationSelectedAsset", fields: [selectedAssetId], references: [id], onDelete: Restrict)
   likes         PublicationLike[] @relation("PublicationLikes")
-  commentsClosed Boolean            @default(false)
+  plays         PublicationPlay[] @relation("PublicationPlays")
+  commentsClosed Boolean           @default(false)
   comments      PublicationComment[]
+  joinRequests  ProjectJoinRequest[]
 
   @@index([authorUserId, status, publishedAt])
   @@index([projectId])
@@ -905,6 +943,17 @@ model PublicationLike {
   @@unique([publicationId, userId])
   @@index([publicationId])
   @@index([userId])
+}
+
+model PublicationPlay {
+  id            String   @id @default(uuid()) @db.Uuid
+  publicationId String   @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  publication   Publication @relation("PublicationPlays", fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@index([publicationId])
+  @@index([publicationId, createdAt])
 }
 
 model Follow {

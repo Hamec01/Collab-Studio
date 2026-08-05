@@ -7,7 +7,7 @@ import { getConfig } from "../config";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { AppError, sendError } from "../middleware/errors";
-import { authRateLimit } from "../middleware/rateLimits";
+import { authLoginRateLimit, authRateLimit } from "../middleware/rateLimits";
 import {
   emailVerificationRequestSchema,
   loginSchema,
@@ -196,7 +196,7 @@ router.post(
 
 router.post(
   "/login",
-  authRateLimit,
+  authLoginRateLimit,
   asyncHandler(async (req, res) => {
     const input = loginSchema.parse(req.body);
     const normalizedLogin = input.login.toLowerCase();

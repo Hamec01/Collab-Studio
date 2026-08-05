@@ -62,6 +62,7 @@ export interface PrivatePublication {
   trackTitle: string;
   snapshotId: string;
   selectedAssetId: string;
+  allowDownload: boolean;
   publicUrl: string;
   streamUrl: string | null;
   downloadUrl: string | null;
@@ -99,6 +100,7 @@ export interface PublicWork {
   author: PublicationAuthorSummary;
   authorUserId: string | null;
   commentsClosed: boolean;
+  allowDownload: boolean;
   collabDetails?: {
     budget: string | null;
     terms: string | null;
@@ -111,7 +113,7 @@ export interface PublicWork {
     sizeBytes: number | null;
     durationMs: number | null;
     streamUrl: string;
-    downloadUrl: string;
+    downloadUrl: string | null;
   } | null;
 }
 
@@ -122,6 +124,26 @@ export interface ProjectMember {
   avatarUrl: string | null;
   role: "owner" | "editor" | "viewer";
   createdAt: string;
+}
+
+export interface ProjectJoinRequest {
+  id: string;
+  projectId: string;
+  requesterId: string;
+  requester: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  requestedRole: "owner" | "editor" | "viewer";
+  message: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  reviewedById: string | null;
+  reviewedAt: string | null;
+  decisionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProjectOwnerSummary {
@@ -337,6 +359,7 @@ export interface Annotation {
 export interface Track {
   id: string;
   title: string;
+  coverUrl?: string | null;
   lyrics: string;
   lyricsDocument?: LyricsDocument;
   lyricsPlainText?: string;
@@ -368,6 +391,7 @@ export interface Project {
   chat?: ChatMessage[];
   tasks?: Task[];
   activity?: ActivityEvent[];
+  joinRequests?: ProjectJoinRequest[];
   tracks: Track[];
   createdAt: string;
   updatedAt: string;

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AppNotification,
+  PrivatePublication,
   Project,
   Task,
   Track,
@@ -11,7 +12,6 @@ import ProjectList from "./components/ProjectList";
 import { type LyricsSaveStatus, type RestoreDraftSnapshot } from "./components/LyricsEditor";
 import NotificationsPanel from "./components/NotificationsPanel";
 import AgeAcknowledgementModal from "./components/AgeAcknowledgementModal";
-import { FolderOpen, MessageSquare, Music } from "lucide-react";
 import { ApiError, isApiError } from "./api/client";
 import { useAuth } from "./app/auth/AuthProvider";
 import { usePlayer } from "./app/player/PlayerProvider";
@@ -34,10 +34,12 @@ import {
   postChatMessage,
   saveLyricsDraft,
   removeProjectMember,
+  reviewProjectJoinRequest,
   resolveComment,
   updateProjectMemberRole,
   updateProjectTask,
   updateTask,
+  updateTrack,
   uploadTrackAudio,
   deleteProject,
 } from "./api/projects";
@@ -45,6 +47,11 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "./api/notifications";
+import {
+  archivePublication,
+  createWorkPublication,
+  getMyPublications,
+} from "./api/publications";
 import {
   isLatestContentSynced,
   shouldRestoreFromLocal,
@@ -86,6 +93,21 @@ type MobileTab = "projects" | "editor" | "rightPanel";
 type ExternalProvider = "google" | "yandex" | "telegram" | "other";
 const AUDIO_LIMIT_BYTES = 25 * 1024 * 1024;
 const AUDIO_ACCEPT = ".mp3,.wav,.flac,.ogg,.aac,.m4a,.webm,audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/ogg,audio/aac,audio/mp4,audio/webm";
+const PUBLICATION_READY_KINDS = new Set(["MASTER", "AUDIO_VERSION", "INSTRUMENTAL", "ACAPELLA", "STEM", "DEMO", "REFERENCE"]);
+
+function hasReadyPublicationAsset(track: Track) {
+  const assets = track.assets ?? [];
+  return assets.some((asset) => (
+    asset.deletedAt === null
+    && asset.status === "READY"
+    && asset.storageProvider === "local"
+    && asset.externalUrl === null
+    && typeof asset.mimeType === "string"
+    && asset.mimeType.startsWith("audio/")
+    && PUBLICATION_READY_KINDS.has(asset.kind)
+  ));
+}
+
 export default function App() {
   const { t } = useI18n();
   const {
@@ -110,11 +132,15 @@ export default function App() {
     setSelectedAudioSourceId,
     syncSelectedAudioSource,
     loadSource,
+    setTrackMetadata,
   } = usePlayer();
   const [searchParams, setSearchParams] = useSearchParams();
   const [inviteSuccessMsg, setInviteSuccessMsg] = useState("");
+  const [projectPublicSuccessMsg, setProjectPublicSuccessMsg] = useState("");
   const [inviteProcessing, setInviteProcessing] = useState(false);
   const [globalError, setGlobalError] = useState<string>("");
+  const [myPublications, setMyPublications] = useState<PrivatePublication[]>([]);
+  const [projectPublicPendingId, setProjectPublicPendingId] = useState<string | null>(null);
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
   const [activeSidebar, setActiveSidebar] = useState<TrackSidebar>("comments");
   const [projectSidebar, setProjectSidebar] = useState<ProjectSidebar>("chat");
@@ -200,6 +226,18 @@ export default function App() {
   }, [currentUser, activeProject]);
 
   const canEdit = projectRole === "owner" || projectRole === "editor";
+
+  const projectPublicStatus = useMemo(() => {
+    const result: Record<string, { isPublic: boolean; canPublish: boolean; pending: boolean }> = {};
+    for (const project of projects) {
+      result[project.id] = {
+        isPublic: myPublications.some((publication) => publication.projectId === project.id && publication.status === "PUBLISHED"),
+        canPublish: project.tracks.some((track) => hasReadyPublicationAsset(track)),
+        pending: projectPublicPendingId === project.id,
+      };
+    }
+    return result;
+  }, [myPublications, projectPublicPendingId, projects]);
   const lyricsLease = useLyricsEditLease({
     projectId: activeProjectId,
     trackId: activeTrackId,
@@ -313,6 +351,25 @@ export default function App() {
       clearDraftTimers();
     };
   }, []);
+
+  useEffect(() => {
+    if (authPhase !== "authenticated") {
+      setMyPublications([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    void withAuth(() => getMyPublications(controller.signal))
+      .then((response) => {
+        setMyPublications(response.publications);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setGlobalError("Не удалось загрузить список публикаций.");
+      });
+
+    return () => controller.abort();
+  }, [authPhase, withAuth]);
 
   useEffect(() => {
     const inviteToken = searchParams.get("inviteToken") || sessionStorage.getItem("pending_invite_token");
@@ -628,7 +685,26 @@ export default function App() {
   useEffect(() => {
     const sourceUrl = activeTrackSelectedAudio?.streamUrl || null;
     loadSource(sourceUrl);
-  }, [activeTrackSelectedAudio?.id, activeTrackSelectedAudio?.streamUrl, loadSource]);
+    if (activeTrack && activeTrackSelectedAudio) {
+      setTrackMetadata({
+        trackTitle: activeTrack.title,
+        activeAudioSource: activeTrackSelectedAudio,
+        activeTrackId: activeTrackId,
+        activeProjectId: activeProjectId,
+      });
+    } else {
+      setTrackMetadata(null);
+    }
+  }, [
+    activeTrack?.id,
+    activeTrack?.title,
+    activeTrackSelectedAudio?.id,
+    activeTrackSelectedAudio?.streamUrl,
+    activeTrackId,
+    activeProjectId,
+    loadSource,
+    setTrackMetadata,
+  ]);
 
   useEffect(() => {
     if (authSystemError) {
@@ -704,14 +780,6 @@ export default function App() {
 
     syncSelectedAudioSource(activeTrackAudioSources);
   }, [activeTrack?.id, activeProject?.id, currentUser?.id, activeTrackAudioSources, syncSelectedAudioSource]);
-
-  useEffect(() => {
-    if (authPhase !== "authenticated") return;
-    const interval = window.setInterval(() => {
-      void refreshNotifications().catch(() => undefined);
-    }, 15000);
-    return () => window.clearInterval(interval);
-  }, [authPhase]);
 
   useEffect(() => {
     const onOnline = () => {
@@ -812,6 +880,20 @@ export default function App() {
     setSelectedAudioSourceId(initialAudio?.id ?? null);
   };
 
+  const handleUpdateTrack = async (projectId: string, trackId: string, payload: { title?: string; coverUrl?: string; tags?: string[] }) => {
+    const updatedTrack = await withAuth(() => updateTrack(projectId, trackId, payload));
+    setProjects((prev) =>
+      prev.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              tracks: project.tracks.map((t) => (t.id === trackId ? { ...t, ...updatedTrack } : t)),
+            }
+          : project,
+      ),
+    );
+  };
+
   const handleAddProjectMember = async (projectId: string, payload: { login: string; role: "viewer" | "editor" }) => {
     const response = await withAuth(() => addProjectMember(projectId, payload));
     const incoming = response.member;
@@ -854,6 +936,35 @@ export default function App() {
         const nextParticipants = project.participants.filter((member) => member.userId !== userId);
         return {
           ...project,
+          participants: nextParticipants,
+          members: nextParticipants,
+        };
+      }),
+    );
+  };
+
+  const handleReviewProjectJoinRequest = async (
+    projectId: string,
+    requestId: string,
+    payload: { action: "approve"; role: "viewer" | "editor" } | { action: "reject" },
+  ) => {
+    const response = await withAuth(() => reviewProjectJoinRequest(projectId, requestId, payload));
+
+    setProjects((prev) =>
+      prev.map((project) => {
+        if (project.id !== projectId) return project;
+
+        const nextJoinRequests = (project.joinRequests ?? []).filter((request) => request.id !== requestId);
+        const incomingMember = response.member;
+        const nextParticipants = incomingMember
+          ? (project.participants.some((member) => member.userId === incomingMember.userId)
+            ? project.participants.map((member) => (member.userId === incomingMember.userId ? incomingMember : member))
+            : [...project.participants, incomingMember])
+          : project.participants;
+
+        return {
+          ...project,
+          joinRequests: nextJoinRequests,
           participants: nextParticipants,
           members: nextParticipants,
         };
@@ -1035,6 +1146,56 @@ export default function App() {
     await refreshActiveProject(activeProject.id);
   };
 
+  const handleToggleProjectPublic = async (projectId: string, options?: { allowDownload?: boolean }) => {
+    if (projectPublicPendingId) return;
+    setProjectPublicPendingId(projectId);
+    setGlobalError("");
+    setProjectPublicSuccessMsg("");
+
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) {
+      setGlobalError("Проект не найден.");
+      setProjectPublicPendingId(null);
+      return;
+    }
+
+    try {
+      const projectPublications = myPublications
+        .filter((publication) => publication.projectId === projectId && publication.status === "PUBLISHED")
+        .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt));
+
+      if (projectPublications.length > 0) {
+        await withAuth(() => archivePublication(projectPublications[0].id));
+        setProjectPublicSuccessMsg(`Проект "${project.title}" снят с Главной.`);
+      } else {
+        const track = project.tracks.find((item) => hasReadyPublicationAsset(item));
+        if (!track) {
+          setGlobalError("Для публикации нужен трек с READY локальным audio asset.");
+          return;
+        }
+
+        await withAuth(() => createWorkPublication({
+          projectId,
+          trackId: track.id,
+          title: track.title,
+          allowDownload: options?.allowDownload ?? true,
+        }));
+        setProjectPublicSuccessMsg(`Проект "${project.title}" опубликован на Главной.`);
+      }
+
+      const refreshed = await withAuth(() => getMyPublications());
+      setMyPublications(refreshed.publications);
+    } catch (error) {
+      if (isApiError(error) && error.code === "PUBLICATION_ASSET_REQUIRED") {
+        setGlobalError("Для публикации нужен готовый локальный audio asset трека.");
+      } else {
+        setGlobalError(error instanceof Error ? error.message : "Не удалось изменить публичность проекта.");
+      }
+    } finally {
+      setProjectPublicPendingId(null);
+    }
+  };
+
   const handleAddAnnotation = async (timestampSeconds: number, text: string, trackAssetId: string) => {
     if (!activeProject || !activeTrack) return;
     await withAuth(() => createAnnotation(activeProject.id, activeTrack.id, { timestampSeconds, text, trackAssetId }));
@@ -1122,9 +1283,9 @@ export default function App() {
       }
       showMobileNav={Boolean(currentUser)}
       mobileNavItems={[
-        { key: "projects", label: t("shell.projects"), icon: FolderOpen, active: mobileTab === "projects", onPress: () => setMobileTab("projects") },
-        { key: "editor", label: t("shell.editor"), icon: Music, active: mobileTab === "editor", onPress: () => setMobileTab("editor") },
-        { key: "discussion", label: t("shell.discussion"), icon: MessageSquare, active: mobileTab === "rightPanel", onPress: () => setMobileTab("rightPanel") },
+        { key: "projects", label: t("shell.projects"), spriteIcon: "folders", active: mobileTab === "projects", onPress: () => setMobileTab("projects") },
+        { key: "editor", label: t("shell.editor"), spriteIcon: "doc", active: mobileTab === "editor", onPress: () => setMobileTab("editor") },
+        { key: "discussion", label: t("shell.discussion"), spriteIcon: "chats", active: mobileTab === "rightPanel", onPress: () => setMobileTab("rightPanel") },
       ]}
     >
       {!currentUser && (
@@ -1150,6 +1311,12 @@ export default function App() {
       {inviteSuccessMsg && (
         <div className="max-w-7xl mx-auto w-full px-4 mt-3">
           <StateView kind="success" message={inviteSuccessMsg} compact />
+        </div>
+      )}
+
+      {projectPublicSuccessMsg && (
+        <div className="max-w-7xl mx-auto w-full px-4 mt-3">
+          <StateView kind="success" message={projectPublicSuccessMsg} compact />
         </div>
       )}
 
@@ -1179,7 +1346,6 @@ export default function App() {
                       tab: "lyrics",
                     }),
                   );
-                  setMobileTab("editor");
                 }}
                 onSelectTrack={(track) => {
                   if (canEdit) {
@@ -1197,9 +1363,13 @@ export default function App() {
                 }}
                 onCreateProject={handleCreateProject}
                 onAddTrack={handleAddTrack}
+                onUpdateTrack={handleUpdateTrack}
+                onToggleProjectPublic={handleToggleProjectPublic}
+                projectPublicStatus={projectPublicStatus}
                 onAddMember={handleAddProjectMember}
                 onUpdateMemberRole={handleUpdateProjectMemberRole}
                 onRemoveMember={handleRemoveProjectMember}
+                onReviewJoinRequest={handleReviewProjectJoinRequest}
                 onDeleteProject={handleDeleteProject}
                 currentUser={currentUser}
               />
@@ -1314,18 +1484,7 @@ export default function App() {
         </>
       )}
 
-      {currentUser && activeTrack && activeTrackSelectedAudio && (
-        <StickyAudioPlayer
-          trackTitle={activeTrack.title}
-          selectedAudio={activeTrackSelectedAudio}
-          onOpenTrack={() => {
-            if (activeProjectId && activeTrackId) {
-              setMobileTab("editor");
-              navigate(buildPrivatePath({ projectId: activeProjectId, trackId: activeTrackId, tab: "lyrics" }));
-            }
-          }}
-        />
-      )}
+
 
       {activeTrack && !lyricsDiscussionsEnabled && (
         <LyricsCommentsSheet

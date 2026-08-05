@@ -139,6 +139,7 @@ describe("PublicationManagerPage", () => {
         trackTitle: "Song A",
         snapshotId: "snap-1",
         selectedAssetId: "asset-1",
+        allowDownload: true,
         publicUrl: "/works/song-a-public",
         streamUrl: "/api/public/works/song-a-public/stream",
         downloadUrl: "/api/public/works/song-a-public/download",
@@ -176,6 +177,7 @@ describe("PublicationManagerPage", () => {
         trackTitle: "Song A",
         snapshotId: "snap-1",
         selectedAssetId: "asset-1",
+        allowDownload: true,
         publicUrl: "/works/song-a-public",
         streamUrl: "/api/public/works/song-a-public/stream",
         downloadUrl: "/api/public/works/song-a-public/download",
@@ -217,6 +219,7 @@ describe("PublicationManagerPage", () => {
     await waitFor(() => expect(createWorkPublication).toHaveBeenCalledWith({
       projectId: "project-1",
       trackId: "track-1",
+      allowDownload: true,
       title: "Song A Public",
       description: undefined,
       coverImageUrl: undefined,

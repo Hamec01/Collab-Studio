@@ -13,10 +13,11 @@ function titleGlyph(title: string) {
 
 export default function CoverImage({ src, title, className = "" }: CoverImageProps) {
   const [failed, setFailed] = React.useState(false);
+  const sizeClasses = className.includes("w-") ? "" : "w-12 h-12 rounded-lg";
 
   if (!src || failed) {
     return (
-      <div className={`w-12 h-12 rounded-lg border border-neutral-700 bg-gradient-to-br from-indigo-700/60 via-neutral-800 to-neutral-900 text-indigo-100 flex items-center justify-center font-bold ${className}`} aria-label={title}>
+      <div className={`${sizeClasses} border border-neutral-700 bg-gradient-to-br from-indigo-700/60 via-neutral-800 to-neutral-900 text-indigo-100 flex items-center justify-center font-bold overflow-hidden ${className}`} aria-label={title}>
         {titleGlyph(title)}
       </div>
     );
@@ -26,7 +27,7 @@ export default function CoverImage({ src, title, className = "" }: CoverImagePro
     <img
       src={src}
       alt={title}
-      className={`w-12 h-12 rounded-lg object-cover border border-neutral-700 bg-neutral-900 ${className}`}
+      className={`${sizeClasses} object-cover border border-neutral-700 bg-neutral-900 overflow-hidden ${className}`}
       referrerPolicy="no-referrer"
       loading="lazy"
       decoding="async"

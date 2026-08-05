@@ -59,6 +59,12 @@ export function formatActivityEventSummary(event: ActivityEvent) {
       return `${actor} создал гостевую ссылку`;
     case "guest_link_revoked":
       return `${actor} отозвал гостевую ссылку`;
+    case "project_join_requested":
+      return `${actor} отправил запрос на участие в проекте`;
+    case "project_join_approved":
+      return `${actor} одобрил запрос на участие`;
+    case "project_join_rejected":
+      return `${actor} отклонил запрос на участие`;
     default:
       return `${actor} выполнил действие: ${event.type}`;
   }

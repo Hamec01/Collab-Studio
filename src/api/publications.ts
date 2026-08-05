@@ -8,6 +8,7 @@ export function getMyPublications(signal?: AbortSignal) {
 export function createWorkPublication(payload: {
   projectId: string;
   trackId: string;
+  allowDownload?: boolean;
   title?: string;
   description?: string;
   coverImageUrl?: string;
@@ -33,6 +34,7 @@ export function getPublicWork(slug: string, signal?: AbortSignal) {
 export function createCollabPublication(payload: {
   projectId: string;
   trackId: string;
+  allowDownload?: boolean;
   title?: string;
   description?: string;
   coverImageUrl?: string;
@@ -74,4 +76,49 @@ export function unlikeCollab(slug: string) {
 
 export function playCollab(slug: string) {
   return apiRequest<{ ok: boolean }>(`/api/public/collabs/${encodeURIComponent(slug)}/play`, { method: "POST" });
+}
+
+export function requestJoinFromWork(slug: string, payload?: { requestedRole?: "viewer" | "editor"; message?: string }) {
+  return apiRequest<{
+    request: {
+      id: string;
+      projectId: string;
+      status: string;
+      requestedRole: "viewer" | "editor";
+      message: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>(`/api/public/works/${encodeURIComponent(slug)}/join-request`, {
+    method: "POST",
+    body: payload ?? {},
+  });
+}
+
+export function requestJoinFromCollab(slug: string, payload?: { requestedRole?: "viewer" | "editor"; message?: string }) {
+  return apiRequest<{
+    request: {
+      id: string;
+      projectId: string;
+      status: string;
+      requestedRole: "viewer" | "editor";
+      message: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+  }>(`/api/public/collabs/${encodeURIComponent(slug)}/join-request`, {
+    method: "POST",
+    body: payload ?? {},
+  });
+}
+
+export interface PublicationStats {
+  totalPlays: number;
+  totalLikes: number;
+  byDate: { date: string; plays: number; likes: number }[];
+  publications: { id: string; title: string; plays: number; likes: number }[];
+}
+
+export function getPublicationsStats(signal?: AbortSignal) {
+  return apiRequest<PublicationStats>("/api/publications/stats", { signal });
 }

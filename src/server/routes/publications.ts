@@ -6,6 +6,8 @@ import { prisma } from "../db";
 import { requireAuth, optionalAuth } from "../middleware/auth";
 import { AppError } from "../middleware/errors";
 import { sendLocalAudioResponse } from "../services/audioDelivery";
+import { recordActivityEvent } from "../services/activity";
+import { createTargetedNotifications } from "../services/notifications";
 import {
   buildPublicationSlug,
   canExposePublicWorkAsset,
@@ -16,8 +18,15 @@ import {
   unlikePublication,
   incrementPublicationPlay,
 } from "../services/publications";
+import { readTrackLyrics, structuredVersionWriteData } from "../services/structuredLyrics";
 import { ensureVerifiedForProtectedWrite, resolveProjectTrackAccess } from "../services/stage3Access";
-import { createWorkPublicationSchema, createCollabPublicationSchema, publicationIdParamsSchema, publicationSlugParamsSchema } from "../schemas/publications";
+import {
+  createWorkPublicationSchema,
+  createCollabPublicationSchema,
+  createProjectJoinRequestSchema,
+  publicationIdParamsSchema,
+  publicationSlugParamsSchema,
+} from "../schemas/publications";
 
 const publicationRouter = Router();
 const publicPublicationRouter = Router();
@@ -65,6 +74,7 @@ async function createPublishedWork(payload: {
   authorUserId: string;
   projectId: string;
   trackId: string;
+  allowDownload?: boolean;
   title?: string;
   description?: string;
   coverImageUrl?: string;
@@ -76,7 +86,14 @@ async function createPublishedWork(payload: {
       return await prisma.$transaction(async (tx) => {
         const track = await tx.track.findFirst({
           where: { id: payload.trackId, projectId: payload.projectId },
-          select: { id: true, title: true, projectId: true },
+          select: {
+            id: true,
+            title: true,
+            projectId: true,
+            lyrics: true,
+            lyricsDocument: true,
+            lyricsPlainText: true,
+          },
         });
         if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
 
@@ -103,9 +120,14 @@ async function createPublishedWork(payload: {
           throw new AppError(409, "PUBLICATION_ASSET_REQUIRED", "A ready local TrackAsset is required for a public work");
         }
 
-        const latestLyricVersion = await tx.lyricVersion.findFirst({
-          where: { trackId: track.id },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        const preparedLyrics = readTrackLyrics(track);
+        const publicationLyricVersion = await tx.lyricVersion.create({
+          data: {
+            trackId: track.id,
+            ...structuredVersionWriteData(preparedLyrics),
+            authorId: payload.authorUserId,
+            label: "Publication snapshot",
+          },
         });
 
         const publicationTitle = payload.title?.trim() || track.title;
@@ -113,7 +135,7 @@ async function createPublishedWork(payload: {
           data: {
             trackId: track.id,
             title: publicationTitle,
-            lyricVersionId: latestLyricVersion?.id ?? null,
+            lyricVersionId: publicationLyricVersion.id,
             metadata: { publication: true },
             assets: {
               create: [{ trackAssetId: asset.id }],
@@ -136,7 +158,9 @@ async function createPublishedWork(payload: {
             coverImageUrl: payload.coverImageUrl?.trim() ? payload.coverImageUrl.trim() : null,
             tags: payload.tags ?? [],
             language: payload.language?.trim() ? payload.language.trim() : null,
-            metadata: {},
+            metadata: {
+              allowDownload: payload.allowDownload !== false,
+            },
           },
           include: publicationInclude,
         });
@@ -154,6 +178,7 @@ async function createPublishedCollab(payload: {
   authorUserId: string;
   projectId: string;
   trackId: string;
+  allowDownload?: boolean;
   title?: string;
   description?: string;
   coverImageUrl?: string;
@@ -168,7 +193,14 @@ async function createPublishedCollab(payload: {
       return await prisma.$transaction(async (tx) => {
         const track = await tx.track.findFirst({
           where: { id: payload.trackId, projectId: payload.projectId },
-          select: { id: true, title: true, projectId: true },
+          select: {
+            id: true,
+            title: true,
+            projectId: true,
+            lyrics: true,
+            lyricsDocument: true,
+            lyricsPlainText: true,
+          },
         });
         if (!track) throw new AppError(404, "TRACK_NOT_FOUND", "Track not found");
 
@@ -195,9 +227,14 @@ async function createPublishedCollab(payload: {
           throw new AppError(409, "PUBLICATION_ASSET_REQUIRED", "A ready local TrackAsset is required for a public collab");
         }
 
-        const latestLyricVersion = await tx.lyricVersion.findFirst({
-          where: { trackId: track.id },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        const preparedLyrics = readTrackLyrics(track);
+        const publicationLyricVersion = await tx.lyricVersion.create({
+          data: {
+            trackId: track.id,
+            ...structuredVersionWriteData(preparedLyrics),
+            authorId: payload.authorUserId,
+            label: "Publication snapshot",
+          },
         });
 
         const publicationTitle = payload.title?.trim() || track.title;
@@ -205,7 +242,7 @@ async function createPublishedCollab(payload: {
           data: {
             trackId: track.id,
             title: publicationTitle,
-            lyricVersionId: latestLyricVersion?.id ?? null,
+            lyricVersionId: publicationLyricVersion.id,
             metadata: { publication: true },
             assets: {
               create: [{ trackAssetId: asset.id }],
@@ -238,7 +275,10 @@ async function createPublishedCollab(payload: {
             tags: payload.tags ?? [],
             language: payload.language?.trim() ? payload.language.trim() : null,
             expiresAt,
-            metadata: { collabDetails },
+            metadata: {
+              allowDownload: payload.allowDownload !== false,
+              collabDetails,
+            },
           },
           include: publicationInclude,
         });
@@ -319,6 +359,107 @@ async function getPublicCollabOrThrow(slug: string, viewerId?: string | null) {
   return publication;
 }
 
+async function createProjectJoinRequestFromPublication(args: {
+  slug: string;
+  requesterId: string;
+  requesterDisplayName: string;
+  requestedRole: "viewer" | "editor";
+  message: string | null;
+  kind: "WORK" | "COLLAB";
+}) {
+  const publication = args.kind === "WORK"
+    ? await getPublicWorkOrThrow(args.slug, args.requesterId)
+    : await getPublicCollabOrThrow(args.slug, args.requesterId);
+
+  if (publication.authorUserId === args.requesterId) {
+    throw new AppError(409, "JOIN_REQUEST_SELF_FORBIDDEN", "You are already the author of this project");
+  }
+
+  const isMember = await prisma.projectMember.findUnique({
+    where: {
+      projectId_userId: {
+        projectId: publication.projectId,
+        userId: args.requesterId,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (isMember) {
+    throw new AppError(409, "ALREADY_PROJECT_MEMBER", "You are already a project member");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.projectJoinRequest.findUnique({
+      where: {
+        projectId_requesterId: {
+          projectId: publication.projectId,
+          requesterId: args.requesterId,
+        },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (existing?.status === "PENDING") {
+      throw new AppError(409, "JOIN_REQUEST_ALREADY_PENDING", "Join request is already pending");
+    }
+
+    const request = existing
+      ? await tx.projectJoinRequest.update({
+        where: { id: existing.id },
+        data: {
+          publicationId: publication.id,
+          requestedRole: args.requestedRole,
+          message: args.message,
+          status: "PENDING",
+          reviewedById: null,
+          reviewedAt: null,
+          decisionReason: null,
+        },
+      })
+      : await tx.projectJoinRequest.create({
+        data: {
+          projectId: publication.projectId,
+          requesterId: args.requesterId,
+          publicationId: publication.id,
+          requestedRole: args.requestedRole,
+          message: args.message,
+          status: "PENDING",
+        },
+      });
+
+    const ownerIds = await tx.projectMember.findMany({
+      where: { projectId: publication.projectId, role: "owner" },
+      select: { userId: true },
+    });
+
+    await createTargetedNotifications(tx, {
+      projectId: publication.projectId,
+      trackId: publication.trackId,
+      actorId: args.requesterId,
+      actorName: args.requesterDisplayName,
+      type: "project_join_request",
+      message: `просит доступ в проект \"${publication.project.title}\"`,
+      userIds: ownerIds.map((owner) => owner.userId),
+    });
+
+    await recordActivityEvent(tx, {
+      projectId: publication.projectId,
+      actorId: args.requesterId,
+      type: "project_join_requested",
+      payload: {
+        requestId: request.id,
+        requestedRole: request.requestedRole,
+        publicationId: publication.id,
+        publicationKind: publication.kind,
+        publicationSlug: publication.slug,
+      },
+    });
+
+    return request;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 const streamPublicWorkHandler = asyncHandler(async (req, res, next) => {
   const { slug } = publicationSlugParamsSchema.parse(req.params);
   const publication = await getPublicWorkOrThrow(slug, req.user?.id);
@@ -370,6 +511,81 @@ const streamPublicCollabHandler = asyncHandler(async (req, res, next) => {
 });
 
 publicationRouter.get(
+  "/stats",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const userPubs = await prisma.publication.findMany({
+      where: { authorUserId: user.id },
+      select: { id: true, title: true, playCount: true, likeCount: true }
+    });
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    startDate.setHours(0, 0, 0, 0);
+
+    const plays = await prisma.publicationPlay.findMany({
+      where: {
+        publication: { authorUserId: user.id },
+        createdAt: { gte: startDate }
+      },
+      select: { publicationId: true, createdAt: true }
+    });
+
+    const likes = await prisma.publicationLike.findMany({
+      where: {
+        publication: { authorUserId: user.id },
+        createdAt: { gte: startDate }
+      },
+      select: { publicationId: true, createdAt: true }
+    });
+
+    const dailyData: Record<string, { date: string; plays: number; likes: number }> = {};
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0];
+      dailyData[dateStr] = { date: dateStr, plays: 0, likes: 0 };
+    }
+
+    for (const play of plays) {
+      const dateStr = play.createdAt.toISOString().split("T")[0];
+      if (dailyData[dateStr]) {
+        dailyData[dateStr].plays += 1;
+      }
+    }
+
+    for (const like of likes) {
+      const dateStr = like.createdAt.toISOString().split("T")[0];
+      if (dailyData[dateStr]) {
+        dailyData[dateStr].likes += 1;
+      }
+    }
+
+    const byDate = Object.values(dailyData).sort((a, b) => a.date.localeCompare(b.date));
+
+    let totalPlays = 0;
+    let totalLikes = 0;
+    for (const pub of userPubs) {
+      totalPlays += pub.playCount;
+      totalLikes += pub.likeCount;
+    }
+
+    res.json({
+      totalPlays,
+      totalLikes,
+      byDate,
+      publications: userPubs.map(pub => ({
+        id: pub.id,
+        title: pub.title,
+        plays: pub.playCount,
+        likes: pub.likeCount
+      }))
+    });
+  })
+);
+
+publicationRouter.get(
   "/mine",
   requireAuth,
   asyncHandler(async (req, res) => {
@@ -408,6 +624,7 @@ publicationRouter.post(
       authorUserId: user.id,
       projectId: input.projectId,
       trackId: input.trackId,
+      allowDownload: input.allowDownload,
       title: input.title,
       description: input.description,
       coverImageUrl: input.coverImageUrl,
@@ -437,6 +654,7 @@ publicationRouter.post(
       authorUserId: user.id,
       projectId: input.projectId,
       trackId: input.trackId,
+      allowDownload: input.allowDownload,
       title: input.title,
       description: input.description,
       coverImageUrl: input.coverImageUrl,
@@ -529,6 +747,37 @@ publicPublicationRouter.post(
   }),
 );
 
+publicPublicationRouter.post(
+  "/works/:slug/join-request",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    const input = createProjectJoinRequestSchema.parse(req.body ?? {});
+
+    const request = await createProjectJoinRequestFromPublication({
+      slug,
+      requesterId: user.id,
+      requesterDisplayName: user.displayName,
+      requestedRole: input.requestedRole ?? "viewer",
+      message: input.message?.trim() ? input.message.trim() : null,
+      kind: "WORK",
+    });
+
+    res.status(201).json({
+      request: {
+        id: request.id,
+        projectId: request.projectId,
+        status: request.status,
+        requestedRole: request.requestedRole,
+        message: request.message,
+        createdAt: request.createdAt.toISOString(),
+        updatedAt: request.updatedAt.toISOString(),
+      },
+    });
+  }),
+);
+
 publicPublicationRouter.head(
   "/works/:slug/stream",
   (req, _res, next) => {
@@ -599,6 +848,37 @@ publicPublicationRouter.post(
     const { slug } = publicationSlugParamsSchema.parse(req.params);
     await incrementPublicationPlay(slug);
     res.json({ ok: true });
+  }),
+);
+
+publicPublicationRouter.post(
+  "/collabs/:slug/join-request",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = requireCurrentUser(req);
+    const { slug } = publicationSlugParamsSchema.parse(req.params);
+    const input = createProjectJoinRequestSchema.parse(req.body ?? {});
+
+    const request = await createProjectJoinRequestFromPublication({
+      slug,
+      requesterId: user.id,
+      requesterDisplayName: user.displayName,
+      requestedRole: input.requestedRole ?? "viewer",
+      message: input.message?.trim() ? input.message.trim() : null,
+      kind: "COLLAB",
+    });
+
+    res.status(201).json({
+      request: {
+        id: request.id,
+        projectId: request.projectId,
+        status: request.status,
+        requestedRole: request.requestedRole,
+        message: request.message,
+        createdAt: request.createdAt.toISOString(),
+        updatedAt: request.updatedAt.toISOString(),
+      },
+    });
   }),
 );
 

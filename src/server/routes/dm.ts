@@ -5,6 +5,7 @@ import { publicDmRateLimit } from "../middleware/rateLimits";
 import { z } from "zod";
 import {
   sendDmRequest,
+  sendDmRequestByUserId,
   listIncomingDmRequests,
   listAcceptedConversations,
   respondToDmRequest,
@@ -21,6 +22,11 @@ const asyncHandler = (handler: AsyncHandler) => (req: Request, res: Response, ne
 
 const sendRequestSchema = z.object({
   handle: z.string().min(1),
+  text: z.string().min(1).max(1000),
+});
+
+const sendRequestByUserSchema = z.object({
+  userId: z.string().uuid(),
   text: z.string().min(1).max(1000),
 });
 
@@ -41,6 +47,18 @@ router.post(
     if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
     const { handle, text } = sendRequestSchema.parse(req.body);
     const request = await sendDmRequest(req.user.id, handle, text);
+    res.json({ request });
+  }),
+);
+
+router.post(
+  "/dm/requests/by-user",
+  requireAuth,
+  publicDmRateLimit,
+  asyncHandler(async (req, res) => {
+    if (!req.user) throw new AppError(401, "UNAUTHENTICATED", "Authentication required");
+    const { userId, text } = sendRequestByUserSchema.parse(req.body);
+    const request = await sendDmRequestByUserId(req.user.id, userId, text);
     res.json({ request });
   }),
 );

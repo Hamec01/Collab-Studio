@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { FolderPlus, Disc, Layers, Music, Users, Plus, Tag, ArrowRight, Trash2, UserPlus, Link, Copy, Check } from "lucide-react";
+import { FolderPlus, Disc, Layers, Music, Users, Plus, Tag, ArrowRight, Trash2, UserPlus, Link, Copy, Check, Edit2, Globe } from "lucide-react";
 import { AuthUser, Project, Track } from "../types";
 import { ApiError } from "../api/client";
 import { createProjectInvite } from "../api/projects";
@@ -14,6 +14,14 @@ interface ProjectListProps {
   onSelectTrack: (t: Track) => void;
   onCreateProject: (title: string, type: 'single' | 'album', initialTrackTitle: string | undefined, tags: string[], coverUrl?: string) => Promise<void>;
   onAddTrack: (projectId: string, title: string) => Promise<void>;
+  onUpdateTrack?: (projectId: string, trackId: string, payload: { title?: string; coverUrl?: string; tags?: string[] }) => Promise<void>;
+  onReviewJoinRequest?: (
+    projectId: string,
+    requestId: string,
+    payload: { action: "approve"; role: "viewer" | "editor" } | { action: "reject" },
+  ) => Promise<void>;
+  onToggleProjectPublic?: (projectId: string, options?: { allowDownload?: boolean }) => Promise<void>;
+  projectPublicStatus?: Record<string, { isPublic: boolean; canPublish: boolean; pending: boolean }>;
   onAddMember: (projectId: string, payload: { login: string; role: "viewer" | "editor" }) => Promise<void>;
   onUpdateMemberRole: (projectId: string, userId: string, role: "viewer" | "editor") => Promise<void>;
   onRemoveMember: (projectId: string, userId: string) => Promise<void>;
@@ -29,6 +37,10 @@ export default function ProjectList({
   onSelectTrack,
   onCreateProject,
   onAddTrack,
+  onUpdateTrack,
+  onReviewJoinRequest,
+  onToggleProjectPublic,
+  projectPublicStatus,
   onAddMember,
   onUpdateMemberRole,
   onRemoveMember,
@@ -44,6 +56,17 @@ export default function ProjectList({
   const [projectSubmitLoading, setProjectSubmitLoading] = useState(false);
   const [projectSubmitError, setProjectSubmitError] = useState("");
 
+  // Search & Filter
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Track Edit
+  const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
+  const [editTrackTitle, setEditTrackTitle] = useState("");
+  const [editTrackCoverUrl, setEditTrackCoverUrl] = useState("");
+  const [editTrackTags, setEditTrackTags] = useState("");
+  const [editTrackLoading, setEditTrackLoading] = useState(false);
+  const [editTrackError, setEditTrackError] = useState("");
+
   const [showAddTrack, setShowAddTrack] = useState(false);
   const [newTrackTitle, setNewTrackTitle] = useState("");
   const [trackSubmitLoading, setTrackSubmitLoading] = useState(false);
@@ -57,6 +80,9 @@ export default function ProjectList({
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [memberActionLoadingKey, setMemberActionLoadingKey] = useState<string | null>(null);
+  const [joinRequestLoadingId, setJoinRequestLoadingId] = useState<string | null>(null);
+  const [joinRequestRoles, setJoinRequestRoles] = useState<Record<string, "viewer" | "editor">>({});
+  const [quickPublishAllowDownload, setQuickPublishAllowDownload] = useState<Record<string, boolean>>({});
   const inviteInputRef = useRef<HTMLInputElement | null>(null);
 
   const canInvite = !!(
@@ -64,9 +90,17 @@ export default function ProjectList({
     activeProject.participants.some((p) => p.userId === currentUser.id && p.role === "owner")
   );
 
-  const ownedProjects = projects.filter((project) => project.currentUserRole === "owner");
-  const sharedProjects = projects.filter((project) => project.currentUserRole === "viewer" || project.currentUserRole === "editor");
-  const recentProjects = [...projects].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()).slice(0, 5);
+  const filteredProjects = projects.filter((project) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase().trim();
+    const matchesTitle = project.title.toLowerCase().includes(query);
+    const matchesTags = project.tags.some(tag => tag.toLowerCase().includes(query));
+    return matchesTitle || matchesTags;
+  });
+
+  const ownedProjects = filteredProjects.filter((project) => project.currentUserRole === "owner");
+  const sharedProjects = filteredProjects.filter((project) => project.currentUserRole === "viewer" || project.currentUserRole === "editor");
+  const recentProjects = [...filteredProjects].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()).slice(0, 5);
 
   const resetInviteState = () => {
     setShowInviteModal(false);
@@ -82,6 +116,11 @@ export default function ProjectList({
   useEffect(() => {
     resetInviteState();
   }, [activeProject?.id, currentUser?.id]);
+
+  useEffect(() => {
+    setJoinRequestLoadingId(null);
+    setJoinRequestRoles({});
+  }, [activeProject?.id]);
 
   useEffect(() => {
     if (!showInviteModal) return;
@@ -208,6 +247,30 @@ export default function ProjectList({
     }
   };
 
+  const resolveRequestedRole = (role: "owner" | "editor" | "viewer") => (role === "editor" ? "editor" : "viewer");
+
+  const handleReviewJoinRequest = async (
+    requestId: string,
+    action: "approve" | "reject",
+    fallbackRole: "viewer" | "editor",
+  ) => {
+    if (!activeProject || !onReviewJoinRequest || joinRequestLoadingId) return;
+    setInviteError("");
+    setJoinRequestLoadingId(requestId);
+    try {
+      if (action === "approve") {
+        const selectedRole = joinRequestRoles[requestId] ?? fallbackRole;
+        await onReviewJoinRequest(activeProject.id, requestId, { action: "approve", role: selectedRole });
+      } else {
+        await onReviewJoinRequest(activeProject.id, requestId, { action: "reject" });
+      }
+    } catch (error) {
+      setInviteError(mapMemberActionError(error));
+    } finally {
+      setJoinRequestLoadingId(null);
+    }
+  };
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || projectSubmitLoading) return;
@@ -250,6 +313,26 @@ export default function ProjectList({
     }
   };
 
+  const handleEditTrackSubmit = async (event: React.FormEvent, projectId: string, trackId: string) => {
+    event.preventDefault();
+    if (!editTrackTitle.trim() || !onUpdateTrack || editTrackLoading) return;
+    setEditTrackError("");
+    setEditTrackLoading(true);
+    try {
+      const tagsArr = editTrackTags.split(",").map((t) => t.trim()).filter(Boolean);
+      await onUpdateTrack(projectId, trackId, {
+        title: editTrackTitle.trim(),
+        coverUrl: editTrackCoverUrl.trim() || undefined,
+        tags: tagsArr,
+      });
+      setEditingTrackId(null);
+    } catch (error) {
+      setEditTrackError(mapProjectWriteError(error));
+    } finally {
+      setEditTrackLoading(false);
+    }
+  };
+
   const roleLabel = (role: "owner" | "editor" | "viewer") => {
     if (role === "owner") return "Владелец";
     if (role === "editor") return "Редактор";
@@ -261,6 +344,7 @@ export default function ProjectList({
     const myRole = proj.currentUserRole ?? (currentUser ? proj.participants.find((p) => p.userId === currentUser.id)?.role ?? null : null);
     const canManageMembers = myRole === "owner";
     const canEditProject = myRole === "owner" || myRole === "editor";
+    const publicStatus = projectPublicStatus?.[proj.id] ?? { isPublic: false, canPublish: false, pending: false };
 
     return (
       <div
@@ -334,6 +418,53 @@ export default function ProjectList({
 
         {isSelected && (
           <div className="bg-neutral-950/60 border-t border-neutral-900 p-2.5 space-y-1.5">
+            {canEditProject && onToggleProjectPublic && (
+              <div className="px-1 pb-1.5">
+                <button
+                  type="button"
+                  onClick={() => void onToggleProjectPublic(proj.id, { allowDownload: quickPublishAllowDownload[proj.id] ?? true })}
+                  disabled={publicStatus.pending || (!publicStatus.isPublic && !publicStatus.canPublish)}
+                  className={`w-full rounded-lg border px-2.5 py-2 text-[11px] font-semibold transition-colors ${
+                    publicStatus.isPublic
+                      ? "border-emerald-700/40 bg-emerald-950/25 text-emerald-300 hover:bg-emerald-900/30"
+                      : "border-indigo-800/50 bg-indigo-950/20 text-indigo-300 hover:bg-indigo-900/30"
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                  title={
+                    publicStatus.isPublic
+                      ? "Снять проект с публичной страницы"
+                      : publicStatus.canPublish
+                        ? "Опубликовать проект на Главной"
+                        : "Для публикации нужен READY локальный audio asset"
+                  }
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5" />
+                    {publicStatus.pending
+                      ? "Обновляем публичность..."
+                      : publicStatus.isPublic
+                        ? "Публичный проект: выключить"
+                        : "Сделать проект публичным"}
+                  </span>
+                </button>
+                {!publicStatus.isPublic && (
+                  <label className="mt-2 inline-flex items-center gap-2 text-[10px] text-neutral-300">
+                    <input
+                      type="checkbox"
+                      checked={quickPublishAllowDownload[proj.id] ?? true}
+                      onChange={(event) => {
+                        setQuickPublishAllowDownload((prev) => ({
+                          ...prev,
+                          [proj.id]: event.target.checked,
+                        }));
+                      }}
+                      className="accent-indigo-500"
+                    />
+                    Разрешить скачивание после быстрой публикации
+                  </label>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500 mb-1 px-1">
               <span>ТРЕКИ В ПРОЕКТЕ:</span>
               {canEditProject ? (
@@ -380,21 +511,102 @@ export default function ProjectList({
             <div className="space-y-1">
               {proj.tracks.map((track) => {
                 const isTrackActive = activeTrack?.id === track.id;
+                const isEditing = editingTrackId === track.id;
+
+                if (isEditing) {
+                  return (
+                    <form
+                      key={track.id}
+                      onClick={(e) => e.stopPropagation()}
+                      onSubmit={(e) => handleEditTrackSubmit(e, proj.id, track.id)}
+                      className="p-2.5 rounded-lg bg-neutral-900 border border-neutral-800 space-y-2 text-xs text-left"
+                    >
+                      <div>
+                        <label className="block text-[8px] font-mono text-neutral-400 mb-0.5">НАЗВАНИЕ ТРЕКА</label>
+                        <input
+                          type="text"
+                          required
+                          value={editTrackTitle}
+                          onChange={(e) => setEditTrackTitle(e.target.value)}
+                          placeholder="Название трека..."
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded p-1 text-[10px] text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-mono text-neutral-400 mb-0.5">ОБЛОЖКА ТРЕКА (URL)</label>
+                        <input
+                          type="text"
+                          value={editTrackCoverUrl}
+                          onChange={(e) => setEditTrackCoverUrl(e.target.value)}
+                          placeholder="Ссылка на обложку..."
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded p-1 text-[10px] text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-mono text-neutral-400 mb-0.5">ТЕГИ (через запятую)</label>
+                        <input
+                          type="text"
+                          value={editTrackTags}
+                          onChange={(e) => setEditTrackTags(e.target.value)}
+                          placeholder="теги трека..."
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded p-1 text-[10px] text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      {editTrackError && <div className="text-[10px] text-red-400">{editTrackError}</div>}
+                      <div className="flex gap-1.5 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setEditingTrackId(null)}
+                          className="px-2 py-0.5 bg-neutral-850 hover:bg-neutral-800 text-neutral-300 rounded text-[10px]"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={editTrackLoading}
+                          className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-medium"
+                        >
+                          {editTrackLoading ? "..." : "ОК"}
+                        </button>
+                      </div>
+                    </form>
+                  );
+                }
+
                 return (
                   <div
                     key={track.id}
                     onClick={() => onSelectTrack(track)}
-                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
+                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all group/track ${
                       isTrackActive
                         ? "bg-indigo-950/40 border border-indigo-900/30 text-white font-medium"
                         : "bg-neutral-900/30 hover:bg-neutral-900 text-neutral-300 hover:text-white"
                     }`}
                   >
-                    <div className="flex items-center gap-2 text-[11px] truncate pr-2">
-                      <Music className="w-3 h-3 text-neutral-400" />
+                    <div className="flex items-center gap-2 text-[11px] truncate pr-2 flex-1">
+                      <CoverImage src={track.coverUrl || proj.coverUrl} title={track.title} className="w-5 h-5 rounded-md shrink-0 border border-neutral-800" />
                       <span className="truncate">{track.title}</span>
                     </div>
-                    <ArrowRight className={`w-3 h-3 text-neutral-600 ${isTrackActive ? "text-indigo-400" : ""}`} />
+                    <div className="flex items-center gap-1 shrink-0">
+                      {canEditProject && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingTrackId(track.id);
+                            setEditTrackTitle(track.title);
+                            setEditTrackCoverUrl(track.coverUrl || "");
+                            setEditTrackTags(track.tags.join(", "));
+                            setEditTrackError("");
+                          }}
+                          className="p-1 hover:text-indigo-400 text-neutral-500 rounded transition-colors focus:outline-none opacity-0 group-hover/track:opacity-100"
+                          title="Редактировать трек"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                      )}
+                      <ArrowRight className={`w-3 h-3 text-neutral-600 ${isTrackActive ? "text-indigo-400" : ""}`} />
+                    </div>
                   </div>
                 );
               })}
@@ -423,6 +635,27 @@ export default function ProjectList({
           <FolderPlus className="w-3.5 h-3.5" />
           Создать
         </button>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div className="relative text-left">
+        <input
+          aria-label="Поиск по названию или тегам..."
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Поиск по названию или тегам..."
+          className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="absolute right-2.5 top-2 text-neutral-500 hover:text-neutral-300 text-xs font-semibold focus:outline-none"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {/* Add Project Form */}
@@ -636,6 +869,64 @@ export default function ProjectList({
               </div>
             ))}
           </div>
+
+          {canInvite && (activeProject.joinRequests?.length ?? 0) > 0 && (
+            <div className="pt-2 border-t border-neutral-900 space-y-2">
+              <div className="text-[10px] font-mono text-amber-300 uppercase tracking-wider">Запросы на участие</div>
+              {(activeProject.joinRequests ?? []).map((request) => {
+                const fallbackRole = resolveRequestedRole(request.requestedRole);
+                const selectedRole = joinRequestRoles[request.id] ?? fallbackRole;
+                const isPendingAction = joinRequestLoadingId === request.id;
+                return (
+                  <div key={request.id} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-2 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[11px] text-white font-semibold truncate">{request.requester.displayName}</div>
+                        <div className="text-[10px] text-neutral-400">@{request.requester.username}</div>
+                        {request.message ? (
+                          <div className="mt-1 text-[10px] text-neutral-300">{request.message}</div>
+                        ) : null}
+                      </div>
+                      <div className="text-[9px] font-mono text-neutral-500 shrink-0">{new Date(request.createdAt).toLocaleString()}</div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={selectedRole}
+                        disabled={isPendingAction}
+                        onChange={(event) => {
+                          setJoinRequestRoles((prev) => ({
+                            ...prev,
+                            [request.id]: event.target.value as "viewer" | "editor",
+                          }));
+                        }}
+                        className="text-[9px] font-mono text-neutral-300 bg-neutral-800 border border-neutral-700 p-0.5 px-1.5 rounded focus:outline-none"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                      </select>
+                      <button
+                        type="button"
+                        disabled={isPendingAction}
+                        onClick={() => void handleReviewJoinRequest(request.id, "approve", fallbackRole)}
+                        className="text-[9px] text-emerald-300 bg-emerald-950/40 border border-emerald-900/40 p-0.5 px-1.5 rounded disabled:opacity-60"
+                      >
+                        Принять
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPendingAction}
+                        onClick={() => void handleReviewJoinRequest(request.id, "reject", fallbackRole)}
+                        className="text-[9px] text-rose-300 bg-rose-950/40 border border-rose-900/40 p-0.5 px-1.5 rounded disabled:opacity-60"
+                      >
+                        Отклонить
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

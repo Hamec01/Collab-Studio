@@ -68,13 +68,23 @@ export function useWorkspaceQuery({
     setWorkspaceError("");
 
     try {
-      const [projectList, notificationList] = await withAuth(() =>
-        Promise.all([listProjects(controller.signal), listNotifications(controller.signal)]),
+      const [projectListResult, notificationListResult] = await withAuth(() =>
+        Promise.allSettled([listProjects(controller.signal), listNotifications(controller.signal)]),
       );
 
       if (controller.signal.aborted) return;
-      setProjects(projectList);
-      setNotifications(notificationList);
+
+      if (projectListResult.status === "rejected") {
+        throw projectListResult.reason;
+      }
+
+      setProjects(projectListResult.value);
+      if (notificationListResult.status === "fulfilled") {
+        setNotifications(notificationListResult.value);
+      } else {
+        // Keep workspace usable even when notification sync has transient failures.
+        setNotifications([]);
+      }
       setWorkspaceReady(true);
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error)) return;

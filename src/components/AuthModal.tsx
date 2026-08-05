@@ -15,6 +15,7 @@ interface AuthModalProps {
   authMessage?: string;
   googleOAuthEnabled?: boolean;
   publicRegistrationEnabled?: boolean;
+  initialMode?: "login" | "register";
 }
 
 export default function AuthModal({
@@ -29,8 +30,9 @@ export default function AuthModal({
   authMessage = "",
   googleOAuthEnabled = false,
   publicRegistrationEnabled = false,
+  initialMode = "login",
 }: AuthModalProps) {
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(initialMode !== "register");
   const [login, setLogin] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -38,8 +40,14 @@ export default function AuthModal({
   const [email, setEmail] = useState("");
   const [ageAcknowledged, setAgeAcknowledged] = useState(false);
   const [error, setError] = useState("");
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  React.useEffect(() => {
+    setIsLogin(initialMode !== "register");
+  }, [initialMode]);
 
   const mapError = (err: unknown) => {
     if (!(err instanceof ApiError)) return "Сервер недоступен. Попробуйте позже.";
@@ -48,13 +56,20 @@ export default function AuthModal({
     if (err.status === 400) return "Проверьте поля формы и подтвердите 18+.";
     if (err.status === 403 && err.code === "REGISTRATION_DISABLED") return "Публичная регистрация отключена.";
     if (err.status === 409) return "Логин или email уже заняты.";
-    if (err.status === 429) return "Слишком много попыток. Повторите позже.";
+    if (err.status === 429) {
+      if (typeof err.retryAfterSeconds === "number" && err.retryAfterSeconds > 0) {
+        const minutes = Math.ceil(err.retryAfterSeconds / 60);
+        return `Слишком много попыток. Повторите через ~${minutes} мин.`;
+      }
+      return "Слишком много попыток. Повторите позже.";
+    }
     return "Не удалось войти.";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setRetryAfterSeconds(null);
     setLoading(true);
     try {
       if (isLogin) {
@@ -71,6 +86,9 @@ export default function AuthModal({
       setPassword("");
       setAgeAcknowledged(false);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 429 && typeof err.retryAfterSeconds === "number" && err.retryAfterSeconds > 0) {
+        setRetryAfterSeconds(err.retryAfterSeconds);
+      }
       setError(mapError(err));
     } finally {
       setLoading(false);
@@ -88,58 +106,91 @@ export default function AuthModal({
 
   if (currentUser) {
     return (
-      <div id="auth_header" className="flex items-center gap-1.5 sm:gap-3 bg-neutral-900/60 border border-neutral-850 p-1 sm:p-2 sm:px-3 rounded-full">
-        {currentUser.avatarUrl && (
-          <img
-            src={currentUser.avatarUrl}
-            alt={currentUser.displayName}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-neutral-700 bg-neutral-800 object-cover"
-            referrerPolicy="no-referrer"
-          />
-        )}
-        <div className="text-left hidden md:block">
-          <div className="text-[10px] text-neutral-400 font-mono leading-none">Соавтор</div>
-          <div className="text-xs font-medium text-white">{currentUser.displayName}</div>
-        </div>
+      <div id="auth_header" className="relative">
         <button
           type="button"
-          onClick={() => window.location.assign("/app/profile")}
-          className="text-[10px] sm:text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium px-2 sm:px-3 py-1 rounded-full border border-neutral-700 transition-colors cursor-pointer"
+          onClick={() => setShowMenu(!showMenu)}
+          className="flex items-center gap-1.5 sm:gap-2.5 bg-neutral-900/80 border border-neutral-800 p-1 pr-3 rounded-full hover:bg-neutral-800 transition-colors focus:outline-none select-none cursor-pointer"
         >
-          Профиль
+          {currentUser.avatarUrl ? (
+            <img
+              src={currentUser.avatarUrl}
+              alt={currentUser.displayName}
+              className="w-7 h-7 rounded-full border border-neutral-700 bg-neutral-800 object-cover shrink-0"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-xs text-neutral-400 shrink-0">
+              👤
+            </div>
+          )}
+          <span className="text-xs font-semibold text-white max-w-[80px] sm:max-w-[120px] truncate">
+            {currentUser.displayName}
+          </span>
+          <span className="text-[9px] text-neutral-500">▼</span>
         </button>
-        <button
-          type="button"
-          onClick={() => window.location.assign("/app/publications")}
-          className="text-[10px] sm:text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium px-2 sm:px-3 py-1 rounded-full border border-neutral-700 transition-colors cursor-pointer"
-        >
-          Публикации
-        </button>
-        {currentUser.isPublicProfile && (
-          <button
-            type="button"
-            onClick={() => window.open(`/u/${encodeURIComponent(currentUser.username)}`, "_blank", "noopener,noreferrer")}
-            className="text-[10px] sm:text-xs bg-indigo-950/40 hover:bg-indigo-900/40 text-indigo-300 font-medium px-2 sm:px-3 py-1 rounded-full border border-indigo-900/40 transition-colors cursor-pointer"
-          >
-            Публичная страница
-          </button>
-        )}
-        <button
-          id="logout_btn"
-          onClick={handleLogout}
-          disabled={logoutLoading}
-          className="text-[10px] sm:text-xs bg-red-950/40 hover:bg-red-900/40 text-red-400 font-medium px-2 sm:px-3 py-1 rounded-full border border-red-900/30 transition-colors cursor-pointer"
-        >
-          {logoutLoading ? "Выход..." : "Выйти"}
-        </button>
-        {googleOAuthEnabled && (
-          <button
-            type="button"
-            onClick={onGoogleAuth}
-            className="text-[10px] sm:text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium px-2 sm:px-3 py-1 rounded-full border border-neutral-700 transition-colors cursor-pointer"
-          >
-            Привязать Google
-          </button>
+
+        {showMenu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+            <div className="absolute right-0 mt-2 w-48 rounded-xl border border-neutral-800 bg-neutral-950 p-1.5 shadow-2xl z-50 text-left">
+              <div className="px-3 py-2 border-b border-neutral-900">
+                <div className="text-[9px] text-neutral-500 font-mono">Соавтор</div>
+                <div className="text-xs font-bold text-white truncate">{currentUser.displayName}</div>
+              </div>
+              <div className="py-1">
+                <button
+                  type="button"
+                  onClick={() => { setShowMenu(false); window.location.assign("/app/profile"); }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-neutral-300 hover:bg-neutral-900 rounded-lg hover:text-white transition-colors cursor-pointer"
+                >
+                  ⚙️ Профиль
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMenu(false); window.location.assign("/app/publications"); }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-neutral-300 hover:bg-neutral-900 rounded-lg hover:text-white transition-colors cursor-pointer"
+                >
+                  📻 Публикации
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowMenu(false); window.location.assign("/app/messages"); }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-neutral-300 hover:bg-neutral-900 rounded-lg hover:text-white transition-colors cursor-pointer"
+                >
+                  ✉ Сообщения
+                </button>
+                {currentUser.isPublicProfile && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowMenu(false); window.open(`/u/${encodeURIComponent(currentUser.username)}`, "_blank", "noopener,noreferrer"); }}
+                    className="w-full text-left px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-neutral-900 rounded-lg hover:text-indigo-200 transition-colors cursor-pointer"
+                  >
+                    👤 Публичная страница
+                  </button>
+                )}
+                {googleOAuthEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowMenu(false); onGoogleAuth(); }}
+                    className="w-full text-left px-3 py-2 text-xs font-semibold text-neutral-300 hover:bg-neutral-900 rounded-lg hover:text-white transition-colors cursor-pointer"
+                  >
+                    🔗 Привязать Google
+                  </button>
+                )}
+                <div className="border-t border-neutral-900 my-1" />
+                <button
+                  type="button"
+                  id="logout_btn"
+                  onClick={() => { setShowMenu(false); handleLogout(); }}
+                  disabled={logoutLoading}
+                  className="w-full text-left px-3 py-2 text-xs font-bold text-rose-500 hover:bg-rose-950/20 rounded-lg hover:text-rose-450 transition-colors cursor-pointer"
+                >
+                  {logoutLoading ? "Выход..." : "🚪 Выйти"}
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     );
@@ -273,6 +324,11 @@ export default function AuthModal({
               </>
             )}
           </button>
+          {retryAfterSeconds && (
+            <p className="text-center text-[11px] text-amber-300 mt-1">
+              Попробуйте снова примерно через {Math.ceil(retryAfterSeconds / 60)} мин.
+            </p>
+          )}
         </form>
 
         {googleOAuthEnabled && (

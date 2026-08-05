@@ -36,6 +36,7 @@ describe("PublicWorkPage", () => {
         hasLiked: false,
         authorUserId: "user-1",
         commentsClosed: false,
+        allowDownload: true,
         author: {
           displayName: "Hamilio",
           username: "hamilio",

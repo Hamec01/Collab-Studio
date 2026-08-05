@@ -16,6 +16,13 @@ type PlayerContextValue = {
   playbackRate: number;
   sourceUrl: string | null;
 
+  // Track metadata for global sticky player
+  trackTitle: string | null;
+  activeAudioSource: PlayableAudioSource | null;
+  activeTrackId: string | null;
+  activeProjectId: string | null;
+  setTrackMetadata: (metadata: { trackTitle: string; activeAudioSource: PlayableAudioSource; activeTrackId: string | null; activeProjectId: string | null } | null) => void;
+
   // Playback controls
   play: () => Promise<void>;
   pause: () => void;
@@ -41,6 +48,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [volume, setVolume] = useState(0.8);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+
+  // Track metadata state
+  const [trackTitle, setTrackTitle] = useState<string | null>(null);
+  const [activeAudioSource, setActiveAudioSource] = useState<PlayableAudioSource | null>(null);
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+
+  const setTrackMetadata = useCallback((metadata: { trackTitle: string; activeAudioSource: PlayableAudioSource; activeTrackId: string | null; activeProjectId: string | null } | null) => {
+    if (!metadata) {
+      setTrackTitle(null);
+      setActiveAudioSource(null);
+      setActiveTrackId(null);
+      setActiveProjectId(null);
+    } else {
+      setTrackTitle(metadata.trackTitle);
+      setActiveAudioSource(metadata.activeAudioSource);
+      setActiveTrackId(metadata.activeTrackId);
+      setActiveProjectId(metadata.activeProjectId);
+    }
+  }, []);
 
   // Create audio element once
   useEffect(() => {
@@ -166,6 +193,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       playbackRate,
       sourceUrl,
 
+      // Track metadata
+      trackTitle,
+      activeAudioSource,
+      activeTrackId,
+      activeProjectId,
+      setTrackMetadata,
+
       // Playback controls
       play,
       pause,
@@ -184,6 +218,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       volume,
       playbackRate,
       sourceUrl,
+      trackTitle,
+      activeAudioSource,
+      activeTrackId,
+      activeProjectId,
+      setTrackMetadata,
       play,
       pause,
       togglePlay,

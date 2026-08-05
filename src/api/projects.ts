@@ -10,6 +10,7 @@ import type {
   Project,
   Task,
   Track,
+  ProjectJoinRequest,
 } from "../types";
 import type { LyricsDiscussionSelection } from "../features/track-workspace/lyrics/lyricsDiscussions";
 import type { LyricsDocument } from "../features/track-workspace/lyrics/lyricsDocument";
@@ -56,7 +57,23 @@ export function removeProjectMember(projectId: string, userId: string) {
   });
 }
 
-export function createTrack(projectId: string, payload: { title: string; lyrics?: string; tags?: string[]; versionLabel?: string }) {
+export function reviewProjectJoinRequest(
+  projectId: string,
+  requestId: string,
+  payload:
+    | { action: "approve"; role: "viewer" | "editor"; reason?: string }
+    | { action: "reject"; reason?: string },
+) {
+  return apiRequest<{
+    request: ProjectJoinRequest;
+    member: ProjectMember | null;
+  }>(`/api/projects/${projectId}/join-requests/${requestId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function createTrack(projectId: string, payload: { title: string; lyrics?: string; tags?: string[]; coverUrl?: string; versionLabel?: string }) {
   return apiRequest<Track>(`/api/projects/${projectId}/tracks`, {
     method: "POST",
     body: payload,
@@ -67,7 +84,7 @@ export function getTrack(projectId: string, trackId: string, signal?: AbortSigna
   return apiRequest<Track>(`/api/projects/${projectId}/tracks/${trackId}`, { signal });
 }
 
-export function updateTrack(projectId: string, trackId: string, payload: { title?: string; lyrics?: string; tags?: string[]; versionLabel?: string }) {
+export function updateTrack(projectId: string, trackId: string, payload: { title?: string; lyrics?: string; tags?: string[]; coverUrl?: string; versionLabel?: string }) {
   return apiRequest<Track>(`/api/projects/${projectId}/tracks/${trackId}`, {
     method: "PATCH",
     body: payload,

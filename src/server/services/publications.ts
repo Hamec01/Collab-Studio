@@ -140,14 +140,21 @@ function extractCollabDetails(publication: PublicationWithRelations) {
   };
 }
 
+function extractAllowDownload(publication: PublicationWithRelations) {
+  const metadata = publication.metadata as Record<string, any> | null;
+  if (!metadata || typeof metadata.allowDownload !== "boolean") return true;
+  return metadata.allowDownload;
+}
+
 export function serializePrivatePublication(publication: PublicationWithRelations, hasLiked: boolean = false) {
   const isCollab = publication.kind === "COLLAB";
+  const allowDownload = extractAllowDownload(publication);
   const streamUrlPath = isCollab ? `/api/public/collabs/${publication.slug}/stream` : buildPublicWorkStreamPath(publication.slug);
   const downloadUrlPath = isCollab ? `/api/public/collabs/${publication.slug}/download` : buildPublicWorkDownloadPath(publication.slug);
   const publicUrlPath = isCollab ? `/collabs/${publication.slug}` : buildPublicWorkPath(publication.slug);
 
   const streamUrl = canExposePublicWorkAsset(publication.selectedAsset) ? streamUrlPath : null;
-  const downloadUrl = canExposePublicWorkAsset(publication.selectedAsset) ? downloadUrlPath : null;
+  const downloadUrl = canExposePublicWorkAsset(publication.selectedAsset) && allowDownload ? downloadUrlPath : null;
 
   return {
     id: publication.id,
@@ -165,6 +172,7 @@ export function serializePrivatePublication(publication: PublicationWithRelation
     trackTitle: publication.track.title,
     snapshotId: publication.snapshotId,
     selectedAssetId: publication.selectedAssetId,
+    allowDownload,
     publicUrl: publicUrlPath,
     streamUrl,
     downloadUrl,
@@ -183,6 +191,7 @@ export function serializePrivatePublication(publication: PublicationWithRelation
 }
 
 export function serializePublicWork(publication: PublicationWithRelations, hasLiked: boolean = false) {
+  const allowDownload = extractAllowDownload(publication);
   return {
     id: publication.id,
     slug: publication.slug,
@@ -199,6 +208,7 @@ export function serializePublicWork(publication: PublicationWithRelations, hasLi
     hasLiked,
     authorUserId: publication.authorUserId,
     commentsClosed: publication.commentsClosed,
+    allowDownload,
     author: serializeAuthor(publication.author),
     lyrics: serializePublicationLyrics(publication.snapshot),
     collabDetails: extractCollabDetails(publication),
@@ -209,7 +219,9 @@ export function serializePublicWork(publication: PublicationWithRelations, hasLi
           sizeBytes: publication.selectedAsset.sizeBytes,
           durationMs: publication.selectedAsset.durationMs,
           streamUrl: publication.kind === "COLLAB" ? `/api/public/collabs/${publication.slug}/stream` : buildPublicWorkStreamPath(publication.slug),
-          downloadUrl: publication.kind === "COLLAB" ? `/api/public/collabs/${publication.slug}/download` : buildPublicWorkDownloadPath(publication.slug),
+          downloadUrl: allowDownload
+            ? (publication.kind === "COLLAB" ? `/api/public/collabs/${publication.slug}/download` : buildPublicWorkDownloadPath(publication.slug))
+            : null,
         }
       : null,
   };
@@ -282,10 +294,15 @@ export async function incrementPublicationPlay(slug: string) {
     throw new AppError(404, "PUBLICATION_NOT_FOUND", "Publication not found");
   }
 
-  await prisma.publication.update({
-    where: { id: publication.id },
-    data: { playCount: { increment: 1 } },
-  });
+  await prisma.$transaction([
+    prisma.publication.update({
+      where: { id: publication.id },
+      data: { playCount: { increment: 1 } },
+    }),
+    prisma.publicationPlay.create({
+      data: { publicationId: publication.id },
+    }),
+  ]);
 }
 
 export async function searchPublications(params: {

@@ -3,8 +3,11 @@ import { Link, useSearchParams } from "react-router-dom";
 import { searchDiscoverPublications } from "../../api/discover";
 import type { PrivatePublication } from "../../types";
 import Avatar from "../../shared/ui/Avatar";
+import AppShell from "../../app/shell/AppShell";
+import { useAuth } from "../../app/auth/AuthProvider";
 
 export default function DiscoverPage() {
+  const { currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [publications, setPublications] = useState<PrivatePublication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,20 +72,21 @@ export default function DiscoverPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-[var(--cs-color-bg)] text-[var(--cs-color-text)] flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between p-4">
-          <h1 className="text-xl font-bold tracking-tight">Discover</h1>
-          <div className="flex items-center gap-4">
-            <Link to="/app" className="text-sm font-semibold text-neutral-400 hover:text-white">
-              Studio
-            </Link>
-          </div>
+    <AppShell
+      title="Главная"
+      headerRight={!currentUser ? (
+        <div className="flex items-center gap-3">
+          <Link to="/login" className="text-sm text-neutral-300 hover:text-white transition-colors">
+            Вход
+          </Link>
+          <Link to="/register" className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 hover:bg-neutral-800 transition-colors">
+            Регистрация
+          </Link>
         </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">
+      ) : undefined}
+      currentUser={currentUser}
+    >
+      <div className="mx-auto w-full max-w-5xl px-4 py-6">
         {/* Filters & Search */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 focus-within:border-neutral-700">
@@ -187,7 +191,7 @@ export default function DiscoverPage() {
             })}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

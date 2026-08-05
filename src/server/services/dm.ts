@@ -13,6 +13,12 @@ async function resolveUserByHandle(handle: string) {
   return user;
 }
 
+async function resolveUserById(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "USER_NOT_FOUND", "User not found");
+  return user;
+}
+
 async function assertNotBlocked(senderId: string, recipientId: string) {
   const block = await prisma.userBlock.findUnique({
     where: { blockerId_blockedId: { blockerId: recipientId, blockedId: senderId } },
@@ -45,15 +51,42 @@ export async function sendDmRequest(senderId: string, recipientHandle: string, t
   ensureVerifiedForProtectedWrite(sender);
 
   const recipient = await resolveUserByHandle(recipientHandle);
-  if (recipient.id === senderId) {
+  return createDmRequest(sender, recipient, text);
+}
+
+export async function sendDmRequestByUserId(senderId: string, recipientUserId: string, text: string) {
+  if (!text || text.trim().length === 0) {
+    throw new AppError(400, "EMPTY_TEXT", "Message text cannot be empty");
+  }
+  if (text.length > MAX_TEXT_LENGTH) {
+    throw new AppError(400, "TEXT_TOO_LONG", `Message text must be at most ${MAX_TEXT_LENGTH} characters`);
+  }
+
+  const sender = await prisma.user.findUnique({ where: { id: senderId } });
+  if (!sender) throw new AppError(404, "USER_NOT_FOUND", "Sender not found");
+  if (sender.isSuspended || sender.isBanned) {
+    throw new AppError(403, "USER_SUSPENDED_OR_BANNED", "Your account is suspended or banned");
+  }
+
+  ensureVerifiedForProtectedWrite(sender);
+  const recipient = await resolveUserById(recipientUserId);
+  return createDmRequest(sender, recipient, text);
+}
+
+async function createDmRequest(
+  sender: { id: string },
+  recipient: { id: string },
+  text: string,
+) {
+  if (recipient.id === sender.id) {
     throw new AppError(400, "CANNOT_DM_SELF", "You cannot send a DM to yourself");
   }
 
-  await assertNotBlocked(senderId, recipient.id);
+  await assertNotBlocked(sender.id, recipient.id);
 
   // Check existing request
   const existing = await prisma.directMessageRequest.findUnique({
-    where: { senderId_recipientId: { senderId, recipientId: recipient.id } },
+    where: { senderId_recipientId: { senderId: sender.id, recipientId: recipient.id } },
   });
   if (existing) {
     if (existing.status === "BLOCKED") {
@@ -68,7 +101,7 @@ export async function sendDmRequest(senderId: string, recipientHandle: string, t
 
   const request = await prisma.directMessageRequest.create({
     data: {
-      senderId,
+      senderId: sender.id,
       recipientId: recipient.id,
       text: text.trim(),
       status: "PENDING",

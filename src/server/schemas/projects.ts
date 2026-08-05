@@ -11,6 +11,11 @@ export const memberParamsSchema = z.object({
   userId: uuidParam,
 });
 
+export const projectJoinRequestParamsSchema = z.object({
+  projectId: uuidParam,
+  requestId: uuidParam,
+});
+
 export const createProjectSchema = z.object({
   title: z.string().trim().min(1).max(160),
   type: z.enum(["single", "album"]),
@@ -56,6 +61,18 @@ export const addMemberSchema = z
 export const updateMemberRoleSchema = z.object({
   role: z.enum(["editor", "viewer"]),
 });
+
+export const reviewProjectJoinRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("approve"),
+    role: z.enum(["editor", "viewer"]),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal("reject"),
+    reason: z.string().trim().max(500).optional(),
+  }),
+]);
 
 export const createInviteSchema = z
   .object({

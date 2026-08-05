@@ -66,8 +66,7 @@ export default function ProfileSettingsPage() {
           К проектам
         </Link>
       }
-      showMobileNav={false}
-      mobileNavItems={[]}
+      currentUser={currentUser}
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
         {isCheckingSession || authPhase === "loading" ? (
@@ -83,7 +82,7 @@ export default function ProfileSettingsPage() {
               <div className="mb-6">
                 <h1 className="text-2xl font-semibold text-white">Публичный профиль</h1>
                 <p className="mt-2 text-sm text-neutral-400">
-                  Здесь включается opt-in публичный профиль. Work publications уже доступны отдельно, discover будет добавлен позже.
+                  Здесь включается opt-in публичный профиль. Work publications уже доступны отдельно, публикации показываются на Главной.
                 </p>
               </div>
 

@@ -10,13 +10,15 @@ export class ApiError extends Error {
   status: number;
   code: string;
   requestId?: string;
+  retryAfterSeconds?: number;
 
-  constructor(message: string, status: number, code = "API_ERROR", requestId?: string) {
+  constructor(message: string, status: number, code = "API_ERROR", requestId?: string, retryAfterSeconds?: number) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.requestId = requestId;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -102,7 +104,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     const message = payload?.error?.message || parsed.text || defaultMessageForStatus(response.status);
     const code = payload?.error?.code || `HTTP_${response.status}`;
     const requestId = payload?.error?.requestId;
-    throw new ApiError(message, response.status, code, requestId);
+    const retryAfterHeader = response.headers.get("retry-after");
+    const retryAfterSeconds = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : undefined;
+    throw new ApiError(message, response.status, code, requestId, Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined);
   }
 
   return (parsed.json as T) ?? (undefined as T);

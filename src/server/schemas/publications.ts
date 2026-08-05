@@ -25,6 +25,7 @@ export const publicationIdParamsSchema = z.object({
 export const createWorkPublicationSchema = z.object({
   projectId: z.string().uuid(),
   trackId: z.string().uuid(),
+  allowDownload: z.boolean().optional(),
   title: z.string().trim().min(1).max(160).optional(),
   description: z.string().trim().max(3000).optional().or(z.literal("")),
   coverImageUrl: optionalHttpUrlSchema.optional().or(z.literal("")),
@@ -37,6 +38,7 @@ export type CreateWorkPublicationInput = z.infer<typeof createWorkPublicationSch
 export const createCollabPublicationSchema = z.object({
   projectId: z.string().uuid(),
   trackId: z.string().uuid(),
+  allowDownload: z.boolean().optional(),
   title: z.string().trim().min(1).max(160).optional(),
   description: z.string().trim().max(3000).optional().or(z.literal("")),
   coverImageUrl: optionalHttpUrlSchema.optional().or(z.literal("")),
@@ -48,3 +50,8 @@ export const createCollabPublicationSchema = z.object({
 });
 
 export type CreateCollabPublicationInput = z.infer<typeof createCollabPublicationSchema>;
+
+export const createProjectJoinRequestSchema = z.object({
+  requestedRole: z.enum(["editor", "viewer"]).optional(),
+  message: z.string().trim().max(500).optional().or(z.literal("")),
+});
