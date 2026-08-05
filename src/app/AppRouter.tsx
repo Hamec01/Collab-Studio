@@ -16,6 +16,7 @@ const PublicWorkPage = React.lazy(() => import("../features/publications/PublicW
 const PublicCollabPage = React.lazy(() => import("../features/publications/PublicCollabPage"));
 const DiscoverPage = React.lazy(() => import("../features/discover/DiscoverPage"));
 const DmInboxPage = React.lazy(() => import("../features/dm/DmInboxPage"));
+const ProjectsDesignPreview = React.lazy(() => import("../features/design-preview/ProjectsDesignPreview"));
 const AdminDashboard = React.lazy(() => import("../features/admin/AdminDashboard").then(module => ({ default: module.AdminDashboard })));
 const AdminUsers = React.lazy(() => import("../features/admin/AdminUsers").then(module => ({ default: module.AdminUsers })));
 const AdminReports = React.lazy(() => import("../features/admin/AdminReports").then(module => ({ default: module.AdminReports })));
@@ -61,6 +62,7 @@ export default function AppRouter() {
           <Route path="/app/projects/:projectId" element={<App />} />
           <Route path="/app/projects/:projectId/tracks/:trackId" element={<App />} />
           <Route path="/app/projects/:projectId/tracks/:trackId/:tab" element={<App />} />
+          <Route path="/design/projects" element={<ProjectsDesignPreview />} />
           
           {/* Admin routes */}
           <Route path="/admin" element={<AdminLayout />}>
