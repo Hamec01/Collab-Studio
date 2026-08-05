@@ -9,10 +9,10 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantClass: Record<ButtonVariant, string> = {
-  primary: "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/40",
-  secondary: "bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-700",
-  danger: "bg-red-800/80 hover:bg-red-700 text-red-100 border border-red-700/60",
-  ghost: "bg-transparent hover:bg-neutral-800/70 text-neutral-200 border border-neutral-700/50",
+  primary: "bg-[var(--cs-accent)] hover:bg-[var(--cs-accent-hover)] active:bg-[var(--cs-accent-active)] text-white border border-[var(--cs-accent-border)] shadow-[0_8px_24px_rgba(99,102,241,0.18)]",
+  secondary: "bg-[var(--cs-bg-surface)] hover:bg-[var(--cs-bg-surface-hover)] active:bg-[var(--cs-bg-surface-active)] text-[var(--cs-text-primary)] border border-[var(--cs-border-default)]",
+  danger: "bg-[var(--cs-error-soft)] hover:bg-red-500/20 text-red-200 border border-red-500/35",
+  ghost: "bg-transparent hover:bg-[var(--cs-bg-surface-hover)] active:bg-[var(--cs-bg-surface-active)] text-[var(--cs-text-secondary)] border border-transparent hover:border-[var(--cs-border-default)]",
 };
 
 const sizeClass: Record<ButtonSize, string> = {
@@ -24,7 +24,7 @@ export default function Button({ variant = "primary", size = "sm", className = "
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 ${variantClass[variant]} ${sizeClass[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-[background-color,border-color,color,box-shadow,transform] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed min-w-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cs-focus-ring)] ${variantClass[variant]} ${sizeClass[size]} ${className}`}
       {...rest}
     />
   );
