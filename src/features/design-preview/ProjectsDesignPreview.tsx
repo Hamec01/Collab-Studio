@@ -129,7 +129,7 @@ function IconButton({
   return (
     <button
       type="button"
-      className={`cs-preview-icon-button${active ? " is-active" : ""}`
+      className={`cs-preview-icon-button${active ? " is-active" : ""}`}
       aria-label={label}
       title={label}
       onClick={onClick}
