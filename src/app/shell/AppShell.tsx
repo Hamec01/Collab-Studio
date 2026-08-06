@@ -78,8 +78,8 @@ export default function AppShell({
   const defaultItems: MobileNavItem[] = [
     { key: "discover", label: "Главная", spriteIcon: "home", active: activePath === "/main" || activePath === "/discover" || activePath === "/", href: "/main" },
     { key: "studio", label: "Studio", spriteIcon: "folders", active: activePath.startsWith("/app/projects") || activePath === "/app", href: "/app" },
-    { key: "messages", label: "Inbox", spriteIcon: "chats", active: activePath.startsWith("/app/messages"), href: "/app/messages" },
-    { key: "profile", label: "Profile", spriteIcon: "user", active: activePath.startsWith("/app/profile"), href: "/app/profile" },
+    { key: "messages", label: "Сообщения", spriteIcon: "chats", active: activePath.startsWith("/app/messages"), href: "/app/messages" },
+    { key: "profile", label: "Профиль", spriteIcon: "user", active: activePath.startsWith("/app/profile"), href: "/app/profile" },
   ];
 
   const itemsToRender = mobileNavItems && mobileNavItems.length > 0 ? mobileNavItems : defaultItems;
@@ -91,7 +91,7 @@ export default function AppShell({
 
       <div className={`app-shell-redesign__layout${showDesktopNav ? "" : " app-shell-redesign__layout--single"}`}>
         {showDesktopNav && (
-          <aside className="app-shell-redesign__sidebar hidden lg:flex">
+          <aside className="app-shell-redesign__sidebar">
             {inRouter ? (
               <Link to="/" className="app-shell-redesign__brand" aria-label="CollabStudio home">
                 <span className="app-shell-redesign__brand-mark">CS</span>
@@ -168,8 +168,8 @@ export default function AppShell({
       </div>
 
       {displayMobileNav && (
-        <nav className="app-shell-mobile-nav fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[var(--cs-safe-bottom)] pt-2 bg-gradient-to-t from-black/95 via-black/90 to-transparent" aria-label="Mobile Navigation">
-          <div className="app-shell-redesign__mobile-nav-bar mx-auto max-w-sm rounded-[1.4rem] border border-white/10 bg-neutral-950/88 p-1 shadow-2xl backdrop-blur-xl">
+        <nav className="app-shell-mobile-nav app-shell-redesign__mobile-nav lg:hidden" aria-label="Mobile Navigation">
+          <div className="app-shell-redesign__mobile-nav-bar">
             {itemsToRender.map((item) => {
               const Icon = item.icon;
               const content = (
@@ -179,11 +179,11 @@ export default function AppShell({
                   ) : Icon ? (
                     <Icon className="app-shell-redesign__mobile-nav-icon" />
                   ) : null}
-                  <span className="sr-only">{item.label}</span>
+                  <span className="app-shell-redesign__mobile-nav-label">{item.label}</span>
                   <span className="app-shell-redesign__mobile-nav-indicator" aria-hidden="true" />
                 </>
               );
-              const buttonClass = `app-shell-redesign__mobile-nav-item flex-1 flex items-center justify-center rounded-[1rem] px-1 min-h-11 min-w-11 ${
+              const buttonClass = `app-shell-redesign__mobile-nav-item flex-1 flex flex-col items-center justify-center rounded-[0.95rem] px-1 min-h-11 min-w-11 ${
                 item.active ? "is-active text-white" : "text-neutral-400"
               }`;
 
