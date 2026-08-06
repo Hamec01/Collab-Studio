@@ -180,7 +180,7 @@ export default function AppShell({
                   ) : Icon ? (
                     <Icon className="app-shell-redesign__mobile-nav-icon" />
                   ) : null}
-                  <span className="app-shell-redesign__mobile-nav-label">{item.label}</span>
+                  <span className={`app-shell-redesign__mobile-nav-label${hasExtendedMobileNav ? " is-extended" : ""}`}>{item.label}</span>
                   <span className="app-shell-redesign__mobile-nav-indicator" aria-hidden="true" />
                 </>
               );
