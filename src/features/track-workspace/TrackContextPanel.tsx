@@ -74,21 +74,21 @@ export function TrackContextPanel({
   onUnauthorized,
 }: TrackContextPanelProps) {
   return (
-    <div className="flex h-full flex-col space-y-4">
-      <div className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-950 p-1">
+    <div className="flex h-full flex-col space-y-3 md:space-y-4">
+      <div className="studio-surface studio-surface--soft grid grid-cols-2 items-center gap-1 rounded-xl p-1 sm:flex sm:justify-between">
         {tabs.map((tab) => (
           <button
             type="button"
             key={tab.key}
             onClick={() => onSelectSidebar(tab.key)}
-            className={`flex-1 rounded-lg p-2 text-[10px] font-bold ${activeSidebar === tab.key ? "bg-indigo-600 text-white" : "text-neutral-400"}`}
+            className={`flex-1 rounded-lg p-2.5 text-[10px] font-bold sm:p-2 ${activeSidebar === tab.key ? "bg-indigo-600 text-white" : "text-neutral-400"}`}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      <div className="min-h-[360px] flex-1">
+      <div className="min-h-[300px] flex-1 md:min-h-[360px]">
         {activeSidebar === "comments" && (useLyricsDiscussions ? (
           <LyricsDiscussionsPanel
             threads={discussionThreads}

@@ -70,17 +70,17 @@ export default function CommentsPanel({
   });
 
   return (
-    <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 h-full flex flex-col">
-      <div className="flex items-center justify-between border-b border-neutral-900 pb-2 mb-3">
+    <div className="studio-surface studio-surface--soft flex h-full flex-col rounded-xl p-3 md:p-4">
+      <div className="mb-3 flex flex-col gap-2 border-b border-neutral-900 pb-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-xs font-mono text-neutral-400 font-semibold uppercase tracking-wider">ПРАВКИ И ОБСУЖДЕНИЕ</h3>
           <p className="text-[10px] text-neutral-500 mt-0.5">Точечные комментарии к тексту песни</p>
         </div>
 
-        <div className="flex gap-1.5 text-[9px]">
+        <div className="flex gap-1.5 text-[10px] sm:text-[9px]">
           <button
             onClick={() => setFilterResolved("unresolved")}
-            className={`px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
+            className={`rounded px-2 py-1 transition-colors cursor-pointer ${
               filterResolved === "unresolved" ? "bg-indigo-600 text-white" : "bg-neutral-900 text-neutral-400"
             }`}
           >
@@ -88,7 +88,7 @@ export default function CommentsPanel({
           </button>
           <button
             onClick={() => setFilterResolved("all")}
-            className={`px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
+            className={`rounded px-2 py-1 transition-colors cursor-pointer ${
               filterResolved === "all" ? "bg-indigo-600 text-white" : "bg-neutral-900 text-neutral-400"
             }`}
           >
@@ -122,7 +122,7 @@ export default function CommentsPanel({
 
       {/* Form to leave comments */}
       <form onSubmit={handleSubmit} className="mb-4">
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             type="text"
             value={text}
@@ -140,7 +140,7 @@ export default function CommentsPanel({
           <button
             type="submit"
             disabled={!text.trim() || !canWrite || isSubmitting}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-900 disabled:text-neutral-600 text-white p-2 px-3 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+            className="flex items-center justify-center rounded-lg bg-indigo-600 p-2 px-3 text-xs font-semibold text-white transition-colors cursor-pointer hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-neutral-900 disabled:text-neutral-600 sm:min-w-[96px]"
           >
             {isSubmitting ? "Сохраняем..." : "Оставить"}
           </button>

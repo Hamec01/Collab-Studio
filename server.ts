@@ -32,6 +32,7 @@ const config = getConfig();
 const app = express();
 const PORT = config.PORT;
 const isHttps = config.APP_URL.startsWith("https://");
+const isDevelopment = process.env.NODE_ENV !== "production";
 
 if (config.TRUST_PROXY) {
   app.set("trust proxy", 1);
@@ -44,11 +45,14 @@ app.use(
     strictTransportSecurity: isHttps,
     crossOriginOpenerPolicy: isHttps,
     originAgentCluster: isHttps,
-    contentSecurityPolicy: {
-      directives: {
-        upgradeInsecureRequests: isHttps ? [] : null,
-      },
-    },
+    // Dev server injects inline scripts and websocket HMR, so disable CSP in development only.
+    contentSecurityPolicy: isDevelopment
+      ? false
+      : {
+          directives: {
+            upgradeInsecureRequests: isHttps ? [] : null,
+          },
+        },
   }),
 );
 

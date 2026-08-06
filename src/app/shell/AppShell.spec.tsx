@@ -33,6 +33,7 @@ describe("AppShell", () => {
 
     expect(screen.getByRole("navigation", { name: "Mobile Navigation" })).toBeInTheDocument();
     const navButton = screen.getByRole("button", { name: "Projects" });
+    expect(navButton.className).toContain("app-shell-redesign__mobile-nav-item");
     expect(navButton.className).toContain("min-h-11");
     expect(navButton.className).toContain("min-w-11");
     await user.click(navButton);

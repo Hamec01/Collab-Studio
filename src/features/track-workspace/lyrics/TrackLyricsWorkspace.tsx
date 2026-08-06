@@ -96,15 +96,15 @@ export function TrackLyricsWorkspace({
 
   return (
     <>
-      <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:flex-row sm:items-center">
+      <div className="studio-surface studio-surface--soft flex flex-col items-start justify-between gap-3 rounded-xl p-3 sm:flex-row sm:items-center sm:p-4">
         <div className="text-left">
           <div className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-neutral-500">
             <FolderOpen className="h-3.5 w-3.5 text-indigo-400" />
             {projectTitle}
           </div>
-          <h2 className="mt-0.5 text-base font-bold text-white">{track.title}</h2>
+          <h2 className="mt-1 text-sm font-bold text-white sm:text-base">{track.title}</h2>
         </div>
-        {canEdit && <Button onClick={onRequestUpload} variant="primary" size="sm">Загрузить аудио</Button>}
+        {canEdit && <Button onClick={onRequestUpload} variant="primary" size="sm" className="w-full sm:w-auto">Загрузить аудио</Button>}
       </div>
 
       <LyricsEditor

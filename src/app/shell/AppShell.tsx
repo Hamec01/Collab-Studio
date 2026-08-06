@@ -3,6 +3,7 @@ import { Link, useInRouterContext } from "react-router-dom";
 import Button from "../../shared/ui/Button";
 import OfflineBanner from "./OfflineBanner";
 import SpriteIcon, { type SpriteIconName } from "../../shared/ui/SpriteIcon";
+import "./app-shell-redesign.css";
 
 type MobileNavItem = {
   key: string;
@@ -34,97 +35,170 @@ export default function AppShell({
   const inRouter = useInRouterContext();
   const activePath = typeof window !== "undefined" ? window.location.pathname : "";
   const displayMobileNav = showMobileNav ?? Boolean(currentUser);
+  const showDesktopNav = Boolean(currentUser);
+
+  const desktopNavItems: Array<{ key: string; label: string; href: string; spriteIcon: SpriteIconName; active: boolean }> = [
+    {
+      key: "discover",
+      label: "Главная",
+      href: "/main",
+      spriteIcon: "home",
+      active: activePath === "/" || activePath === "/main" || activePath.startsWith("/discover"),
+    },
+    {
+      key: "studio",
+      label: "Studio",
+      href: "/app",
+      spriteIcon: "folders",
+      active: activePath === "/app" || activePath.startsWith("/app/projects"),
+    },
+    {
+      key: "messages",
+      label: "Сообщения",
+      href: "/app/messages",
+      spriteIcon: "chats",
+      active: activePath.startsWith("/app/messages"),
+    },
+    {
+      key: "publications",
+      label: "Релизы",
+      href: "/app/publications",
+      spriteIcon: "musicUpload",
+      active: activePath.startsWith("/app/publications"),
+    },
+    {
+      key: "profile",
+      label: "Профиль",
+      href: "/app/profile",
+      spriteIcon: "user",
+      active: activePath.startsWith("/app/profile"),
+    },
+  ];
 
   const defaultItems: MobileNavItem[] = [
     { key: "discover", label: "Главная", spriteIcon: "home", active: activePath === "/main" || activePath === "/discover" || activePath === "/", href: "/main" },
     { key: "studio", label: "Studio", spriteIcon: "folders", active: activePath.startsWith("/app/projects") || activePath === "/app", href: "/app" },
-    { key: "publications", label: "Releases", spriteIcon: "wave", active: activePath.startsWith("/app/publications"), href: "/app/publications" },
-    { key: "profile", label: "Profile", spriteIcon: "user", active: activePath.startsWith("/app/profile"), href: "/app/profile" },
+    { key: "messages", label: "Сообщения", spriteIcon: "chats", active: activePath.startsWith("/app/messages"), href: "/app/messages" },
+    { key: "profile", label: "Профиль", spriteIcon: "user", active: activePath.startsWith("/app/profile"), href: "/app/profile" },
   ];
 
   const itemsToRender = mobileNavItems && mobileNavItems.length > 0 ? mobileNavItems : defaultItems;
+  const hasExtendedMobileNav = itemsToRender.length > 4;
+  const userLabel = currentUser?.displayName || currentUser?.username || "Коллаборатор";
 
   return (
-    <div className="app-shell min-h-dvh flex flex-col bg-[var(--cs-color-bg)] text-[var(--cs-color-text)]">
-      <header className="app-shell-header border-b px-4 py-2 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-[var(--cs-color-bg-elevated)]/90 border-[var(--cs-color-border)]">
-        <div className="flex items-center gap-6">
-          {inRouter ? (
-            <Link to="/" className="flex items-center select-none cursor-pointer">
-              <img
-                src="/logo.png"
-                alt="CollabStudio"
-                className="h-14 sm:h-20 w-auto object-contain"
-                style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.85)) drop-shadow(0 0 28px rgba(129,140,248,0.55)) brightness(1.38) contrast(1.08)" }}
-              />
-            </Link>
-          ) : (
-            <a href="/" className="flex items-center select-none cursor-pointer">
-              <img
-                src="/logo.png"
-                alt="CollabStudio"
-                className="h-14 sm:h-20 w-auto object-contain"
-                style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.85)) drop-shadow(0 0 28px rgba(129,140,248,0.55)) brightness(1.38) contrast(1.08)" }}
-              />
-            </a>
-          )}
-          {inRouter ? (
-            <Link to="/main" className="hidden sm:inline text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
-              Главная
-            </Link>
-          ) : (
-            <a href="/main" className="hidden sm:inline text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
-              Главная
-            </a>
-          )}
-          {inRouter ? (
-            <Link to="/app" className="hidden sm:inline text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
-              Studio
-            </Link>
-          ) : (
-            <a href="/app" className="hidden sm:inline text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
-              Studio
-            </a>
-          )}
-        </div>
-        {headerRight}
-      </header>
+    <div className={`app-shell app-shell-redesign min-h-dvh text-[var(--cs-color-text)]${displayMobileNav ? " has-mobile-nav" : ""}${showDesktopNav ? " has-desktop-nav" : ""}`}>
+      <div className="app-shell-redesign__backdrop" aria-hidden="true" />
 
-      <OfflineBanner />
+      <div className={`app-shell-redesign__layout${showDesktopNav ? "" : " app-shell-redesign__layout--single"}`}>
+        {showDesktopNav && (
+          <aside className="app-shell-redesign__sidebar">
+            {inRouter ? (
+              <Link to="/" className="app-shell-redesign__brand" aria-label="CollabStudio home">
+                <span className="app-shell-redesign__brand-mark">CS</span>
+                <span className="app-shell-redesign__brand-text">
+                  <strong>CollabStudio</strong>
+                  <small>Creative workspace</small>
+                </span>
+              </Link>
+            ) : (
+              <a href="/" className="app-shell-redesign__brand" aria-label="CollabStudio home">
+                <span className="app-shell-redesign__brand-mark">CS</span>
+                <span className="app-shell-redesign__brand-text">
+                  <strong>CollabStudio</strong>
+                  <small>Creative workspace</small>
+                </span>
+              </a>
+            )}
 
-      <main className="app-shell-main flex-1 min-h-0 overflow-y-auto">
-        {children}
-      </main>
+            <nav className="app-shell-redesign__sidebar-nav" aria-label="Основная навигация">
+              {desktopNavItems.map((item) => {
+                const navClass = `app-shell-redesign__sidebar-link${item.active ? " is-active" : ""}`;
+                const content = (
+                  <>
+                    <SpriteIcon name={item.spriteIcon} size={18} />
+                    <span>{item.label}</span>
+                  </>
+                );
 
-      {displayMobileNav && (
-        <nav className="app-shell-mobile-nav fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[var(--cs-safe-bottom)] pt-2 bg-gradient-to-t from-black/95 via-black/90 to-transparent" aria-label="Mobile Navigation">
-          <div className="mx-auto max-w-md rounded-2xl flex items-center justify-around p-1.5 shadow-2xl border backdrop-blur-lg bg-neutral-900/90 border-neutral-800">
-            {itemsToRender.map((item) => {
-              const Icon = item.icon;
-              const content = (
-                <>
-                  {item.spriteIcon ? (
-                    <SpriteIcon name={item.spriteIcon} size={20} className="mb-1" />
-                  ) : Icon ? (
-                    <Icon className="w-5 h-5 mb-1" />
-                  ) : null}
-                  <span className="text-[10px] font-bold">{item.label}</span>
-                </>
-              );
-              const buttonClass = `flex-1 flex flex-col items-center justify-center rounded-xl py-2 px-1 min-h-11 min-w-11 ${
-                item.active ? "text-white bg-indigo-600/30 border-indigo-500/40" : "text-neutral-300"
-              }`;
-
-              if (item.href) {
                 if (inRouter) {
                   return (
-                    <Link key={item.key} to={item.href} className={buttonClass}>
+                    <Link key={item.key} to={item.href} className={navClass}>
                       {content}
                     </Link>
                   );
                 }
 
                 return (
-                  <a key={item.key} href={item.href} className={buttonClass}>
+                  <a key={item.key} href={item.href} className={navClass}>
+                    {content}
+                  </a>
+                );
+              })}
+            </nav>
+
+            <div className="app-shell-redesign__user-card">
+              <span className="app-shell-redesign__user-avatar">{String(userLabel).slice(0, 2).toUpperCase()}</span>
+              <div>
+                <strong>{userLabel}</strong>
+                {currentUser?.username && <small>@{currentUser.username}</small>}
+              </div>
+            </div>
+          </aside>
+        )}
+
+        <div className="app-shell-redesign__stage">
+          <header className="app-shell-header app-shell-redesign__topbar">
+            <div className="app-shell-redesign__title-group">
+              <span className="app-shell-redesign__eyebrow">Studio</span>
+              <h1>{title}</h1>
+            </div>
+            <div className="app-shell-redesign__topbar-right">
+              {inRouter ? <Link to="/main" className="app-shell-redesign__quick-link">Главная</Link> : <a href="/main" className="app-shell-redesign__quick-link">Главная</a>}
+              {inRouter ? <Link to="/app" className="app-shell-redesign__quick-link">Проекты</Link> : <a href="/app" className="app-shell-redesign__quick-link">Проекты</a>}
+              {headerRight}
+            </div>
+          </header>
+
+          <OfflineBanner />
+
+          <main className="app-shell-main app-shell-redesign__main flex-1 min-h-0 overflow-y-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+
+      {displayMobileNav && (
+        <nav className="app-shell-mobile-nav app-shell-redesign__mobile-nav lg:hidden" aria-label="Mobile Navigation">
+          <div className={`app-shell-redesign__mobile-nav-bar${hasExtendedMobileNav ? " is-extended" : ""}`}>
+            {itemsToRender.map((item) => {
+              const Icon = item.icon;
+              const content = (
+                <>
+                  {item.spriteIcon ? (
+                    <SpriteIcon name={item.spriteIcon} size={20} className="app-shell-redesign__mobile-nav-icon" />
+                  ) : Icon ? (
+                    <Icon className="app-shell-redesign__mobile-nav-icon" />
+                  ) : null}
+                  <span className={`app-shell-redesign__mobile-nav-label${hasExtendedMobileNav ? " is-extended" : ""}`}>{item.label}</span>
+                  <span className="app-shell-redesign__mobile-nav-indicator" aria-hidden="true" />
+                </>
+              );
+              const buttonClass = `app-shell-redesign__mobile-nav-item flex flex-col items-center justify-center rounded-[0.95rem] px-1 min-h-11 min-w-11 ${
+                item.active ? "is-active text-white" : "text-neutral-400"
+              }`;
+
+              if (item.href) {
+                if (inRouter) {
+                  return (
+                    <Link key={item.key} to={item.href} className={buttonClass} aria-label={item.label} onClick={item.onPress}>
+                      {content}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <a key={item.key} href={item.href} className={buttonClass} aria-label={item.label} onClick={item.onPress}>
                     {content}
                   </a>
                 );
@@ -136,6 +210,7 @@ export default function AppShell({
                   variant="ghost"
                   onClick={item.onPress}
                   className={buttonClass}
+                  aria-label={item.label}
                   aria-current={item.active ? "page" : undefined}
                 >
                   {content}

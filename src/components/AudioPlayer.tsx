@@ -172,7 +172,7 @@ export default function AudioPlayer({
   };
 
   return (
-    <section className="bg-neutral-950 border border-neutral-800 rounded-xl p-3 sm:p-4 flex flex-col gap-3 shadow-xl w-full">
+    <section className="studio-surface studio-surface--soft flex w-full flex-col gap-3 rounded-xl p-3 shadow-xl sm:p-4">
       <div className="h-0.5 w-full rounded-full bg-gradient-to-r from-indigo-500/80 to-teal-500/80" />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -192,12 +192,12 @@ export default function AudioPlayer({
         </div>
 
         {audioSources.length > 0 && (
-          <div className="flex items-center gap-1.5 shrink-0 sm:pl-2">
+          <div className="flex w-full items-center gap-1.5 sm:w-auto sm:shrink-0 sm:pl-2">
             <span className="text-[10px] font-mono text-neutral-400">ВЕРСИИ:</span>
             <select
               value={selectedAudioSourceId || ""}
               onChange={(e) => onSelectAudioSource(e.target.value)}
-              className="max-w-[170px] bg-neutral-900 border border-neutral-800 rounded p-1.5 text-[11px] text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/60 cursor-pointer"
+              className="min-w-0 flex-1 rounded border border-neutral-800 bg-neutral-900 p-1.5 text-[11px] text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/60 cursor-pointer sm:max-w-[170px] sm:flex-none"
               aria-label="Выбор версии аудио"
               title="Выбор версии аудио"
             >
@@ -212,8 +212,8 @@ export default function AudioPlayer({
       </div>
 
       {!hasActiveSource ? (
-        <div className="border border-dashed border-neutral-800 rounded-lg bg-neutral-900/30 p-4 min-h-[120px] flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-3 min-w-0">
+        <div className="flex min-h-[120px] flex-col gap-4 rounded-lg border border-dashed border-neutral-800 bg-neutral-900/30 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+          <div className="flex min-w-0 items-start gap-3">
             <div className="w-10 h-10 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center shrink-0">
               <Music2 className="w-5 h-5 text-neutral-500" />
             </div>
@@ -227,13 +227,13 @@ export default function AudioPlayer({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end">
             {hasExternalSource && externalUrl && (
               <a
                 href={externalUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-sky-800 bg-sky-950/40 text-sky-200 hover:bg-sky-900/40 focus:outline-none focus:ring-2 focus:ring-sky-500/60"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky-800 bg-sky-950/40 px-3 py-2 text-xs text-sky-200 hover:bg-sky-900/40 focus:outline-none focus:ring-2 focus:ring-sky-500/60"
               >
                 <Link2 className="w-3.5 h-3.5" />
                 Открыть ссылку
@@ -243,7 +243,7 @@ export default function AudioPlayer({
               type="button"
               onClick={onRequestUploadFile}
               disabled={!canAnnotate}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
               title="Загрузить файл"
               aria-label="Загрузить файл"
             >
@@ -254,7 +254,7 @@ export default function AudioPlayer({
               type="button"
               onClick={onRequestAddLink}
               disabled={!canAnnotate}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
               title="Добавить ссылку"
               aria-label="Добавить ссылку"
             >
@@ -264,7 +264,7 @@ export default function AudioPlayer({
             <button
               type="button"
               disabled
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-neutral-800 bg-neutral-950 text-neutral-500 disabled:cursor-not-allowed focus:outline-none"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-neutral-500 disabled:cursor-not-allowed focus:outline-none"
               title={annotationUnavailableReason ?? "Заметки недоступны"}
               aria-label="Добавить заметку"
               aria-description={annotationUnavailableReason ?? "Заметки недоступны"}

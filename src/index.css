@@ -2,12 +2,58 @@
 
 :root {
 	color-scheme: dark;
-	--cs-color-bg: #09090b;
-	--cs-color-bg-elevated: #12121a;
-	--cs-color-surface: #171722;
-	--cs-color-border: #242433;
-	--cs-color-text: #f5f5f7;
-	--cs-color-muted: #a1a1b2;
+
+	/* Canvas and surfaces */
+	--cs-bg-canvas: #09090b;
+	--cs-bg-subtle: #0d0d13;
+	--cs-bg-elevated: #12121a;
+	--cs-bg-surface: #181824;
+	--cs-bg-surface-hover: #20202e;
+	--cs-bg-surface-active: #262638;
+	--cs-bg-overlay: rgba(5, 5, 8, 0.76);
+
+	/* Borders */
+	--cs-border-subtle: #20202d;
+	--cs-border-default: #2a2a3b;
+	--cs-border-strong: #37374d;
+
+	/* Text */
+	--cs-text-primary: #f7f7fb;
+	--cs-text-secondary: #b8b8c8;
+	--cs-text-muted: #858599;
+	--cs-text-disabled: #606071;
+	--cs-text-inverse: #101014;
+
+	/* Accent */
+	--cs-accent: #6366f1;
+	--cs-accent-hover: #7477ff;
+	--cs-accent-active: #5558dd;
+	--cs-accent-soft: rgba(99, 102, 241, 0.14);
+	--cs-accent-soft-hover: rgba(99, 102, 241, 0.22);
+	--cs-accent-border: rgba(129, 140, 248, 0.42);
+
+	/* Semantic states */
+	--cs-success: #22c55e;
+	--cs-success-soft: rgba(34, 197, 94, 0.14);
+	--cs-warning: #f59e0b;
+	--cs-warning-soft: rgba(245, 158, 11, 0.14);
+	--cs-error: #ef4444;
+	--cs-error-soft: rgba(239, 68, 68, 0.14);
+	--cs-info: #38bdf8;
+	--cs-info-soft: rgba(56, 189, 248, 0.14);
+
+	/* Interaction */
+	--cs-focus-ring: #818cf8;
+	--cs-selection: rgba(99, 102, 241, 0.26);
+
+	/* Backwards-compatible aliases used by existing components */
+	--cs-color-bg: var(--cs-bg-canvas);
+	--cs-color-bg-elevated: var(--cs-bg-elevated);
+	--cs-color-surface: var(--cs-bg-surface);
+	--cs-color-border: var(--cs-border-default);
+	--cs-color-text: var(--cs-text-primary);
+	--cs-color-muted: var(--cs-text-secondary);
+
 	--cs-safe-top: env(safe-area-inset-top, 0px);
 	--cs-safe-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
 }
@@ -16,12 +62,18 @@ html,
 body,
 #root {
 	min-height: 100dvh;
-	background: radial-gradient(circle at top, #1a1a2a 0%, #09090b 52%);
+	background: radial-gradient(circle at top, #1a1a2a 0%, var(--cs-bg-canvas) 52%);
 }
 
 body {
 	margin: 0;
-	color: var(--cs-color-text);
+	color: var(--cs-text-primary);
+	background-color: var(--cs-bg-canvas);
+}
+
+::selection {
+	background: var(--cs-selection);
+	color: var(--cs-text-primary);
 }
 
 .app-shell-header {

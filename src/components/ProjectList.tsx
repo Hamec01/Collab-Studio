@@ -618,9 +618,9 @@ export default function ProjectList({
   };
 
   return (
-    <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 flex flex-col h-full space-y-4">
+    <div className="studio-surface studio-surface--soft flex h-full flex-col space-y-3 rounded-xl p-3 md:space-y-4 md:p-4">
       {/* List Header */}
-      <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
+      <div className="flex flex-col gap-2 border-b border-neutral-900 pb-3 text-left sm:flex-row sm:items-center sm:justify-between">
         <div className="text-left">
           <h3 className="text-xs font-mono text-neutral-400 font-semibold uppercase tracking-wider">ПРОЕКТЫ (СИНГЛЫ / АЛЬБОМЫ)</h3>
           <p className="text-[10px] text-neutral-500 mt-0.5">Выберите папку проекта или трек для работы</p>
@@ -630,7 +630,7 @@ export default function ProjectList({
             setProjectSubmitError("");
             setShowAddProject(!showAddProject);
           }}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 p-2 px-3 text-xs font-medium text-white transition-colors cursor-pointer hover:bg-indigo-500 sm:w-auto"
         >
           <FolderPlus className="w-3.5 h-3.5" />
           Создать
@@ -645,7 +645,7 @@ export default function ProjectList({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Поиск по названию или тегам..."
-          className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+          className="studio-input min-h-0 rounded-lg p-2 text-xs placeholder-neutral-500"
         />
         {searchQuery && (
           <button
@@ -660,7 +660,7 @@ export default function ProjectList({
 
       {/* Add Project Form */}
       {showAddProject && (
-        <form onSubmit={handleCreateProject} className="bg-neutral-900 border border-neutral-800 p-3.5 rounded-xl text-xs space-y-2.5">
+        <form onSubmit={handleCreateProject} className="studio-surface studio-surface--soft space-y-2.5 rounded-xl p-3 text-xs md:p-3.5">
           <div className="text-left">
             <label className="block text-[10px] font-mono text-neutral-400 mb-1">НАЗВАНИЕ ПРОЕКТА</label>
             <input
@@ -691,7 +691,7 @@ export default function ProjectList({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="text-left">
               <label className="block text-[10px] font-mono text-neutral-400 mb-1">ФОРМАТ</label>
               <select
@@ -754,7 +754,7 @@ export default function ProjectList({
       )}
 
       {/* Projects Cards List */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1 max-h-[500px]">
+      <div className="max-h-[52vh] flex-1 space-y-3 overflow-y-auto pr-1 md:max-h-[500px]">
         {projects.length === 0 ? (
           <div className="text-center p-6 text-neutral-400 text-xs space-y-3">
             <p>У вас пока нет проектов</p>
