@@ -129,6 +129,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const loadSource = useCallback((url: string | null) => {
     if (!audioRef.current) return;
 
+    // Keep playback state when requested source is already active.
+    if (url === sourceUrl) return;
+
     audioRef.current.pause();
     audioRef.current.currentTime = 0;
     setIsPlaying(false);
@@ -142,7 +145,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } else {
       audioRef.current.removeAttribute("src");
     }
-  }, []);
+  }, [sourceUrl]);
 
   const play = useCallback(async () => {
     if (!audioRef.current || !sourceUrl) return;

@@ -968,6 +968,91 @@
   font-size: 11px;
 }
 
+.cs-preview-context-empty {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--cs-border-default, #2a2a3b);
+  border-radius: 10px;
+  color: var(--cs-text-muted, #858599);
+  font-size: 10px;
+}
+
+.cs-preview-inline-form {
+  margin-bottom: 16px;
+  border: 1px solid var(--cs-border-default, #2a2a3b);
+  border-radius: 14px;
+  background: rgba(18, 18, 26, 0.78);
+  padding: 10px;
+}
+
+.cs-preview-inline-form__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 8px;
+}
+
+.cs-preview-inline-form input,
+.cs-preview-inline-form select,
+.cs-preview-inline-form button {
+  min-height: 38px;
+  border: 1px solid var(--cs-border-default, #2a2a3b);
+  border-radius: 10px;
+  background: var(--cs-bg-surface, #181824);
+  color: var(--cs-text-primary, #f7f7fb);
+  padding: 0 11px;
+  font-size: 12px;
+}
+
+.cs-preview-inline-form button {
+  background: linear-gradient(180deg, var(--cs-accent-hover, #7477ff), var(--cs-accent, #6366f1));
+  border-color: var(--cs-accent-border, rgba(129, 140, 248, 0.42));
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cs-preview-inline-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.cs-preview-inline-form__error {
+  margin: 8px 2px 0;
+  color: #fca5a5;
+  font-size: 11px;
+}
+
+.cs-preview-data-list {
+  width: 100%;
+  display: grid;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.cs-preview-data-list__item {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid var(--cs-border-default, #2a2a3b);
+  border-radius: 11px;
+  background: rgba(24, 24, 36, 0.9);
+  color: var(--cs-text-primary, #f7f7fb);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+
+.cs-preview-data-list__item small {
+  color: var(--cs-text-muted, #858599);
+  font-size: 10px;
+}
+
+.cs-preview-data-list__item.is-static {
+  cursor: default;
+}
+
 .cs-preview-context {
   grid-column: 3;
   grid-row: 1;
@@ -1649,6 +1734,10 @@
   .cs-preview-mobile-placeholder {
     min-height: 440px;
     padding: 24px;
+  }
+
+  .cs-preview-inline-form__row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

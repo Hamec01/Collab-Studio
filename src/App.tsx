@@ -684,16 +684,14 @@ export default function App() {
   // Load audio source into shared player when selected audio changes
   useEffect(() => {
     const sourceUrl = activeTrackSelectedAudio?.streamUrl || null;
-    loadSource(sourceUrl);
     if (activeTrack && activeTrackSelectedAudio) {
+      loadSource(sourceUrl);
       setTrackMetadata({
         trackTitle: activeTrack.title,
         activeAudioSource: activeTrackSelectedAudio,
         activeTrackId: activeTrackId,
         activeProjectId: activeProjectId,
       });
-    } else {
-      setTrackMetadata(null);
     }
   }, [
     activeTrack?.id,
@@ -1267,7 +1265,8 @@ export default function App() {
 
   return (
     <AppShell
-      title={t("shell.brand")}
+      title={activeProject?.title || "Studio"}
+      currentUser={currentUser}
       headerRight={
         currentUser ? (
           <AuthModal
@@ -1329,8 +1328,8 @@ export default function App() {
       {currentUser && (
         <>
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 pb-24 max-w-7xl mx-auto w-full min-h-0">
-              <div className={`lg:col-span-3 min-h-0 flex-col gap-4 ${mobileTab === "projects" ? "flex" : "hidden lg:flex"}`}>
+            <div className="mx-auto grid min-h-0 w-full max-w-7xl grid-cols-1 gap-3 p-3 pb-24 md:gap-4 md:p-4 md:pb-28 lg:grid-cols-12 lg:gap-5">
+              <div className={`min-h-0 flex-col gap-3 md:gap-4 lg:col-span-3 ${mobileTab === "projects" ? "flex" : "hidden lg:flex"}`}>
               <ProjectList
                 projects={projects}
                 activeProject={activeProject}
@@ -1375,7 +1374,7 @@ export default function App() {
               />
               </div>
 
-              <div className={`lg:col-span-6 min-h-0 flex-col gap-5 ${mobileTab === "editor" ? "flex" : "hidden lg:flex"}`}>
+              <div className={`min-h-0 flex-col gap-3 md:gap-5 lg:col-span-6 ${mobileTab === "editor" ? "flex" : "hidden lg:flex"}`}>
               {activeTrack ? (
                 <TrackLyricsWorkspace
                   projectTitle={activeProject?.title}
@@ -1419,7 +1418,7 @@ export default function App() {
               )}
               </div>
 
-              <div className={`lg:col-span-3 min-h-0 flex-col gap-4 ${mobileTab === "rightPanel" ? "flex" : "hidden lg:flex"}`}>
+              <div className={`min-h-0 flex-col gap-3 md:gap-4 lg:col-span-3 ${mobileTab === "rightPanel" ? "flex" : "hidden lg:flex"}`}>
               {activeTrack ? (
                 <TrackContextPanel
                   track={activeTrack}

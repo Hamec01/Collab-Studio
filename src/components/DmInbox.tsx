@@ -106,7 +106,7 @@ export function DmInbox({ initialRequestId }: DmInboxProps) {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-[500px] rounded-2xl border border-neutral-800 bg-neutral-950/80 overflow-hidden">
+    <div className="studio-surface flex h-full min-h-[500px] flex-col overflow-hidden rounded-2xl">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3 bg-neutral-900/60">
         {view === "conversation" && (

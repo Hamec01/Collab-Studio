@@ -68,7 +68,7 @@ export default function ProfileSettingsPage() {
       }
       currentUser={currentUser}
     >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
+      <div className="studio-page studio-page--narrow flex flex-col gap-4">
         {isCheckingSession || authPhase === "loading" ? (
           <StateView kind="loading" message="Загружаем профиль..." />
         ) : authPhase !== "authenticated" || !currentUser ? (
@@ -78,8 +78,9 @@ export default function ProfileSettingsPage() {
             {message && <StateView kind="empty" message={message} compact />}
             {error && <StateView kind="error" message={error} compact />}
 
-            <form onSubmit={handleSubmit} className="rounded-3xl border border-neutral-800 bg-neutral-950/80 p-6 shadow-2xl">
+            <form onSubmit={handleSubmit} className="studio-surface studio-surface--section">
               <div className="mb-6">
+                <span className="studio-page__eyebrow">Studio Profile</span>
                 <h1 className="text-2xl font-semibold text-white">Публичный профиль</h1>
                 <p className="mt-2 text-sm text-neutral-400">
                   Здесь включается opt-in публичный профиль. Work publications уже доступны отдельно, публикации показываются на Главной.
@@ -95,7 +96,7 @@ export default function ProfileSettingsPage() {
                     onChange={(event) => setDisplayName(event.target.value)}
                     maxLength={120}
                     required
-                    className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-white outline-none focus:border-indigo-500"
+                    className="studio-input"
                   />
                 </label>
 
@@ -107,7 +108,7 @@ export default function ProfileSettingsPage() {
                     onChange={(event) => setBio(event.target.value)}
                     maxLength={500}
                     rows={5}
-                    className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-white outline-none focus:border-indigo-500"
+                    className="studio-textarea"
                   />
                 </label>
 
@@ -118,7 +119,7 @@ export default function ProfileSettingsPage() {
                     value={location}
                     onChange={(event) => setLocation(event.target.value)}
                     maxLength={120}
-                    className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-white outline-none focus:border-indigo-500"
+                    className="studio-input"
                   />
                 </label>
 
@@ -130,11 +131,11 @@ export default function ProfileSettingsPage() {
                     onChange={(event) => setWebsite(event.target.value)}
                     inputMode="url"
                     placeholder="https://example.com"
-                    className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-white outline-none focus:border-indigo-500"
+                    className="studio-input"
                   />
                 </label>
 
-                <label className="flex items-start gap-3 rounded-xl border border-neutral-800 bg-neutral-900/80 p-4 text-sm text-neutral-200">
+                <label className="studio-surface studio-surface--soft flex items-start gap-3 rounded-xl p-4 text-sm text-neutral-200">
                   <input
                     type="checkbox"
                     checked={isPublicProfile}

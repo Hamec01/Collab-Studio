@@ -62,7 +62,7 @@ export default function AppRouter() {
           <Route path="/app/projects/:projectId" element={<App />} />
           <Route path="/app/projects/:projectId/tracks/:trackId" element={<App />} />
           <Route path="/app/projects/:projectId/tracks/:trackId/:tab" element={<App />} />
-          <Route path="/design/projects" element={<ProjectsDesignPreview />} />
+          <Route path="/design/projects" element={<Navigate to="/app" replace />} />
           
           {/* Admin routes */}
           <Route path="/admin" element={<AdminLayout />}>

@@ -206,7 +206,7 @@ export default function PublicationManagerPage() {
       }
       currentUser={currentUser}
     >
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6">
+      <div className="studio-page flex flex-col gap-4">
         {isCheckingSession || loading ? (
           <StateView kind="loading" message="Загружаем публикации..." />
         ) : authPhase !== "authenticated" || !currentUser ? (
@@ -217,14 +217,14 @@ export default function PublicationManagerPage() {
             {error && <StateView kind="error" message={error} compact />}
 
             {/* Navigation Tabs */}
-            <div className="flex border-b border-neutral-800 mb-6 overflow-x-auto whitespace-nowrap scrollbar-none">
+            <div className="studio-toolbar border-b border-neutral-800 mb-6 overflow-x-auto whitespace-nowrap scrollbar-none pb-2">
               <button
                 type="button"
                 onClick={() => setActiveTab("manage")}
-                className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors focus:outline-none ${
+                className={`studio-chip rounded-xl border transition-colors focus:outline-none ${
                   activeTab === "manage"
-                    ? "border-indigo-500 text-indigo-400 font-medium"
-                    : "border-transparent text-neutral-400 hover:text-neutral-200"
+                    ? "is-active"
+                    : "hover:bg-neutral-800/70"
                 }`}
               >
                 Управление публикациями
@@ -232,10 +232,10 @@ export default function PublicationManagerPage() {
               <button
                 type="button"
                 onClick={() => setActiveTab("stats")}
-                className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors focus:outline-none ${
+                className={`studio-chip rounded-xl border transition-colors focus:outline-none ${
                   activeTab === "stats"
-                    ? "border-indigo-500 text-indigo-400 font-medium"
-                    : "border-transparent text-neutral-400 hover:text-neutral-200"
+                    ? "is-active"
+                    : "hover:bg-neutral-800/70"
                 }`}
               >
                 Аналитика и статистика
@@ -244,8 +244,9 @@ export default function PublicationManagerPage() {
 
             {activeTab === "manage" && (
               <>
-                <section className="rounded-3xl border border-neutral-800 bg-neutral-950/80 p-6 shadow-2xl">
+                <section className="studio-surface studio-surface--section">
                   <div className="mb-6">
+                    <span className="studio-page__eyebrow">Studio Releases</span>
                     <h1 className="text-2xl font-semibold text-white">Новая публикация</h1>
                     <p className="mt-2 text-sm text-neutral-400">
                       Этот slice публикует выбранный track snapshot как Work или Collab.

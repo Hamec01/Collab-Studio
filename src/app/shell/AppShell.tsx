@@ -3,6 +3,7 @@ import { Link, useInRouterContext } from "react-router-dom";
 import Button from "../../shared/ui/Button";
 import OfflineBanner from "./OfflineBanner";
 import SpriteIcon, { type SpriteIconName } from "../../shared/ui/SpriteIcon";
+import "./app-shell-redesign.css";
 
 type MobileNavItem = {
   key: string;
@@ -34,6 +35,45 @@ export default function AppShell({
   const inRouter = useInRouterContext();
   const activePath = typeof window !== "undefined" ? window.location.pathname : "";
   const displayMobileNav = showMobileNav ?? Boolean(currentUser);
+  const showDesktopNav = Boolean(currentUser);
+
+  const desktopNavItems: Array<{ key: string; label: string; href: string; spriteIcon: SpriteIconName; active: boolean }> = [
+    {
+      key: "discover",
+      label: "Главная",
+      href: "/main",
+      spriteIcon: "home",
+      active: activePath === "/" || activePath === "/main" || activePath.startsWith("/discover"),
+    },
+    {
+      key: "studio",
+      label: "Studio",
+      href: "/app",
+      spriteIcon: "folders",
+      active: activePath === "/app" || activePath.startsWith("/app/projects"),
+    },
+    {
+      key: "messages",
+      label: "Сообщения",
+      href: "/app/messages",
+      spriteIcon: "chats",
+      active: activePath.startsWith("/app/messages"),
+    },
+    {
+      key: "publications",
+      label: "Релизы",
+      href: "/app/publications",
+      spriteIcon: "musicUpload",
+      active: activePath.startsWith("/app/publications"),
+    },
+    {
+      key: "profile",
+      label: "Профиль",
+      href: "/app/profile",
+      spriteIcon: "user",
+      active: activePath.startsWith("/app/profile"),
+    },
+  ];
 
   const defaultItems: MobileNavItem[] = [
     { key: "discover", label: "Главная", spriteIcon: "home", active: activePath === "/main" || activePath === "/discover" || activePath === "/", href: "/main" },
@@ -43,57 +83,89 @@ export default function AppShell({
   ];
 
   const itemsToRender = mobileNavItems && mobileNavItems.length > 0 ? mobileNavItems : defaultItems;
+  const userLabel = currentUser?.displayName || currentUser?.username || "Коллаборатор";
 
   return (
-    <div className="app-shell min-h-dvh flex flex-col bg-[var(--cs-color-bg)] text-[var(--cs-color-text)]">
-      <header className="app-shell-header border-b px-4 py-2 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md bg-[var(--cs-color-bg-elevated)]/90 border-[var(--cs-color-border)]">
-        <div className="flex items-center gap-6">
-          {inRouter ? (
-            <Link to="/" className="flex items-center select-none cursor-pointer">
-              <img
-                src="/logo.png"
-                alt="CollabStudio"
-                className="h-14 sm:h-20 w-auto object-contain"
-                style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.85)) drop-shadow(0 0 28px rgba(129,140,248,0.55)) brightness(1.38) contrast(1.08)" }}
-              />
-            </Link>
-          ) : (
-            <a href="/" className="flex items-center select-none cursor-pointer">
-              <img
-                src="/logo.png"
-                alt="CollabStudio"
-                className="h-14 sm:h-20 w-auto object-contain"
-                style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.85)) drop-shadow(0 0 28px rgba(129,140,248,0.55)) brightness(1.38) contrast(1.08)" }}
-              />
-            </a>
-          )}
-          {inRouter ? (
-            <Link to="/main" className="hidden sm:inline text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
-              Главная
-            </Link>
-          ) : (
-            <a href="/main" className="hidden sm:inline text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
-              Главная
-            </a>
-          )}
-          {inRouter ? (
-            <Link to="/app" className="hidden sm:inline text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
-              Studio
-            </Link>
-          ) : (
-            <a href="/app" className="hidden sm:inline text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
-              Studio
-            </a>
-          )}
+    <div className={`app-shell app-shell-redesign min-h-dvh text-[var(--cs-color-text)]${displayMobileNav ? " has-mobile-nav" : ""}${showDesktopNav ? " has-desktop-nav" : ""}`}>
+      <div className="app-shell-redesign__backdrop" aria-hidden="true" />
+
+      <div className={`app-shell-redesign__layout${showDesktopNav ? "" : " app-shell-redesign__layout--single"}`}>
+        {showDesktopNav && (
+          <aside className="app-shell-redesign__sidebar hidden lg:flex">
+            {inRouter ? (
+              <Link to="/" className="app-shell-redesign__brand" aria-label="CollabStudio home">
+                <span className="app-shell-redesign__brand-mark">CS</span>
+                <span className="app-shell-redesign__brand-text">
+                  <strong>CollabStudio</strong>
+                  <small>Creative workspace</small>
+                </span>
+              </Link>
+            ) : (
+              <a href="/" className="app-shell-redesign__brand" aria-label="CollabStudio home">
+                <span className="app-shell-redesign__brand-mark">CS</span>
+                <span className="app-shell-redesign__brand-text">
+                  <strong>CollabStudio</strong>
+                  <small>Creative workspace</small>
+                </span>
+              </a>
+            )}
+
+            <nav className="app-shell-redesign__sidebar-nav" aria-label="Основная навигация">
+              {desktopNavItems.map((item) => {
+                const navClass = `app-shell-redesign__sidebar-link${item.active ? " is-active" : ""}`;
+                const content = (
+                  <>
+                    <SpriteIcon name={item.spriteIcon} size={18} />
+                    <span>{item.label}</span>
+                  </>
+                );
+
+                if (inRouter) {
+                  return (
+                    <Link key={item.key} to={item.href} className={navClass}>
+                      {content}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <a key={item.key} href={item.href} className={navClass}>
+                    {content}
+                  </a>
+                );
+              })}
+            </nav>
+
+            <div className="app-shell-redesign__user-card">
+              <span className="app-shell-redesign__user-avatar">{String(userLabel).slice(0, 2).toUpperCase()}</span>
+              <div>
+                <strong>{userLabel}</strong>
+                {currentUser?.username && <small>@{currentUser.username}</small>}
+              </div>
+            </div>
+          </aside>
+        )}
+
+        <div className="app-shell-redesign__stage">
+          <header className="app-shell-header app-shell-redesign__topbar">
+            <div className="app-shell-redesign__title-group">
+              <span className="app-shell-redesign__eyebrow">Studio</span>
+              <h1>{title}</h1>
+            </div>
+            <div className="app-shell-redesign__topbar-right">
+              {inRouter ? <Link to="/main" className="app-shell-redesign__quick-link">Главная</Link> : <a href="/main" className="app-shell-redesign__quick-link">Главная</a>}
+              {inRouter ? <Link to="/app" className="app-shell-redesign__quick-link">Проекты</Link> : <a href="/app" className="app-shell-redesign__quick-link">Проекты</a>}
+              {headerRight}
+            </div>
+          </header>
+
+          <OfflineBanner />
+
+          <main className="app-shell-main app-shell-redesign__main flex-1 min-h-0 overflow-y-auto">
+            {children}
+          </main>
         </div>
-        {headerRight}
-      </header>
-
-      <OfflineBanner />
-
-      <main className="app-shell-main flex-1 min-h-0 overflow-y-auto">
-        {children}
-      </main>
+      </div>
 
       {displayMobileNav && (
         <nav className="app-shell-mobile-nav fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[var(--cs-safe-bottom)] pt-2 bg-gradient-to-t from-black/95 via-black/90 to-transparent" aria-label="Mobile Navigation">

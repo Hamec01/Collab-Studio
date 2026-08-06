@@ -86,41 +86,49 @@ export default function DiscoverPage() {
       ) : undefined}
       currentUser={currentUser}
     >
-      <div className="mx-auto w-full max-w-5xl px-4 py-6">
-        {/* Filters & Search */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 focus-within:border-neutral-700">
+      <div className="studio-page">
+        <div className="studio-page__header">
+          <div>
+            <span className="studio-page__eyebrow">Discover</span>
+            <h1 className="studio-page__title">Главная</h1>
+            <p className="studio-page__subtitle">Публичные работы, коллабы и свежие релизы в едином Studio-стиле.</p>
+          </div>
+        </div>
+
+        <div className="studio-surface studio-surface--section mb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-1 items-center gap-2 rounded-xl border border-neutral-800/70 bg-neutral-900/40 px-4 focus-within:border-indigo-500/50">
             <span className="text-neutral-500">🔍</span>
             <input
               type="text"
               placeholder="Search works & collabs..."
               value={q}
               onChange={handleSearchChange}
-              className="w-full bg-transparent py-3 text-sm outline-none placeholder:text-neutral-600"
+              className="w-full bg-transparent py-3 text-sm text-white outline-none placeholder:text-neutral-600"
             />
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
+          <div className="studio-toolbar overflow-x-auto pb-2 sm:pb-0">
             <button
               onClick={() => setKind("")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                !kind ? "bg-white text-black" : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+              className={`studio-chip transition-colors ${
+                !kind ? "is-active" : "hover:bg-neutral-800/70"
               }`}
             >
               All
             </button>
             <button
               onClick={() => setKind("WORK")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                kind === "WORK" ? "bg-white text-black" : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+              className={`studio-chip transition-colors ${
+                kind === "WORK" ? "is-active" : "hover:bg-neutral-800/70"
               }`}
             >
               Works
             </button>
             <button
               onClick={() => setKind("COLLAB")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                kind === "COLLAB" ? "bg-white text-black" : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+              className={`studio-chip transition-colors ${
+                kind === "COLLAB" ? "is-active" : "hover:bg-neutral-800/70"
               }`}
             >
               Collabs
@@ -128,20 +136,21 @@ export default function DiscoverPage() {
             <div className="h-4 w-px bg-neutral-700 mx-2" />
             <button
               onClick={toggleFeatured}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                isFeatured ? "bg-pink-900/40 text-pink-300" : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+              className={`studio-chip transition-colors ${
+                isFeatured ? "is-active" : "hover:bg-neutral-800/70"
               }`}
             >
               ⭐ Featured
             </button>
           </div>
         </div>
+        </div>
 
         {/* Results */}
         {isLoading ? (
-          <div className="py-20 text-center text-sm text-neutral-500">Loading...</div>
+          <div className="studio-surface studio-empty">Loading...</div>
         ) : publications.length === 0 ? (
-          <div className="py-20 text-center text-neutral-500">
+          <div className="studio-surface studio-empty">
             <p className="text-lg font-semibold text-neutral-300">No results found</p>
             <p className="text-sm mt-1">Try adjusting your filters or search query.</p>
           </div>
@@ -153,7 +162,7 @@ export default function DiscoverPage() {
                 <Link
                   key={pub.id}
                   to={url}
-                  className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/40 transition-all hover:border-neutral-700 hover:bg-neutral-900"
+                  className="studio-surface studio-surface--soft group flex flex-col overflow-hidden rounded-2xl transition-all hover:border-neutral-700 hover:bg-neutral-900/90"
                 >
                   <div className="aspect-video w-full bg-neutral-800 relative">
                     {pub.coverImageUrl ? (

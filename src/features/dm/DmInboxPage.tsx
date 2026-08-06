@@ -18,7 +18,7 @@ export default function DmInboxPage() {
       }
       currentUser={currentUser}
     >
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6">
+      <div className="studio-page flex flex-col gap-4">
         {isCheckingSession ? (
           <StateView kind="loading" message="Загружаем сообщения..." />
         ) : authPhase !== "authenticated" || !currentUser ? (
