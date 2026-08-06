@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 
 const LOCAL_SW_RESET_KEY = "cs-local-sw-reset-v1";
-const GLOBAL_SW_RESET_KEY = "cs-global-sw-reset-v2";
+const GLOBAL_SW_RESET_KEY = "cs-global-sw-reset-v3";
 
 async function clearGlobalServiceWorkerCacheOnce() {
   if (typeof window === "undefined" || typeof navigator === "undefined") return;
