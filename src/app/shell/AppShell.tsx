@@ -78,7 +78,7 @@ export default function AppShell({
   const defaultItems: MobileNavItem[] = [
     { key: "discover", label: "Главная", spriteIcon: "home", active: activePath === "/main" || activePath === "/discover" || activePath === "/", href: "/main" },
     { key: "studio", label: "Studio", spriteIcon: "folders", active: activePath.startsWith("/app/projects") || activePath === "/app", href: "/app" },
-    { key: "publications", label: "Releases", spriteIcon: "wave", active: activePath.startsWith("/app/publications"), href: "/app/publications" },
+    { key: "messages", label: "Inbox", spriteIcon: "chats", active: activePath.startsWith("/app/messages"), href: "/app/messages" },
     { key: "profile", label: "Profile", spriteIcon: "user", active: activePath.startsWith("/app/profile"), href: "/app/profile" },
   ];
 
@@ -169,34 +169,35 @@ export default function AppShell({
 
       {displayMobileNav && (
         <nav className="app-shell-mobile-nav fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[var(--cs-safe-bottom)] pt-2 bg-gradient-to-t from-black/95 via-black/90 to-transparent" aria-label="Mobile Navigation">
-          <div className="mx-auto max-w-md rounded-2xl flex items-center justify-around p-1.5 shadow-2xl border backdrop-blur-lg bg-neutral-900/90 border-neutral-800">
+          <div className="app-shell-redesign__mobile-nav-bar mx-auto max-w-sm rounded-[1.4rem] border border-white/10 bg-neutral-950/88 p-1 shadow-2xl backdrop-blur-xl">
             {itemsToRender.map((item) => {
               const Icon = item.icon;
               const content = (
                 <>
                   {item.spriteIcon ? (
-                    <SpriteIcon name={item.spriteIcon} size={20} className="mb-1" />
+                    <SpriteIcon name={item.spriteIcon} size={20} className="app-shell-redesign__mobile-nav-icon" />
                   ) : Icon ? (
-                    <Icon className="w-5 h-5 mb-1" />
+                    <Icon className="app-shell-redesign__mobile-nav-icon" />
                   ) : null}
-                  <span className="text-[10px] font-bold">{item.label}</span>
+                  <span className="sr-only">{item.label}</span>
+                  <span className="app-shell-redesign__mobile-nav-indicator" aria-hidden="true" />
                 </>
               );
-              const buttonClass = `flex-1 flex flex-col items-center justify-center rounded-xl py-2 px-1 min-h-11 min-w-11 ${
-                item.active ? "text-white bg-indigo-600/30 border-indigo-500/40" : "text-neutral-300"
+              const buttonClass = `app-shell-redesign__mobile-nav-item flex-1 flex items-center justify-center rounded-[1rem] px-1 min-h-11 min-w-11 ${
+                item.active ? "is-active text-white" : "text-neutral-400"
               }`;
 
               if (item.href) {
                 if (inRouter) {
                   return (
-                    <Link key={item.key} to={item.href} className={buttonClass}>
+                    <Link key={item.key} to={item.href} className={buttonClass} aria-label={item.label}>
                       {content}
                     </Link>
                   );
                 }
 
                 return (
-                  <a key={item.key} href={item.href} className={buttonClass}>
+                  <a key={item.key} href={item.href} className={buttonClass} aria-label={item.label}>
                     {content}
                   </a>
                 );
@@ -208,6 +209,7 @@ export default function AppShell({
                   variant="ghost"
                   onClick={item.onPress}
                   className={buttonClass}
+                  aria-label={item.label}
                   aria-current={item.active ? "page" : undefined}
                 >
                   {content}

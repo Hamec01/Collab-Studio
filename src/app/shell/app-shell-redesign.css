@@ -231,6 +231,48 @@
   min-width: 0;
 }
 
+.app-shell-redesign__mobile-nav-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.app-shell-redesign__mobile-nav-item {
+  position: relative;
+  min-height: 48px;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.app-shell-redesign__mobile-nav-item:hover {
+  color: #f8fafc;
+}
+
+.app-shell-redesign__mobile-nav-item.is-active {
+  background: linear-gradient(180deg, rgba(67, 56, 202, 0.2), rgba(219, 39, 119, 0.12));
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.24);
+}
+
+.app-shell-redesign__mobile-nav-icon {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.app-shell-redesign__mobile-nav-indicator {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+  transform: translateX(-50%);
+}
+
+.app-shell-redesign__mobile-nav-item.is-active .app-shell-redesign__mobile-nav-indicator {
+  background: #f8fafc;
+}
+
 .studio-page {
   width: 100%;
   max-width: 1200px;
@@ -436,22 +478,24 @@
   }
 
   .app-shell-redesign.has-mobile-nav .app-shell-redesign__main {
-    padding-bottom: calc(88px + var(--cs-safe-bottom, 0px));
+    padding-bottom: calc(72px + var(--cs-safe-bottom, 0px));
   }
 
   .app-shell-redesign__topbar {
-    min-height: 62px;
-    gap: 10px;
-    padding: 10px 12px;
+    min-height: 56px;
+    gap: 8px;
+    padding: 8px 12px;
   }
 
   .app-shell-redesign__title-group h1 {
-    font-size: 16px;
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .app-shell-redesign__eyebrow {
-    font-size: 10px;
-    margin-bottom: 2px;
+    display: none;
   }
 
   .app-shell-redesign__topbar-right {
@@ -466,6 +510,11 @@
 
   .app-shell-redesign__quick-link {
     display: none;
+  }
+
+  .app-shell-mobile-nav {
+    padding: 0 12px calc(8px + var(--cs-safe-bottom, 0px));
+    background: linear-gradient(180deg, transparent, rgba(6, 7, 13, 0.2) 24%, rgba(6, 7, 13, 0.92) 100%);
   }
 }
 
