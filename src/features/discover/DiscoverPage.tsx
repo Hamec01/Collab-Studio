@@ -91,7 +91,7 @@ export default function DiscoverPage() {
           <div>
             <span className="studio-page__eyebrow">Discover</span>
             <h1 className="studio-page__title">Главная</h1>
-            <p className="studio-page__subtitle">Публичные работы, коллабы и свежие релизы в едином Studio-стиле.</p>
+            <p className="studio-page__subtitle">Здесь ты найдешь свежие релизы, коллабы и новые треки.</p>
           </div>
         </div>
 

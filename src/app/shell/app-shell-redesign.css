@@ -255,10 +255,27 @@
   backdrop-filter: blur(14px);
 }
 
+.app-shell-redesign__mobile-nav-bar.is-extended {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: min(100%, 460px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.app-shell-redesign__mobile-nav-bar.is-extended::-webkit-scrollbar {
+  display: none;
+}
+
 .app-shell-redesign__mobile-nav-item {
   position: relative;
   min-height: 44px;
   transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.app-shell-redesign__mobile-nav-bar.is-extended .app-shell-redesign__mobile-nav-item {
+  min-width: 68px;
 }
 
 .app-shell-redesign__mobile-nav-item:hover {

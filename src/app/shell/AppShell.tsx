@@ -83,6 +83,7 @@ export default function AppShell({
   ];
 
   const itemsToRender = mobileNavItems && mobileNavItems.length > 0 ? mobileNavItems : defaultItems;
+  const hasExtendedMobileNav = itemsToRender.length > 4;
   const userLabel = currentUser?.displayName || currentUser?.username || "Коллаборатор";
 
   return (
@@ -169,7 +170,7 @@ export default function AppShell({
 
       {displayMobileNav && (
         <nav className="app-shell-mobile-nav app-shell-redesign__mobile-nav lg:hidden" aria-label="Mobile Navigation">
-          <div className="app-shell-redesign__mobile-nav-bar">
+          <div className={`app-shell-redesign__mobile-nav-bar${hasExtendedMobileNav ? " is-extended" : ""}`}>
             {itemsToRender.map((item) => {
               const Icon = item.icon;
               const content = (
@@ -183,7 +184,7 @@ export default function AppShell({
                   <span className="app-shell-redesign__mobile-nav-indicator" aria-hidden="true" />
                 </>
               );
-              const buttonClass = `app-shell-redesign__mobile-nav-item flex-1 flex flex-col items-center justify-center rounded-[0.95rem] px-1 min-h-11 min-w-11 ${
+              const buttonClass = `app-shell-redesign__mobile-nav-item ${hasExtendedMobileNav ? "flex-none" : "flex-1"} flex flex-col items-center justify-center rounded-[0.95rem] px-1 min-h-11 min-w-11 ${
                 item.active ? "is-active text-white" : "text-neutral-400"
               }`;
 
