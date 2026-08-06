@@ -184,21 +184,21 @@ export default function AppShell({
                   <span className="app-shell-redesign__mobile-nav-indicator" aria-hidden="true" />
                 </>
               );
-              const buttonClass = `app-shell-redesign__mobile-nav-item ${hasExtendedMobileNav ? "flex-none" : "flex-1"} flex flex-col items-center justify-center rounded-[0.95rem] px-1 min-h-11 min-w-11 ${
+              const buttonClass = `app-shell-redesign__mobile-nav-item flex flex-col items-center justify-center rounded-[0.95rem] px-1 min-h-11 min-w-11 ${
                 item.active ? "is-active text-white" : "text-neutral-400"
               }`;
 
               if (item.href) {
                 if (inRouter) {
                   return (
-                    <Link key={item.key} to={item.href} className={buttonClass} aria-label={item.label}>
+                    <Link key={item.key} to={item.href} className={buttonClass} aria-label={item.label} onClick={item.onPress}>
                       {content}
                     </Link>
                   );
                 }
 
                 return (
-                  <a key={item.key} href={item.href} className={buttonClass} aria-label={item.label}>
+                  <a key={item.key} href={item.href} className={buttonClass} aria-label={item.label} onClick={item.onPress}>
                     {content}
                   </a>
                 );

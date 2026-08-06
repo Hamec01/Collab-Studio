@@ -1286,7 +1286,7 @@ export default function App() {
         { key: "studio", label: "Studio", spriteIcon: "folders", active: location.pathname === "/app" || location.pathname.startsWith("/app/projects"), href: "/app" },
         { key: "messages", label: "Сообщения", spriteIcon: "chats", active: location.pathname.startsWith("/app/messages"), href: "/app/messages" },
         { key: "profile", label: "Профиль", spriteIcon: "user", active: location.pathname.startsWith("/app/profile"), href: "/app/profile" },
-        { key: "projects", label: t("shell.projects"), spriteIcon: "folders", active: mobileTab === "projects", href: "/app" },
+        { key: "projects", label: t("shell.projects"), spriteIcon: "folders", active: mobileTab === "projects", href: "/app", onPress: () => setMobileTab("projects") },
         { key: "editor", label: t("shell.editor"), spriteIcon: "doc", active: mobileTab === "editor", onPress: () => setMobileTab("editor") },
         { key: "discussion", label: t("shell.discussion"), spriteIcon: "chats", active: mobileTab === "rightPanel", onPress: () => setMobileTab("rightPanel") },
       ]}
